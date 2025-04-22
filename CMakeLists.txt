@@ -3,4 +3,5 @@ project(MemoryManager C)
 
 set(CMAKE_C_STANDARD 11)
 
-add_executable(MemoryManager vm.c)
+add_executable(MemoryManager vm.c
+        vm.h)
