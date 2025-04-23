@@ -8,13 +8,17 @@
 
 // This is my central controller for editing with a debug mode. All debug settings are enabled
 // and disabled by DEBUG.
-#define DEBUG                       0
+#define DEBUG                       1
 
 #if DEBUG
 #define assert(x)                   if (!x) { printf("error");}
 #else
 #define  assert(x)
 #endif
+
+struct __pfn {
+    ULONG_PTR data;
+} PFN, *PPFN;
 
 
 #define PAGE_SIZE                   4096
@@ -33,6 +37,8 @@
 //
 // Deliberately use a physical page pool that is approximately 1% of the
 // virtual address space !
+//
+// This is, initially, 64 physical pages.
 //
 
 #define NUMBER_OF_PHYSICAL_PAGES   ((VIRTUAL_ADDRESS_SIZE / PAGE_SIZE) / 64)
