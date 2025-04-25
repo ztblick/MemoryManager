@@ -135,7 +135,36 @@ CreateSharedMemorySection (
 
 #endif
 
-void unmap_all_pages(void);
+// PFN Data Structures
+PPFN PFN_array;
+
+// PTE Data Structures
+PULONG_PTR virtual_addresses_mapped[64];
+ULONG_PTR page_bitmap = 0;
+
+short get_next_free_page() {
+    return 0;
+}
+
+BOOL page_in_use(short i) {
+    return page_bitmap & (1 << i);
+}
+
+void unmap_all_pages() {
+    for (int i = 0; i < 64; i++) {
+        if (page_in_use(i)) {
+            PULONG_PTR VA = virtual_addresses_mapped[i];
+            // unmap user phys page
+            if (MapUserPhysicalPages (VA, 1, NULL) == FALSE) {
+
+                printf ("full_virtual_memory_test : could not unmap VA %p.\n", VA);
+                return;
+            }
+            page_bitmap = page_bitmap & ~(1 << i);
+        }
+
+    }
+}
 
 VOID
 full_virtual_memory_test (VOID) {
@@ -208,13 +237,13 @@ full_virtual_memory_test (VOID) {
                 NUMBER_OF_PHYSICAL_PAGES);
     }
 
-#if DEBUG
+    // Find largest frame number for PFN array
+    ULONG max_page_number = 0;
     PULONG_PTR page = physical_page_numbers;
     for (int i = 0; i < physical_page_count; i++) {
-        printf("Physical page number %d: %llu\n", i, *page);
+        max_page_number = max(*page, max_page_number);
         page++;
     }
-#endif
 
     //
     // Reserve a user address space region using the Windows kernel
@@ -268,15 +297,17 @@ full_virtual_memory_test (VOID) {
 #endif
 
     if (p == NULL) {
-
         printf ("full_virtual_memory_test : could not reserve memory %x\n",
                 GetLastError ());
 
         return;
     }
 
-    // Set up data structures to facilitate initial test
-    ULONG_PTR pages_in_use = 0;
+    // Initialize PFN Array
+    PFN_array = VirtualAlloc    (NULL,
+                                sizeof(PFN) * max_page_number,
+                                MEM_RESERVE,
+                                PAGE_NOACCESS);
 
     //
     // Now perform random accesses.
@@ -284,91 +315,45 @@ full_virtual_memory_test (VOID) {
 
     for (i = 0; i < MB (1); i += 1) {
 
-        //
-        // Randomly access different portions of the virtual address
-        // space we obtained above.
-        //
-        // If we have never accessed the surrounding page size (4K)
-        // portion, the operating system will receive a page fault
-        // from the CPU and proceed to obtain a physical page and
-        // install a PTE to map it - thus connecting the end-to-end
-        // virtual address translation.  Then the operating system
-        // will tell the CPU to repeat the instruction that accessed
-        // the virtual address and this time, the CPU will see the
-        // valid PTE and proceed to obtain the physical contents
-        // (without faulting to the operating system again).
-        //
-
+        // Randomly access different portions of the virtual address space.
         random_number = rand () * rand () * rand ();
-
         random_number %= virtual_address_size_in_unsigned_chunks;
 
-        //
-        // Write the virtual address into each page.  If we need to
-        // debug anything, we'll be able to see these in the pages.
-        //
-
+        // Write the virtual address into each page.
         page_faulted = FALSE;
 
-        //
         // Ensure the write to the arbitrary virtual address doesn't
         // straddle a PAGE_SIZE boundary just to keep things simple for
         // now.
-        //
-
         random_number &= ~0x7;
-
         arbitrary_va = p + random_number;
 
         __try {
-
             *arbitrary_va = (ULONG_PTR) arbitrary_va;
-
         } __except (EXCEPTION_EXECUTE_HANDLER) {
-
             page_faulted = TRUE;
         }
 
+        // Begin handling page faults
         if (page_faulted) {
 
-            // Begin handling page faults
+            // Get the location of the next available page.
+            short offset = get_next_free_page(arbitrary_va);
 
-            // if all pages are in use, unmap all of them.
-            if (pages_in_use == 0x3f) {
-                // TODO: implement this
-                unmap_all_pages();
-            }
-
-            // TODO: Implement grabbing a free page, updating its PFN, and mapping the physial page to the VA
-
-            if (MapUserPhysicalPages (arbitrary_va, 1, physical_page_numbers) == FALSE) {
+            if (MapUserPhysicalPages (arbitrary_va, 1, physical_page_numbers + offset * sizeof(PULONG_PTR)) == FALSE) {
 
                 printf ("full_virtual_memory_test : could not map VA %p to page %llX\n", arbitrary_va, *physical_page_numbers);
-
                 return;
             }
 
-            //
             // No exception handler needed now since we have connected
             // the virtual address above to one of our physical pages
             // so no subsequent fault can occur.
-            //
-
             *arbitrary_va = (ULONG_PTR) arbitrary_va;
-
-            //
-            // Unmap the virtual address translation we installed above
-            // now that we're done writing our value into it.
-            //
-
-            if (MapUserPhysicalPages (arbitrary_va, 1, NULL) == FALSE) {
-
-                printf ("full_virtual_memory_test : could not unmap VA %p\n", arbitrary_va);
-
-                return;
-            }
-
         }
+
+        // TODO Unmap any remaining virtual address translations.
+        unmap_all_pages();
     }
 
     printf ("full_virtual_memory_test : finished accessing %u random virtual addresses\n", i);
