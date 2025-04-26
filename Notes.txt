@@ -4,7 +4,7 @@ Things to be done:
 - Implement PTE and PFN data structures:
     - Create PFN and PTE structs (DONE)
     - Create Page Table - 1-to-1 maps from 4k of VA space to each PTE
-    - Create page file (malloc to hold data written out to "disk"
+    - Create page file (malloc to hold data written out to "disk")
 
 
 Bootup:

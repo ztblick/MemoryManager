@@ -44,9 +44,7 @@ typedef struct __pfn {
     PPTE PTE;
 } PFN, *PPFN;
 
-
 #define PAGE_SIZE                   4096
-
 #define MB(x)                       ((x) * 1024 * 1024)
 
 //
@@ -54,9 +52,9 @@ typedef struct __pfn {
 // within bounds.
 //
 
-#define VIRTUAL_ADDRESS_SIZE        MB(16)
-
-#define VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS        (VIRTUAL_ADDRESS_SIZE / sizeof (ULONG_PTR))
+#define VIRTUAL_ADDRESS_SIZE                            MB(16)
+#define VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS         (VIRTUAL_ADDRESS_SIZE / sizeof (ULONG_PTR))
+#define NUM_PTEs                                        (VIRTUAL_ADDRESS_SIZE / PAGE_SIZE)
 
 //
 // Deliberately use a physical page pool that is approximately 1% of the
