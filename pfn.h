@@ -1,0 +1,23 @@
+//
+// Created by zblickensderfer on 4/25/2025.
+//
+
+#pragma once
+
+// PFN Status Constants
+#define PFN_FREE      0x0
+#define PFN_ACTIVE    0x1
+#define PFN_MODIFIED  0x2
+#define PFN_STANDBY   0x3
+
+// Macros for easy analysis later.
+#define IsPfnFree(pfn)      ((pfn)->status == PFN_STATUS_FREE)
+#define SetPfnStatus(pfn, s)  ((pfn)->status = (s))
+
+// We need the list entry to be first, as its address is also the address of the PFN.
+typedef struct __pfn {
+    LIST_ENTRY entry;
+    ULONG_PTR status;
+    // TODO Think about reducing the size of the status field while keeping the size of PFN a power of 2
+    PPTE PTE;
+} PFN, *PPFN;

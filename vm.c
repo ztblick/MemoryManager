@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <windows.h>
 #include "vm.h"
+#include "macros.h"
+#include "pfn.h"
+#include "pte.h"
 
 //
 // This define enables code that lets us create multiple virtual address
@@ -138,6 +141,10 @@ CreateSharedMemorySection (
 // PFN Data Structures
 PPFN PFN_array;
 ULONG max_page_number = 0;
+PULONG_PTR physical_page_numbers;
+PLIST_ENTRY free_list;
+PLIST_ENTRY active_list;
+PLIST_ENTRY modified_list;
 
 // PTE Data Structures
 PPTE PTE_base;
@@ -146,14 +153,47 @@ PULONG_PTR page_file;
 // Initialize the above structures
 void initialize_data_structures(void) {
 
+    // Initialize PTE array
     PTE_base = malloc(sizeof(PTE) * NUM_PTEs);
 
+    // TODO Initialize all PTEs?
+
+    // Initialize PFN sparse array
     PFN_array = VirtualAlloc    (NULL,
                                 sizeof(PFN) * max_page_number,
                                 MEM_RESERVE,
                                 PAGE_NOACCESS);
 
-    page_file = malloc(VIRTUAL_ADDRESS_SIZE); // TODO is this way too big?
+    // Initialize lists for PFN state machine
+    free_list = malloc(sizeof(LIST_ENTRY));
+    InitializeListHead(free_list);
+    active_list = malloc(sizeof(LIST_ENTRY));
+    InitializeListHead(active_list);
+    modified_list = malloc(sizeof(LIST_ENTRY));
+    InitializeListHead(modified_list);
+
+    // Create all PFNs, adding them to the free list
+    PULONG_PTR page = physical_page_numbers;
+    for (int i = 0; i < NUMBER_OF_PHYSICAL_PAGES; i++) {
+        ULONG_PTR frame_number = *page;
+        PPFN new_pfn = VirtualAlloc((LPVOID)(PFN_array + frame_number),
+                                    sizeof(PFN),
+                                    MEM_COMMIT,
+                                    PAGE_READWRITE);
+        if (new_pfn == NULL) {
+            DWORD error = GetLastError();
+            fprintf(stderr, "Error: Failed to commit memory for PFN at frame number %llu (error code %lu)\n",
+                    (unsigned long long)frame_number, (unsigned long)error);
+            ExitProcess(1);
+        }
+
+        new_pfn->PTE = NULL;
+        new_pfn->status = PFN_FREE;
+        InsertHeadList(free_list, &new_pfn->entry);
+        page++;
+    }
+
+    page_file = malloc(VIRTUAL_ADDRESS_SIZE);
 }
 
 PPFN get_next_free_page(void) {
@@ -179,7 +219,6 @@ full_virtual_memory_test (VOID) {
     BOOL page_faulted;
     BOOL privilege;
     ULONG_PTR physical_page_count;
-    PULONG_PTR physical_page_numbers;
     HANDLE physical_page_handle;
 
     // Acquire privilege to manage pages from the operating system.

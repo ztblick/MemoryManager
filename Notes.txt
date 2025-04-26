@@ -3,24 +3,21 @@ Things to be done:
 
 - Implement PTE and PFN data structures:
     - Create PFN and PTE structs (DONE)
-    - Create Page Table - 1-to-1 maps from 4k of VA space to each PTE
-    - Create page file (malloc to hold data written out to "disk")
-
+    - Create Page Table - 1-to-1 maps from 4k of VA space to each PTE (DONE)
+    - Create page file (malloc to hold data written out to "disk") (DONE)
 
 Bootup:
     - Create PFN_Array - mem reserve with virtual alloc (DONE)
-    - call mem commit to allocate space for each physical page
-    - add all pages to free list
-    - initialize other list heads?
-
-    - initialize page table (malloc)
-
-    - initialize page file (malloc)
+    - call mem commit to allocate space for each physical page (DONE)
+    - add all pages to free list (DONE)
+    - initialize other list heads (DONE)
+    - initialize page table (malloc) (DONE)
+    - initialize page file (malloc) (DONE)
 
 
 Things to figure out
-    - how to map 4k of VA space to each PTE?
-
+    - how to map 4k of VA space to each PTE
+    - how to find correct parameter for mapUser once I've found the offset of a page (from sparse array)?
 
 
 Fault handler:
@@ -34,4 +31,4 @@ Fault handler:
  - Write out to disk
  - update PTE
  - modify PFN
- - then serve page up to faulting VA.
+ - then serve page up to faulting VA
