@@ -3,6 +3,7 @@
 //
 
 #pragma once
+#include "pte.h"
 
 // PFN Status Constants
 #define PFN_FREE      0x0

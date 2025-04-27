@@ -164,6 +164,11 @@ void initialize_data_structures(void) {
                                 MEM_RESERVE,
                                 PAGE_NOACCESS);
 
+    if (!PFN_array) {
+        printf("Failed to reserve VA space for PFN_array\n");
+        ExitProcess(1);
+    }
+
     // Initialize lists for PFN state machine
     free_list = malloc(sizeof(LIST_ENTRY));
     InitializeListHead(free_list);
@@ -187,6 +192,9 @@ void initialize_data_structures(void) {
             ExitProcess(1);
         }
 
+        printf("New PFN created at VA: %p.\n", new_pfn);
+
+
         new_pfn->PTE = NULL;
         new_pfn->status = PFN_FREE;
         InsertHeadList(free_list, &new_pfn->entry);
@@ -197,7 +205,15 @@ void initialize_data_structures(void) {
 }
 
 PPFN get_next_free_page(void) {
-    return NULL;
+    if (IsListEmpty(free_list)) {
+        return NULL;
+    }
+
+    PLIST_ENTRY entry = RemoveHeadList(free_list);
+    PPFN pfn = CONTAINING_RECORD(entry, PFN, entry);
+
+    pfn->status = PFN_ACTIVE; // Mark it as active now
+    return pfn;
 }
 
 void unmap_all_pages(void) {
@@ -210,11 +226,29 @@ void free_all_data(void) {
     free(page_file);
 }
 
+void set_max_page_number(void) {
+    PULONG_PTR page = physical_page_numbers;
+    for (int i = 0; i < NUMBER_OF_PHYSICAL_PAGES; i++) {
+        max_page_number = max(*page, max_page_number);
+        page++;
+    }
+}
+
+PULONG_PTR get_arbitrary_va(PULONG_PTR p) {
+    // Randomly access different portions of the virtual address space.
+    unsigned random_number = rand () * rand () * rand ();
+    random_number %= VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS;
+
+    // Ensure the write to the arbitrary virtual address doesn't
+    // straddle a PAGE_SIZE boundary.
+    random_number &= ~0x7;
+    return p + random_number;
+}
+
 VOID
 full_virtual_memory_test (VOID) {
     PULONG_PTR p;
     PULONG_PTR arbitrary_va;
-    unsigned random_number;
     BOOL allocated;
     BOOL page_faulted;
     BOOL privilege;
@@ -240,7 +274,7 @@ full_virtual_memory_test (VOID) {
 
     // Grab physical pages from the OS
     physical_page_count = NUMBER_OF_PHYSICAL_PAGES;
-    physical_page_numbers = malloc (physical_page_count * sizeof (ULONG_PTR));
+    physical_page_numbers = malloc (NUMBER_OF_PHYSICAL_PAGES * sizeof (ULONG_PTR));
     if (physical_page_numbers == NULL) {
         printf ("full_virtual_memory_test : could not allocate array to hold physical page numbers\n");
         return;
@@ -260,11 +294,7 @@ full_virtual_memory_test (VOID) {
     }
 
     // Find largest frame number for PFN array
-    PULONG_PTR page = physical_page_numbers;
-    for (int i = 0; i < physical_page_count; i++) {
-        max_page_number = max(*page, max_page_number);
-        page++;
-    }
+    set_max_page_number();
 
     // Initialize major data structures
     initialize_data_structures();
@@ -302,13 +332,7 @@ full_virtual_memory_test (VOID) {
     for (int i = 0; i < MB (1); i += 1) {
 
         // Randomly access different portions of the virtual address space.
-        random_number = rand () * rand () * rand ();
-        random_number %= VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS;
-
-        // Ensure the write to the arbitrary virtual address doesn't
-        // straddle a PAGE_SIZE boundary.
-        random_number &= ~0x7;
-        arbitrary_va = p + random_number;
+        arbitrary_va = get_arbitrary_va(p);
 
         // Attempt to write the virtual address into memory page.
         page_faulted = FALSE;
@@ -324,11 +348,23 @@ full_virtual_memory_test (VOID) {
             // Get the next free page.
             PPFN available_pfn = get_next_free_page();
 
+            // If no page is available on the free list, then we will evict one from the active list
+            if (available_pfn == NULL) {
+                // TODO remove page from active list
+                printf("NO FREE PAGE!");
+            }
+
+            // Set the PFN state
+            available_pfn->status = PFN_ACTIVE;
+
             // Calculate index in PFN sparse array, giving the page number
-            ULONG PFN_offset = (available_pfn - PFN_array) / sizeof(PFN);
-            PULONG_PTR page = physical_page_numbers + PFN_offset;
-            // TODO - sparse array helps us find the frame number. But do I give a frame number to mapuser,
-            // or do I give it the address of that page? Or are those the same thing?
+            ULONG_PTR frame_number  = (ULONG_PTR) (available_pfn - PFN_array);
+            PULONG_PTR page = &frame_number;
+
+            /** TODO --
+             * we need to access the page from the PFN. Landy's sparse array strategy is cool,
+             * but I can't seem to get the address of the page from the offset in the sparse array.
+             */
 
             if (MapUserPhysicalPages (arbitrary_va, 1, page) == FALSE) {
 
@@ -340,6 +376,8 @@ full_virtual_memory_test (VOID) {
             // No exception handler needed now since we have connected
             // the virtual address above to one of our physical pages.
             *arbitrary_va = (ULONG_PTR) arbitrary_va;
+
+            printf("Successfully mapped and trimmed page #%d...\n", i + 1);
         }
 
         // TODO Unmap any remaining virtual address translations.
