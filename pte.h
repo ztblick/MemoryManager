@@ -23,3 +23,5 @@ typedef struct {
         INVALID_PTE disk_format;
     };
 } PTE, *PPTE;
+
+#define IS_PTE_ZEROED(pte) ((pte)->memory_format.valid == 0 && (pte)->memory_format.frame_number == 0)
