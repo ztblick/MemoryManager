@@ -247,6 +247,16 @@ PPFN get_next_free_page(void) {
     return pfn;
 }
 
+PPFN get_first_active_page(void) {
+    if (IsListEmpty(active_list)) {
+        return NULL;
+    }
+
+    PLIST_ENTRY entry = RemoveHeadList(active_list);
+    PPFN pfn = CONTAINING_RECORD(entry, PFN, entry);
+    return pfn;
+}
+
 void unmap_all_pages(void) {
     // TODO complete this
     return;
@@ -291,6 +301,63 @@ UINT64 get_frame_from_pfn(PPFN pfn) {
         fatal_error("PFN out of bounds while attempting to map PFN to frame number.");
     }
     return pfn - PFN_array;
+}
+
+ULONG_PTR page_fault_handler(PULONG_PTR faulting_va, int i) {
+
+    // Grab the PTE for the VA
+    PPTE pte = get_PTE_from_VA(faulting_va);
+
+    // If we faulted on a valid VA, something is very wrong
+    if (pte->memory_format.valid == 1) {
+        fatal_error("Faulted on a hardware valid PTE.");
+    }
+
+    // If the PTE is in disk format, then we know we need to load its contents from the disk
+    if (pte->disk_format.status == PTE_ON_DISK) {
+        // TODO read page from disk into memory
+    }
+
+    if (IS_PTE_ZEROED(pte)) {
+        // Nothing to be done!
+    }
+
+    // Get the next free page.
+    PPFN available_pfn = get_next_free_page();
+
+    // If no page is available on the free list, then we will evict one from the head of the active list (FIFO)
+    if (available_pfn == NULL) {
+        available_pfn = get_first_active_page();
+    }
+
+    // If no pages are available from the active list, fail immediately
+    if (available_pfn == NULL) {
+        fatal_error("No PFNs available to trim from active list");
+    }
+
+    /*  TODO
+    *   - Unmap the old PTE to this page -- put it into disk format
+        - Write the page out to the disk, saving its disk index
+        - Add the disk index to the old PTE
+        - Update the PFN's PTE to the new PTE
+     *
+     */
+
+    // Set the PFN to its active state and add it to the end of the active list
+    SetPfnStatus(available_pfn, PFN_ACTIVE);
+    InsertTailList(active_list, &available_pfn->entry);
+
+    // Set the PTE into its memory format
+    ULONG_PTR frame_number = get_frame_from_pfn(available_pfn);
+    pte->memory_format.frame_number = frame_number;
+    pte->memory_format.valid = 1;
+
+#if DEBUG
+    printf("Iteration %d: Successfully mapped and trimmed physical page %llu with PTE %p.\n", i, frame_number, pte);
+#endif
+
+    // Return the frame number of the freed page!
+    return frame_number;
 }
 
 VOID
@@ -391,42 +458,16 @@ full_virtual_memory_test (VOID) {
         // Begin handling page faults
         if (page_faulted) {
 
-            PPTE pte = get_PTE_from_VA(arbitrary_va);
-            // If we faulted on a valid VA, something is very wrong
-            if (pte->memory_format.valid == 1) {
-                fatal_error("Faulted on a hardware valid PTE.");
-            }
+            // Fault handler returns the frame number of the newly assigned page
+            ULONG_PTR page = page_fault_handler(arbitrary_va, i);
 
-            // Get the next free page.
-            PPFN available_pfn = get_next_free_page();
-
-            // If no page is available on the free list, then we will evict one from the active list
-            if (available_pfn == NULL) {
-                // TODO remove page from active list
-                fatal_error("no free pages!");
-            }
-
-            // Set the PFN state
-            SetPfnStatus(available_pfn, PFN_ACTIVE);
-
-            // Map PTE to PFN and page
-            pte->memory_format.frame_number = get_frame_from_pfn(available_pfn);
-            pte->memory_format.valid = 1;
-
-            // Calculate index in PFN sparse array, giving the page number
-            ULONG_PTR frame_number  = available_pfn - PFN_array;
-            PULONG_PTR page = &frame_number;
-
-            if (MapUserPhysicalPages (arbitrary_va, 1, page) == FALSE) {
-                fatal_error("Could not map VA to page in Map User Physical Pages.");
+            if (MapUserPhysicalPages (arbitrary_va, 1, &page) == FALSE) {
+                fatal_error("Could not map VA to page in MapUserPhysicalPages.");
             }
 
             // No exception handler needed now since we have connected
             // the virtual address above to one of our physical pages.
             *arbitrary_va = (ULONG_PTR) arbitrary_va;
-#if DEBUG
-            printf("Successfully mapped and trimmed page #%d, physical page %llu with PTE %p.\n", i + 1, frame_number, pte);
-#endif
         }
     }
 

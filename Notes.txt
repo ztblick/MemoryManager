@@ -32,3 +32,26 @@ Fault handler:
  - update PTE
  - modify PFN
  - then serve page up to faulting VA
+
+
+ What to do when we get a page fault?
+ 1. Grab the PTE for that VA (done)
+ 2. If the PTE is in disk format, then we know we need to load its contents from the disk. (NOT DONE)
+ 3. If the PTE is in transition, then (not yet possible, do not think about this yet)
+ 4. If the PTE is zeroed, then there is nothing to be done. (done)
+
+ 5. Get a page of memory by...
+ 6. First trying to get a page from the free list. If you can, great! Return the first PFN on the free list. (done)
+ 7. If the free list is empty, trim the first page from the active list: (done)
+
+ - Unmap the old PTE to this page -- put it into disk format
+ - Write the page out to the disk, saving its disk index
+ - Add the disk index to the old PTE
+ - Update the PFN's PTE to the new PTE
+
+ K. Set the PTE into its memory format. Set the valid bit to 1 and save the frame_number. (done)
+ L. Set the PFN to its active state and add it to the active list. (done)
+ M. Call MapUserPhysicalPages() to make the connection. (done)
+
+ Z. Read/write to the VA - no page fault this time!
+
