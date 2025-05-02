@@ -4,6 +4,8 @@
 
 #pragma once
 
+#define PTE_INVALID 0
+#define PTE_VALID 1
 #define PTE_IN_TRANSITION 0
 #define PTE_ON_DISK 1
 
@@ -16,7 +18,7 @@ typedef struct {
 typedef struct {
     UINT64 disk_index : 22;   // 40 bits to hold the frame number
     UINT64 unused : 40;         // Remaining bits reserved for later
-    UINT64 status : 1;          // 1 bit to encode transition (00) or on disk (10)
+    UINT64 status : 1;          // 1 bit to encode transition (0) or on disk (1)
     UINT64 valid : 1;           // Valid bit -- 0 indicating PTE is invalid
 } INVALID_PTE;
 

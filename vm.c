@@ -296,11 +296,40 @@ PPTE get_PTE_from_VA(PULONG_PTR faulting_VA) {
     return PTE_base + pte_index;
 }
 
+PVOID get_va_from_pte(PPTE pte) {
+    size_t index = (size_t)(pte - PTE_base);  // Already scaled correctly
+    return (PVOID)((char*)VA_base + index * PAGE_SIZE);
+}
+
 UINT64 get_frame_from_pfn(PPFN pfn) {
     if (pfn < PFN_array) {
         fatal_error("PFN out of bounds while attempting to map PFN to frame number.");
     }
     return pfn - PFN_array;
+}
+
+void map_pte_to_disk(PPTE pte, size_t disk_index) {
+
+    pte->disk_format.disk_index = disk_index;
+    pte->disk_format.status = PTE_ON_DISK;
+    pte->disk_format.valid = PTE_INVALID;
+}
+
+size_t get_disk_index_from_pte(PPTE pte) {
+    return (size_t)(pte - PTE_base);
+}
+
+void write_page_to_disk(PPTE pte) {
+
+    PULONG_PTR disk_slot = page_file + pte->disk_format.disk_index * PAGE_SIZE;
+    PVOID page_data = get_va_from_pte(pte);
+    memcpy(disk_slot, page_data, PAGE_SIZE);
+}
+
+void load_page_from_disk(PPTE pte, PVOID destination_va) {
+    PULONG_PTR disk_slot = page_file + pte->disk_format.disk_index * PAGE_SIZE;
+
+    memcpy(destination_va, disk_slot, PAGE_SIZE);
 }
 
 ULONG_PTR page_fault_handler(PULONG_PTR faulting_va, int i) {
@@ -313,17 +342,23 @@ ULONG_PTR page_fault_handler(PULONG_PTR faulting_va, int i) {
         fatal_error("Faulted on a hardware valid PTE.");
     }
 
-    // If the PTE is in disk format, then we know we need to load its contents from the disk
-    if (pte->disk_format.status == PTE_ON_DISK) {
-        // TODO read page from disk into memory
-    }
-
-    if (IS_PTE_ZEROED(pte)) {
-        // Nothing to be done!
-    }
-
     // Get the next free page.
     PPFN available_pfn = get_next_free_page();
+
+    // If a free page is available, map the PFN to the PTE.
+    if (available_pfn != NULL) {
+        // Set the PFN to its active state and add it to the end of the active list
+        available_pfn->PTE = pte;
+        SET_PFN_STATUS(available_pfn, PFN_ACTIVE);
+        InsertTailList(active_list, &available_pfn->entry);
+
+        // Set the PTE into its memory format
+        ULONG_PTR frame_number = get_frame_from_pfn(available_pfn);
+        pte->memory_format.frame_number = frame_number;
+        pte->memory_format.valid = 1;
+        return frame_number;
+    }
+
 
     // If no page is available on the free list, then we will evict one from the head of the active list (FIFO)
     if (available_pfn == NULL) {
@@ -335,16 +370,39 @@ ULONG_PTR page_fault_handler(PULONG_PTR faulting_va, int i) {
         fatal_error("No PFNs available to trim from active list");
     }
 
-    /*  TODO
-    *   - Unmap the old PTE to this page -- put it into disk format
-        - Write the page out to the disk, saving its disk index
-        - Add the disk index to the old PTE
-        - Update the PFN's PTE to the new PTE
-     *
-     */
+    // Get the previous PTE mapping to this frame
+    PPTE old_pte = available_pfn->PTE;
+
+    // Unmap the old VA from this physical page
+    if (MapUserPhysicalPages (get_va_from_pte(old_pte), 1, NULL) == FALSE) {
+        fatal_error("Could not un-map old VA.");
+    }
+
+    // Unmap the old PTE, put it into disk format, and map it to its disk index;
+    size_t disk_index = get_disk_index_from_pte(old_pte);
+    map_pte_to_disk(old_pte, disk_index);
+
+    // Write the page out to the disk, saving its disk index
+    // TODO - this is where I get an exception at the moment so I am skipping it for now
+    // write_page_to_disk(old_pte);
+
+    // Update the PFN's PTE to the new PTE
+    available_pfn->PTE = pte;
+
+    // If the PTE is in disk format, then we know we need to load its contents from the disk
+    // This writes them into the page that our old PTE's VA was previously mapped to,
+    // which we will presently be mapping to the faulting VA.
+    if (pte->disk_format.status == PTE_ON_DISK) {
+        // TODO same deal
+        // load_page_from_disk(pte, get_va_from_pte(old_pte));
+    }
+
+    if (IS_PTE_ZEROED(pte)) {
+        // Nothing to be done!
+    }
 
     // Set the PFN to its active state and add it to the end of the active list
-    SetPfnStatus(available_pfn, PFN_ACTIVE);
+    SET_PFN_STATUS(available_pfn, PFN_ACTIVE);
     InsertTailList(active_list, &available_pfn->entry);
 
     // Set the PTE into its memory format
