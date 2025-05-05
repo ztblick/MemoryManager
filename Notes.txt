@@ -1,6 +1,22 @@
 
 Things to be done:
 
+
+Current goal:
+- Implement all states of the state machines for PTEs and PFNs.
+
+Sub-goals:
+- Write pages to disk and read pages from disk (fix bug with MapUser returning NULL)
+- Zero pages before assignment to new PTEs
+- Create a data structure for disk metadata
+- Create a VA_SPAN variable to connect num_pages, VA space size, and page file size
+- Add aging and trimming
+- Initiate aging and trimming based on projections
+
+
+
+~~~ OLD THOUGHTS THAT ARE SEEMINGLY IRRELEVANT ~~~
+
 - Implement PTE and PFN data structures:
     - Create PFN and PTE structs (DONE)
     - Create Page Table - 1-to-1 maps from 4k of VA space to each PTE (DONE)

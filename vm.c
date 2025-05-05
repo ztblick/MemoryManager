@@ -321,18 +321,35 @@ size_t get_disk_index_from_pte(PPTE pte) {
 
 void write_page_to_disk(PPTE pte) {
 
+    // Temporarily map an un-used VA to this frame
+    PULONG_PTR kernal_VA = malloc(sizeof(ULONG_PTR));
+    ULONG_PTR frame_number = pte->memory_format.frame_number;
+    if (MapUserPhysicalPages (kernal_VA, 1, &frame_number) == FALSE) {
+        fatal_error("Could not map Kernal VA to physical page.");
+    }
+
+    // Get disk slot for this PTE
+    // TODO update this with a reasonable disk slot strategy
     PULONG_PTR disk_slot = page_file + pte->disk_format.disk_index * PAGE_SIZE;
-    PVOID page_data = get_va_from_pte(pte);
-    memcpy(disk_slot, page_data, PAGE_SIZE);
+    memcpy(disk_slot, kernal_VA, PAGE_SIZE);
+
+    // Un-map kernal VA
+    if (MapUserPhysicalPages (kernal_VA, 1, NULL) == FALSE) {
+        fatal_error("Could not unmap Kernal VA to physical page.");
+    }
+
+    // Free the kernal VA pointer.
+    free(kernal_VA);
 }
 
 void load_page_from_disk(PPTE pte, PVOID destination_va) {
+
     PULONG_PTR disk_slot = page_file + pte->disk_format.disk_index * PAGE_SIZE;
 
     memcpy(destination_va, disk_slot, PAGE_SIZE);
 }
 
-ULONG_PTR page_fault_handler(PULONG_PTR faulting_va, int i) {
+VOID page_fault_handler(PULONG_PTR faulting_va, int i) {
 
     // Grab the PTE for the VA
     PPTE pte = get_PTE_from_VA(faulting_va);
@@ -356,7 +373,12 @@ ULONG_PTR page_fault_handler(PULONG_PTR faulting_va, int i) {
         ULONG_PTR frame_number = get_frame_from_pfn(available_pfn);
         pte->memory_format.frame_number = frame_number;
         pte->memory_format.valid = 1;
-        return frame_number;
+
+        // Map the VA to its new page.
+        if (MapUserPhysicalPages (faulting_va, 1, &frame_number) == FALSE) {
+            fatal_error("Could not map VA to page in MapUserPhysicalPages.");
+        }
+        return;
     }
 
 
@@ -371,6 +393,7 @@ ULONG_PTR page_fault_handler(PULONG_PTR faulting_va, int i) {
     }
 
     // Get the previous PTE mapping to this frame
+    ULONG_PTR frame_number = get_frame_from_pfn(available_pfn);
     PPTE old_pte = available_pfn->PTE;
 
     // Unmap the old VA from this physical page
@@ -383,8 +406,12 @@ ULONG_PTR page_fault_handler(PULONG_PTR faulting_va, int i) {
     map_pte_to_disk(old_pte, disk_index);
 
     // Write the page out to the disk, saving its disk index
-    // TODO - this is where I get an exception at the moment so I am skipping it for now
-    // write_page_to_disk(old_pte);
+    write_page_to_disk(old_pte);
+
+    // Map the new VA to the free page
+    if (MapUserPhysicalPages (faulting_va, 1, &frame_number) == FALSE) {
+        fatal_error("Could not map VA to page in MapUserPhysicalPages.");
+    }
 
     // Update the PFN's PTE to the new PTE
     available_pfn->PTE = pte;
@@ -393,8 +420,7 @@ ULONG_PTR page_fault_handler(PULONG_PTR faulting_va, int i) {
     // This writes them into the page that our old PTE's VA was previously mapped to,
     // which we will presently be mapping to the faulting VA.
     if (pte->disk_format.status == PTE_ON_DISK) {
-        // TODO same deal
-        // load_page_from_disk(pte, get_va_from_pte(old_pte));
+        load_page_from_disk(pte, faulting_va);
     }
 
     if (IS_PTE_ZEROED(pte)) {
@@ -406,16 +432,12 @@ ULONG_PTR page_fault_handler(PULONG_PTR faulting_va, int i) {
     InsertTailList(active_list, &available_pfn->entry);
 
     // Set the PTE into its memory format
-    ULONG_PTR frame_number = get_frame_from_pfn(available_pfn);
     pte->memory_format.frame_number = frame_number;
     pte->memory_format.valid = 1;
 
 #if DEBUG
     printf("Iteration %d: Successfully mapped and trimmed physical page %llu with PTE %p.\n", i, frame_number, pte);
 #endif
-
-    // Return the frame number of the freed page!
-    return frame_number;
 }
 
 VOID
@@ -516,12 +538,8 @@ full_virtual_memory_test (VOID) {
         // Begin handling page faults
         if (page_faulted) {
 
-            // Fault handler returns the frame number of the newly assigned page
-            ULONG_PTR page = page_fault_handler(arbitrary_va, i);
-
-            if (MapUserPhysicalPages (arbitrary_va, 1, &page) == FALSE) {
-                fatal_error("Could not map VA to page in MapUserPhysicalPages.");
-            }
+            // Fault handler maps the VA to its new page
+            page_fault_handler(arbitrary_va, i);
 
             // No exception handler needed now since we have connected
             // the virtual address above to one of our physical pages.
