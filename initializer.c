@@ -1,10 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <windows.h>
-#include "vm.h"
+#include "initializer.h"
 #include "macros.h"
 #include "pfn.h"
 #include "pte.h"
+#include "scheduler.h"
 
 #define COLOR_RED "\x1b[31m"
 #define COLOR_RESET "\x1b[0m"
@@ -168,14 +169,23 @@ ULONG_PTR max_page_number;
 ULONG_PTR min_page_number;
 PULONG_PTR physical_page_numbers;
 ULONG_PTR physical_page_count;
+
+// Page lists
 PLIST_ENTRY free_list;
 PLIST_ENTRY active_list;
 PLIST_ENTRY modified_list;
 
-// PTE Data Structures
-PULONG_PTR VA_base;
+// VA spaces
+PULONG_PTR application_va_base;
+PULONG_PTR kernal_write_va;
+PULONG_PTR kernal_read_va;
+
+// PTEs
 PPTE PTE_base;
+
+// Page File and Page File Metadata
 PULONG_PTR page_file;
+PULONG_PTR page_file_metadata;
 
 // Initialize the above structures
 void initialize_data_structures(void) {
@@ -291,14 +301,14 @@ PULONG_PTR get_arbitrary_va(PULONG_PTR p) {
 // Returns the pte associated with the faulting VA. Divides the offset of the VA within the VA space
 // by the page_size, resulting in the index of the VA within the PTE array.
 PPTE get_PTE_from_VA(PULONG_PTR faulting_VA) {
-    ULONG_PTR va_offset = (ULONG_PTR)faulting_VA - (ULONG_PTR)VA_base;
+    ULONG_PTR va_offset = (ULONG_PTR)faulting_VA - (ULONG_PTR)application_va_base;
     size_t pte_index = va_offset / PAGE_SIZE;
     return PTE_base + pte_index;
 }
 
 PVOID get_va_from_pte(PPTE pte) {
     size_t index = (size_t)(pte - PTE_base);  // Already scaled correctly
-    return (PVOID)((char*)VA_base + index * PAGE_SIZE);
+    return (PVOID)((char*)application_va_base + index * PAGE_SIZE);
 }
 
 UINT64 get_frame_from_pfn(PPFN pfn) {
@@ -319,27 +329,23 @@ size_t get_disk_index_from_pte(PPTE pte) {
     return (size_t)(pte - PTE_base);
 }
 
-void write_page_to_disk(PPTE pte) {
+void write_pages_to_disk(PPTE pte, ULONG_PTR num_pages) {
 
     // Temporarily map an un-used VA to this frame
-    PULONG_PTR kernal_VA = malloc(sizeof(ULONG_PTR));
     ULONG_PTR frame_number = pte->memory_format.frame_number;
-    if (MapUserPhysicalPages (kernal_VA, 1, &frame_number) == FALSE) {
+    if (MapUserPhysicalPages (kernal_write_va, num_pages, &frame_number) == FALSE) {
         fatal_error("Could not map Kernal VA to physical page.");
     }
 
     // Get disk slot for this PTE
     // TODO update this with a reasonable disk slot strategy
     PULONG_PTR disk_slot = page_file + pte->disk_format.disk_index * PAGE_SIZE;
-    memcpy(disk_slot, kernal_VA, PAGE_SIZE);
+    memcpy(disk_slot, kernal_write_va, PAGE_SIZE);
 
     // Un-map kernal VA
-    if (MapUserPhysicalPages (kernal_VA, 1, NULL) == FALSE) {
+    if (MapUserPhysicalPages (kernal_write_va, 1, NULL) == FALSE) {
         fatal_error("Could not unmap Kernal VA to physical page.");
     }
-
-    // Free the kernal VA pointer.
-    free(kernal_VA);
 }
 
 void load_page_from_disk(PPTE pte, PVOID destination_va) {
@@ -406,7 +412,7 @@ VOID page_fault_handler(PULONG_PTR faulting_va, int i) {
     map_pte_to_disk(old_pte, disk_index);
 
     // Write the page out to the disk, saving its disk index
-    write_page_to_disk(old_pte);
+    write_pages_to_disk(old_pte, 1);
 
     // Map the new VA to the free page
     if (MapUserPhysicalPages (faulting_va, 1, &frame_number) == FALSE) {
@@ -451,8 +457,7 @@ full_virtual_memory_test (VOID) {
     // Acquire privilege to manage pages from the operating system.
     privilege = GetPrivilege ();
     if (privilege == FALSE) {
-        printf ("full_virtual_memory_test : could not get privilege\n");
-        return;
+        fatal_error ("full_virtual_memory_test : could not get privilege.");
     }
 
 #if SUPPORT_MULTIPLE_VA_TO_SAME_PAGE
@@ -468,16 +473,13 @@ full_virtual_memory_test (VOID) {
     // Grab physical pages from the OS
     physical_page_count = NUMBER_OF_PHYSICAL_PAGES;
     physical_page_numbers = malloc (NUMBER_OF_PHYSICAL_PAGES * sizeof (ULONG_PTR));
-    if (physical_page_numbers == NULL) {
-        printf ("full_virtual_memory_test : could not allocate array to hold physical page numbers\n");
-        return;
-    }
+    NULL_CHECK (physical_page_numbers, "full_virtual_memory_test : could not allocate array to hold physical page numbers.");
+
     allocated = AllocateUserPhysicalPages (physical_page_handle,
                                            &physical_page_count,
                                            physical_page_numbers);
     if (allocated == FALSE) {
-        printf ("full_virtual_memory_test : could not allocate physical pages\n");
-        return;
+        fatal_error ("full_virtual_memory_test : could not allocate physical pages.");
     }
     if (physical_page_count != NUMBER_OF_PHYSICAL_PAGES) {
 
@@ -509,23 +511,36 @@ full_virtual_memory_test (VOID) {
                        1);
 #else
     // Reserve user virtual address space.
-    VA_base = VirtualAlloc (NULL,
+    application_va_base = VirtualAlloc (NULL,
                       VIRTUAL_ADDRESS_SIZE,
                       MEM_RESERVE | MEM_PHYSICAL,
                       PAGE_READWRITE);
 #endif
 
-    if (VA_base == NULL) {
-        printf ("full_virtual_memory_test : could not reserve memory %x\n",
-                GetLastError ());
-        return;
-    }
+    NULL_CHECK (application_va_base, "Could not reserve user VA space.");
+
+    kernal_write_va = VirtualAlloc (NULL,
+                      PAGE_SIZE * MAX_WRITE_BATCH_SIZE,
+                      MEM_RESERVE | MEM_PHYSICAL,
+                      PAGE_READWRITE);
+
+    NULL_CHECK (kernal_write_va, "Could not reserve kernal write VA space.");
+
+    kernal_read_va = VirtualAlloc (NULL,
+                      PAGE_SIZE * MAX_READ_BATCH_SIZE,
+                      MEM_RESERVE | MEM_PHYSICAL,
+                      PAGE_READWRITE);
+
+    NULL_CHECK (kernal_read_va, "Could not reserve kernal read VA space.");
 
     // Now perform random accesses
     for (int i = 0; i < MB (1); i += 1) {
 
+        // Ask the scheduler to age, trim, and write as is necessary.
+        schedule_tasks();
+
         // Randomly access different portions of the virtual address space.
-        arbitrary_va = get_arbitrary_va(VA_base);
+        arbitrary_va = get_arbitrary_va(application_va_base);
 
         // Attempt to write the virtual address into memory page.
         page_faulted = FALSE;
@@ -551,23 +566,15 @@ full_virtual_memory_test (VOID) {
 
     // Now that we're done with our memory we can be a good
     // citizen and free it.
-    VirtualFree (VA_base, 0, MEM_RELEASE);
+    VirtualFree (application_va_base, 0, MEM_RELEASE);
     // TODO Unmap any remaining virtual address translations.
     unmap_all_pages();
     free_all_data();
-    return;
 }
 
 VOID
 main (int argc, char** argv) {
-#if DEBUG
-    LPSYSTEM_INFO lpSystemInfo = malloc(sizeof(SYSTEM_INFO));
-    GetSystemInfo(lpSystemInfo);
-    printf("%lu\n", lpSystemInfo->dwAllocationGranularity);
-#endif
 
     // Test our very complicated usermode virtual implementation.
     full_virtual_memory_test ();
-    return;
 }
-

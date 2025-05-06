@@ -5,6 +5,13 @@ Things to be done:
 Current goal:
 - Implement all states of the state machines for PTEs and PFNs.
 
+Priority Sub-Goal:
+- Split main c file into sub-files
+- Make sure all dependencies are taken care of
+- Move all code into appropriate files (for abstraction and eventual multithreading)
+- Be able to build it in its current form (map free pages, fail on disk write)
+
+
 Sub-goals:
 - Write pages to disk and read pages from disk (fix bug with MapUser returning NULL)
 - Zero pages before assignment to new PTEs

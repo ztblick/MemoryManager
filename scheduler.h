@@ -1,0 +1,19 @@
+/*
+ * Created by zblickensderfer on 5/6/2025.
+ * Scheduler collects statistics on page consumption.
+ * It then calls ager, trimmer, and writer to provide just enough pages
+ * to keep simulator running smoothly.
+ *
+ * In the future, it will ideally analyze consumption to look for patterns,
+ * such as sequential page access vs. random page access.
+ *
+ * For now, it simply calls ager, trimmer, and writer sequentially.
+*/
+
+#pragma once
+#include "initializer.h"
+
+/*
+ * Analyzes consumption, then calls ager, trimmer, and writer appropriately.
+ */
+VOID schedule_tasks(VOID);

@@ -14,9 +14,17 @@
 #else
 #define  assert(x)
 #endif
+#define NULL_CHECK(x, msg)       if (x == NULL) {fatal_error(msg); }
 
 #define PAGE_SIZE                   4096
 #define MB(x)                       ((x) * 1024 * 1024)
+
+// These will change as we decide how many pages to write out or read from to disk at once.
+#define MAX_WRITE_BATCH_SIZE        1
+#define MAX_READ_BATCH_SIZE         1
+#define WRITE_BATCH_SIZE            1
+#define READ_BATCH_SIZE             1
+
 
 // This is intentionally a power of two so we can use masking to stay within bounds.
 #define VIRTUAL_ADDRESS_SIZE                            MB(16)
