@@ -4,8 +4,7 @@
 
 #pragma once
 #include "initializer.h"
+#include "pte.h"
+#include "pfn.h"
 
-/*
- *  Write the given number of pages to the disk.
- */
-VOID write_pages(int num_pages);
+VOID page_fault_handler(PULONG_PTR faulting_va, int i);

@@ -2,11 +2,11 @@
 // Created by zblickensderfer on 5/6/2025.
 //
 
-#include "scheduler.h"
+#include "../include/scheduler.h"
 
-#include "ager.h"
-#include "trimmer.h"
-#include "writer.h"
+#include "../include/ager.h"
+#include "../include/trimmer.h"
+#include "../include/writer.h"
 
 VOID schedule_tasks(VOID) {
 

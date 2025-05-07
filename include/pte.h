@@ -30,3 +30,15 @@ typedef struct {
 } PTE, *PPTE;
 
 #define IS_PTE_ZEROED(pte) ((pte)->memory_format.valid == 0 && (pte)->memory_format.frame_number == 0)
+
+/*
+ *  Provides translations between VAs and their associated PTEs and vice-versa.
+ */
+PPTE get_PTE_from_VA(PULONG_PTR faulting_VA);
+PVOID get_VA_from_PTE(PPTE pte);
+
+/*
+ *  These will likely be replaced with a call to the page file metadata
+ */
+void map_pte_to_disk(PPTE pte, size_t disk_index);
+size_t get_disk_index_from_pte(PPTE pte);
