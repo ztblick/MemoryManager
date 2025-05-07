@@ -60,7 +60,7 @@ VOID page_fault_handler(PULONG_PTR faulting_va, int i) {
         return;
     }
 
-
+    // TODO modify this to take into account the work that trimmer is doing -- get pages from standby instead.
     // If no page is available on the free list, then we will evict one from the head of the active list (FIFO)
     if (available_pfn == NULL) {
         available_pfn = get_first_active_page();

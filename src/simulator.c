@@ -134,7 +134,6 @@ VOID full_virtual_memory_test (VOID) {
     // Now that we're done with our memory we can be a good
     // citizen and free it.
     VirtualFree (application_va_base, 0, MEM_RELEASE);
-    // TODO Unmap any remaining virtual address translations.
     unmap_all_pages();
     free_all_data();
 }

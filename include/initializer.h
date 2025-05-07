@@ -16,11 +16,9 @@
 #define WRITE_BATCH_SIZE            1
 #define READ_BATCH_SIZE             1
 
-
 // This is intentionally a power of two so we can use masking to stay within bounds.
 #define VIRTUAL_ADDRESS_SIZE                            MB(16)
 #define VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS         (VIRTUAL_ADDRESS_SIZE / sizeof (ULONG_PTR))
-#define NUM_PTEs                                        (VIRTUAL_ADDRESS_SIZE / PAGE_SIZE)
 
 // Deliberately use a physical page pool that is approximately 1% of the VA space.
 // This is, initially, 64 physical pages.
@@ -35,7 +33,7 @@ ULONG_PTR physical_page_count;
 
 // Page lists
 PLIST_ENTRY free_list;
-PLIST_ENTRY active_list;
+PLIST_ENTRY active_list;        // TODO Remove the active list and all references to it.
 PLIST_ENTRY modified_list;
 
 // VA spaces

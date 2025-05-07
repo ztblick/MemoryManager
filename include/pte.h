@@ -4,10 +4,12 @@
 
 #pragma once
 
-#define PTE_INVALID 0
-#define PTE_VALID 1
-#define PTE_IN_TRANSITION 0
-#define PTE_ON_DISK 1
+#define PTE_INVALID             0
+#define PTE_VALID               1
+#define PTE_IN_TRANSITION       0
+#define PTE_ON_DISK             1
+
+#define NUM_PTEs                (VIRTUAL_ADDRESS_SIZE / PAGE_SIZE)
 
 typedef struct {
     UINT64 frame_number : 40;   // 40 bits to hold the frame number
@@ -36,6 +38,11 @@ typedef struct {
  */
 PPTE get_PTE_from_VA(PULONG_PTR faulting_VA);
 PVOID get_VA_from_PTE(PPTE pte);
+
+/*
+ *  Moves an active PTE into the transition state.
+ */
+void set_PTE_to_transition(PPTE pte);
 
 /*
  *  These will likely be replaced with a call to the page file metadata

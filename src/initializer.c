@@ -8,8 +8,7 @@
 #include "../include/pte.h"
 #include "../include/scheduler.h"
 
-BOOL GetPrivilege (VOID)
-{
+BOOL GetPrivilege (VOID) {
     struct {
         DWORD Count;
         LUID_AND_ATTRIBUTES Privilege [1];

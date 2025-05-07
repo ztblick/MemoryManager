@@ -18,6 +18,12 @@ PVOID get_VA_from_PTE(PPTE pte) {
     return (PVOID)((char*)application_va_base + index * PAGE_SIZE);
 }
 
+void set_PTE_to_transition(PPTE pte) {
+    // TODO should we clear any of the old data, such as the frame number?
+    pte->disk_format.status = PTE_IN_TRANSITION;
+    pte->disk_format.valid = PTE_INVALID;
+}
+
 void map_pte_to_disk(PPTE pte, size_t disk_index) {
 
     pte->disk_format.disk_index = disk_index;

@@ -27,3 +27,8 @@ typedef struct __pfn {
  *  Returns frame number associated with this PFN.
  */
 ULONG_PTR get_frame_from_PFN(PPFN pfn);
+
+/*
+ *  Returns PFN associated with this frame number.
+ */
+PPFN get_PFN_from_frame(ULONG_PTR frame_number);

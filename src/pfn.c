@@ -7,7 +7,14 @@
 
 ULONG_PTR get_frame_from_PFN(PPFN pfn) {
     if (pfn < PFN_array) {
-        fatal_error("PFN out of bounds while attempting to map PFN to frame number.");
+        fatal_error("PFN out of bounds while attempting to get frame number from PFN.");
     }
     return pfn - PFN_array;
+}
+
+PPFN get_PFN_from_frame(ULONG_PTR frame_number) {
+    if (frame_number < 0 || frame_number > physical_page_count) {
+        fatal_error("Frame number out of bounds while attempting to get PFN from frame number.");
+    }
+    return PFN_array + frame_number;
 }

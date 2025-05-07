@@ -3,7 +3,8 @@
 //
 
 #pragma once
-#include "initializer.h"
+
+#include "macros.h"
 
 /*
  *  Trims active pages, moving them to the modified or standby lists.
