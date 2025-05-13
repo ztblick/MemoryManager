@@ -5,24 +5,17 @@ Things to be done:
 Current goal:
 - Implement all states of the state machines for PTEs and PFNs.
 
-Priority Sub-Goal:
-- Split main c file into sub-files (DONE)
-- Make sure all dependencies are taken care of (DONE)
-- Move all code into appropriate files (for abstraction and eventual multithreading) (IN PROGRESS)
-- Be able to build it in its current form (map free pages, fail on disk write) (DONE)
-- Modify page_fault_handler to play nice with its new friends (trimmer, writer)
+Priority Sub-Goals:
+- Resolve soft-fault issue
+- Create a data structure for disk metadata
+- Add disk, disk_map, and provide functionality for disk reads and disk writes
+- Create a VA_SPAN variable to connect num_pages, VA space size, and page file size
 
 
 Sub-goals:
-- Write pages to disk and read pages from disk (fix bug with MapUser returning NULL)
 - Zero pages before assignment to new PTEs
-- Create a data structure for disk metadata
-- Create a VA_SPAN variable to connect num_pages, VA space size, and page file size
-- Add aging and trimming
 - Initiate aging and trimming based on projections
 
-*** We will continue to run schedule_tasks() and fault on the same VA until there is an available page
-that is associated with the faulting VA by the fault handler. ***
 
 ~~~ OLD THOUGHTS THAT ARE SEEMINGLY IRRELEVANT ~~~
 

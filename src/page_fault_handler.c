@@ -12,7 +12,7 @@ PPFN get_standby_page(void) {
     return NULL;
 }
 
-VOID page_fault_handler(PULONG_PTR faulting_va, int i) {
+BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
 
     // The PFN associated with the page that will be mapped to the faulting VA.
     PPFN available_pfn = NULL;
@@ -54,7 +54,7 @@ VOID page_fault_handler(PULONG_PTR faulting_va, int i) {
 #endif
 
         free(frame_number);
-        return;
+        return TRUE;
     }
 
     // If no page is available on the zero or free list, then we will evict one from the head of the active list (FIFO)
@@ -63,7 +63,7 @@ VOID page_fault_handler(PULONG_PTR faulting_va, int i) {
 #if DEBUG
         printf("Fault handler could not resolve fault as no pages were available on zero, free, or standby");
 #endif
-        return;
+        return FALSE;
     }
 
     // Get a page from the standby list
@@ -102,4 +102,6 @@ VOID page_fault_handler(PULONG_PTR faulting_va, int i) {
 #endif
 
     free(frame_number);
+
+    return TRUE;
 }

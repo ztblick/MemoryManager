@@ -18,6 +18,7 @@ VOID full_virtual_memory_test (VOID) {
     PULONG_PTR arbitrary_va;
     BOOL allocated;
     BOOL page_faulted = FALSE;
+    BOOL fault_resolved = TRUE;
     BOOL privilege;
     HANDLE physical_page_handle;
 
@@ -102,13 +103,12 @@ VOID full_virtual_memory_test (VOID) {
 
     // Now perform random accesses
     for (int i = 0; i < MB (1); i += 1) {
-
         // Ask the scheduler to age, trim, and write as is necessary.
         schedule_tasks();
 
         // Randomly access different portions of the virtual address space.
         // If we faulted before, use the previous address!
-        if (!page_faulted) {
+        if (fault_resolved) {
             arbitrary_va = get_arbitrary_va(application_va_base);
         }
 
@@ -124,14 +124,15 @@ VOID full_virtual_memory_test (VOID) {
         if (page_faulted) {
 
             // Fault handler maps the VA to its new page
-            page_fault_handler(arbitrary_va, i);
+            fault_resolved = page_fault_handler(arbitrary_va, i);
         }
-        else {
-            // No exception handler needed now since we have connected
-            // the virtual address above to one of our physical pages.
+
+        // If we were successful, we will do allow our usermode program to continue with its goal.
+        if (fault_resolved){
             *arbitrary_va = (ULONG_PTR) arbitrary_va;
         }
     }
+
 
     printf ("full_virtual_memory_test : finished accessing %u random virtual addresses\n", MB (1));
 
