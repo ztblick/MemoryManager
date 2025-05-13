@@ -29,7 +29,7 @@ VOID trim_pages(VOID) {
 
     // Unmap the VA from this page
     if (MapUserPhysicalPages (get_VA_from_PTE(pte), 1, NULL) == FALSE) {
-        fatal_error("Could not unmap Kernal VA to physical page.");
+        fatal_error("Could not unmap VA from physical page.");
     }
 
     // Set the PTE as memory format modified.
@@ -38,7 +38,13 @@ VOID trim_pages(VOID) {
     // Trim this page to the modified list
     PPFN pfn = get_PFN_from_frame(pte->memory_format.frame_number);
     InsertHeadList(modified_list, &pfn->entry);
+    modified_page_count++;
+    active_page_count--;
 
     // Set PFN status as modified
     SET_PFN_STATUS(pfn, PFN_MODIFIED);
+
+#if DEBUG
+    printf("\nTrimmed one page to from active to modified.\n\n");
+#endif
 }

@@ -17,7 +17,7 @@
 VOID full_virtual_memory_test (VOID) {
     PULONG_PTR arbitrary_va;
     BOOL allocated;
-    BOOL page_faulted;
+    BOOL page_faulted = FALSE;
     BOOL privilege;
     HANDLE physical_page_handle;
 
@@ -38,20 +38,20 @@ VOID full_virtual_memory_test (VOID) {
 #endif
 
     // Grab physical pages from the OS
-    physical_page_count = NUMBER_OF_PHYSICAL_PAGES;
-    physical_page_numbers = malloc (NUMBER_OF_PHYSICAL_PAGES * sizeof (ULONG_PTR));
-    NULL_CHECK (physical_page_numbers, "full_virtual_memory_test : could not allocate array to hold physical page numbers.");
+    allocated_frame_count = NUMBER_OF_PHYSICAL_PAGES;
+    allocated_frame_numbers = malloc (NUMBER_OF_PHYSICAL_PAGES * sizeof (ULONG_PTR));
+    NULL_CHECK (allocated_frame_numbers, "full_virtual_memory_test : could not allocate array to hold physical page numbers.");
 
     allocated = AllocateUserPhysicalPages (physical_page_handle,
-                                           &physical_page_count,
-                                           physical_page_numbers);
+                                           &allocated_frame_count,
+                                           allocated_frame_numbers);
     if (allocated == FALSE) {
         fatal_error ("full_virtual_memory_test : could not allocate physical pages.");
     }
-    if (physical_page_count != NUMBER_OF_PHYSICAL_PAGES) {
+    if (allocated_frame_count != NUMBER_OF_PHYSICAL_PAGES) {
 
         printf ("full_virtual_memory_test : allocated only %llu pages out of %u pages requested\n",
-                physical_page_count,
+                allocated_frame_count,
                 NUMBER_OF_PHYSICAL_PAGES);
     }
 
@@ -107,7 +107,10 @@ VOID full_virtual_memory_test (VOID) {
         schedule_tasks();
 
         // Randomly access different portions of the virtual address space.
-        arbitrary_va = get_arbitrary_va(application_va_base);
+        // If we faulted before, use the previous address!
+        if (!page_faulted) {
+            arbitrary_va = get_arbitrary_va(application_va_base);
+        }
 
         // Attempt to write the virtual address into memory page.
         page_faulted = FALSE;
@@ -122,7 +125,8 @@ VOID full_virtual_memory_test (VOID) {
 
             // Fault handler maps the VA to its new page
             page_fault_handler(arbitrary_va, i);
-
+        }
+        else {
             // No exception handler needed now since we have connected
             // the virtual address above to one of our physical pages.
             *arbitrary_va = (ULONG_PTR) arbitrary_va;

@@ -24,6 +24,12 @@ void set_PTE_to_transition(PPTE pte) {
     pte->disk_format.valid = PTE_INVALID;
 }
 
+void set_PTE_to_valid(PPTE pte, ULONG_PTR frame_number) {
+    // TODO should we clear any of the old data, such as the disk slot??
+    pte->memory_format.frame_number = frame_number;
+    pte->memory_format.valid = PTE_VALID;
+}
+
 void map_pte_to_disk(PPTE pte, size_t disk_index) {
 
     pte->disk_format.disk_index = disk_index;

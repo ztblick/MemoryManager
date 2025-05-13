@@ -125,6 +125,11 @@ CreateSharedMemorySection (
 // Initialize the above structures
 void initialize_data_structures(void) {
 
+    free_page_count = 0;
+    active_page_count = 0;
+    modified_page_count = 0;
+    standby_page_count = 0;
+
     // Initialize PTE array
     PTE_base = malloc(sizeof(PTE) * NUM_PTEs);
     if (!PTE_base) {
@@ -135,7 +140,7 @@ void initialize_data_structures(void) {
 
     // Initialize PFN sparse array
     PFN_array = VirtualAlloc    (NULL,
-                                sizeof(PFN) * max_page_number,
+                                sizeof(PFN) * max_frame_number,
                                 MEM_RESERVE,
                                 PAGE_READWRITE);
 
@@ -145,23 +150,28 @@ void initialize_data_structures(void) {
     }
 
     // Initialize lists for PFN state machine
+    zero_list = malloc(sizeof(LIST_ENTRY));
+    InitializeListHead(zero_list);
+
     free_list = malloc(sizeof(LIST_ENTRY));
     InitializeListHead(free_list);
-    active_list = malloc(sizeof(LIST_ENTRY));
-    InitializeListHead(active_list);
+
     modified_list = malloc(sizeof(LIST_ENTRY));
     InitializeListHead(modified_list);
+
+    standby_list = malloc(sizeof(LIST_ENTRY));
+    InitializeListHead(standby_list);
 
     // Create all PFNs, adding them to the free list
     // Note -- it is critical to not save the returned value of VirtualAlloc as the VA of the PFN.
     // VirtualAlloc returns the beginning of the page that has been committed, which can round down.
     // Once the memory is successfully committed, the PFN should map to the region inside that page
     // That corresponds with the value of the frame number.
-    for (ULONG64 i = 0; i < physical_page_count; i++) {
-        if (physical_page_numbers[i] == 0) {
+    for (ULONG64 i = 0; i < allocated_frame_count; i++) {
+        if (allocated_frame_numbers[i] == 0) {
             continue; // skip frame number 0, as it is an invalid page of memory per our PTE encoding.
         }
-       LPVOID result = VirtualAlloc((LPVOID)(PFN_array + physical_page_numbers[i]),
+       LPVOID result = VirtualAlloc((LPVOID)(PFN_array + allocated_frame_numbers[i]),
                                     sizeof(PFN),
                                     MEM_COMMIT,
                                     PAGE_READWRITE);
@@ -169,22 +179,48 @@ void initialize_data_structures(void) {
             fatal_error("Error: Failed to commit memory for PFN.");
         }
 
-        PPFN new_pfn = PFN_array + physical_page_numbers[i];
-#if DEBUG
-        printf("%llu || New PFN created at VA %p for physical page %llu.\n", i, new_pfn, physical_page_numbers[i]);
-#endif
+        PPFN new_pfn = PFN_array + allocated_frame_numbers[i];
+
         new_pfn->PTE = NULL;
         new_pfn->status = PFN_FREE;
         InsertHeadList(free_list, &new_pfn->entry);
+        free_page_count++;
     }
 
     // Initialize page file.
+    // TODO replace this with a valid amount
     page_file = malloc(VIRTUAL_ADDRESS_SIZE);
+
+#if DEBUG
+    printf("All data structures initialized!\n");
+#endif
+}
+
+void map_pages(int num_pages, PULONG_PTR va, PULONG_PTR frame_numbers) {
+    if (MapUserPhysicalPages (va, num_pages, frame_numbers) == FALSE) {
+        fatal_error("Could not map VA to page in MapUserPhysicalPages.");
+    }
+}
+
+void unmap_pages(int num_pages, PULONG_PTR va) {
+    if (MapUserPhysicalPages (va, num_pages, NULL) == FALSE) {
+        fatal_error("Could not un-map old VA.");
+    }
 }
 
 void unmap_all_pages(void) {
     // TODO complete this
     return;
+}
+
+PPFN get_first_frame_from_list(PLIST_ENTRY head) {
+    if (IsListEmpty(head)) {
+        return NULL;
+    }
+
+    PLIST_ENTRY entry = RemoveHeadList(head);
+    PPFN pfn = CONTAINING_RECORD(entry, PFN, entry);
+    return pfn;
 }
 
 void free_all_data(void) {
@@ -194,10 +230,10 @@ void free_all_data(void) {
 }
 
 void set_max_frame_number(void) {
-    max_page_number = 0;
-    min_page_number = ULONG_MAX;
-    for (int i = 0; i < physical_page_count; i++) {
-        max_page_number = max(max_page_number, physical_page_numbers[i]);
-        min_page_number = min(min_page_number, physical_page_numbers[i]);
+    max_frame_number = 0;
+    min_frame_number = ULONG_MAX;
+    for (int i = 0; i < allocated_frame_count; i++) {
+        max_frame_number = max(max_frame_number, allocated_frame_numbers[i]);
+        min_frame_number = min(min_frame_number, allocated_frame_numbers[i]);
     }
 }

@@ -13,7 +13,15 @@
 #pragma once
 #include "initializer.h"
 
+// Initially, we will begin trimming and writing when we have less than 10% free pages available.
+#define FREE_PAGE_THRESHOLD     NUMBER_OF_PHYSICAL_PAGES / 10
+
 /*
  * Analyzes consumption, then calls ager, trimmer, and writer appropriately.
  */
 VOID schedule_tasks(VOID);
+
+/*
+ *  Print page consumption statistics.
+ */
+VOID print_statistics(VOID);

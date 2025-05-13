@@ -32,6 +32,8 @@ typedef struct {
 } PTE, *PPTE;
 
 #define IS_PTE_ZEROED(pte) ((pte)->memory_format.valid == 0 && (pte)->memory_format.frame_number == 0)
+#define IS_PTE_VALID(pte) ((pte)->memory_format.valid == 1)
+
 
 /*
  *  Provides translations between VAs and their associated PTEs and vice-versa.
@@ -43,6 +45,11 @@ PVOID get_VA_from_PTE(PPTE pte);
  *  Moves an active PTE into the transition state.
  */
 void set_PTE_to_transition(PPTE pte);
+
+/*
+ *  Moves an invalid PTE into the valid state.
+ */
+void set_PTE_to_valid(PPTE pte, ULONG_PTR frame_number);
 
 /*
  *  These will likely be replaced with a call to the page file metadata

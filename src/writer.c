@@ -4,32 +4,71 @@
 
 #include "../include/writer.h"
 #include "../include/debug.h"
+#include "../include/initializer.h"
+#include "../include/macros.h"
 
 VOID write_pages(int num_pages) {
-    // TODO Write the given number of pages to the disk
-}
 
-void write_pages_to_disk(PPTE pte, ULONG_PTR num_pages) {
-
-    // Temporarily map an un-used VA to this frame
-    ULONG_PTR frame_number = pte->memory_format.frame_number;
-    if (MapUserPhysicalPages (kernal_write_va, num_pages, &frame_number) == FALSE) {
-        fatal_error("Could not map Kernal VA to physical page.");
+    // First, check to see if there are any pages to write
+    if (IsListEmpty(modified_list) || num_pages == 0) {
+#if DEBUG
+        printf("No modified pages to write to disk.\n");
+#endif
+        return;
     }
+
+    PPFN pfn;
+    PPTE pte;
+
+    // TODO figure out how to quickly know how many pages can be batched together -- scheduler could do this
+
+
+    // Get the frame numbers, then map kernal VA to them
+    PULONG_PTR frames_to_write = malloc(sizeof(ULONG_PTR) * num_pages);
+
+    // Get all pages to write:
+    for (int i = 0; i < num_pages; i++) {
+
+        // Get the next modified page for this batch
+        pfn = get_first_frame_from_list(modified_list);
+        modified_page_count--;
+
+        // Get the transition PTE associated with this page
+        pte = pfn->PTE;
+
+        if (IS_PTE_VALID(pte)) {
+            fatal_error("PTE for modified page still listed as active.");
+        }
+
+        frames_to_write[i] = get_frame_from_PFN(pfn);
+    }
+
+    // Map all pages to the kernal VA space
+    map_pages(num_pages, kernal_write_va, frames_to_write);
 
     // Get disk slot for this PTE
-    // TODO update this with a reasonable disk slot strategy
     PULONG_PTR disk_slot = page_file + pte->disk_format.disk_index * PAGE_SIZE;
-    memcpy(disk_slot, kernal_write_va, PAGE_SIZE);
+
+    // Write page out to disk
+    // TODO update this with a reasonable disk slot strategy and attend to any issues with VA offset issues
+    // Current issue: cannot write 16 bytes after disk slot?
+    // memcpy(disk_slot, kernal_write_va, PAGE_SIZE);
 
     // Un-map kernal VA
-    if (MapUserPhysicalPages (kernal_write_va, 1, NULL) == FALSE) {
+    if (MapUserPhysicalPages (kernal_write_va, num_pages, NULL) == FALSE) {
         fatal_error("Could not unmap Kernal VA to physical page.");
     }
-}
 
-void load_page_from_disk(PPTE pte, PVOID destination_va) {
+    // TODO eventually loop through and update all PTEs and all PFNs for the batch
 
-    PULONG_PTR disk_slot = page_file + pte->disk_format.disk_index * PAGE_SIZE;
-    memcpy(destination_va, disk_slot, PAGE_SIZE);
+    // Update PFN to be on disk
+    SET_PFN_STATUS(pfn, PFN_STANDBY);
+
+    // Update PTE with disk slot
+    // map_pte_to_disk(pte, disk_slot);    // TODO fix me!
+
+    // Add page to the standby list
+    InsertHeadList(standby_list, &pfn->entry);
+    standby_page_count++;
+
 }

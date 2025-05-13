@@ -26,15 +26,16 @@
 
 // PFN Data Structures
 PPFN PFN_array;
-ULONG_PTR max_page_number;
-ULONG_PTR min_page_number;
-PULONG_PTR physical_page_numbers;
-ULONG_PTR physical_page_count;
+ULONG_PTR max_frame_number;
+ULONG_PTR min_frame_number;
+PULONG_PTR allocated_frame_numbers;
+ULONG_PTR allocated_frame_count;
 
 // Page lists
+PLIST_ENTRY zero_list;
 PLIST_ENTRY free_list;
-PLIST_ENTRY active_list;        // TODO Remove the active list and all references to it.
 PLIST_ENTRY modified_list;
+PLIST_ENTRY standby_list;
 
 // VA spaces
 PULONG_PTR application_va_base;
@@ -48,6 +49,12 @@ PPTE PTE_base;
 PULONG_PTR page_file;
 PULONG_PTR page_file_metadata;
 
+// Statisitcs
+ULONG64 free_page_count;
+ULONG64 active_page_count;
+ULONG64 modified_page_count;
+ULONG64 standby_page_count;
+
 /*
  *  Initialize all data structures, as declared above.
  */
@@ -59,10 +66,24 @@ void initialize_data_structures(void);
 void set_max_frame_number(void);
 
 /*
+ *  Gets the PFN for the head frame on any given list, or NULL if the list is empty.
+ */
+PPFN get_first_frame_from_list(PLIST_ENTRY head);
+
+/*
  *  Frees all data allocated by initializer.
  */
 void free_all_data(void);
 
+/*
+ *  Maps the given page (or pages) to the given VA.
+ */
+void map_pages(int num_pages, PULONG_PTR va, PULONG_PTR frame_numbers);
+
+/*
+ *  Un-maps the given page from the given VA.
+ */
+void unmap_pages(int num_pages, PULONG_PTR va);
 
 /*
  *  Unmaps all physical pages when user app is terminated.
