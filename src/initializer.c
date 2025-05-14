@@ -188,8 +188,7 @@ void initialize_data_structures(void) {
     }
 
     // Initialize page file.
-    // TODO replace this with a valid amount
-    page_file = malloc(VIRTUAL_ADDRESS_SIZE);
+    page_file = malloc(PAGES_IN_PAGE_FILE * PAGE_SIZE);
 
 #if DEBUG
     printf("All data structures initialized!\n");

@@ -5,6 +5,7 @@ Things to be done:
 Current goal:
 - Implement all states of the state machines for PTEs and PFNs.
 
+
 Priority Sub-Goals:
 - Resolve soft-fault issue
 - Create a data structure for disk metadata

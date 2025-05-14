@@ -5,7 +5,6 @@
 #pragma once
 #include <Windows.h>
 #include "pfn.h"
-#include "pte.h"
 
 #define PAGE_SIZE                   4096
 #define MB(x)                       ((x) * 1024 * 1024)
@@ -16,13 +15,14 @@
 #define WRITE_BATCH_SIZE            1
 #define READ_BATCH_SIZE             1
 
-// This is intentionally a power of two so we can use masking to stay within bounds.
-#define VIRTUAL_ADDRESS_SIZE                            MB(16)
-#define VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS         (VIRTUAL_ADDRESS_SIZE / sizeof (ULONG_PTR))
+// Pages in memory and page file, which are used to calculate VA span
+#define NUMBER_OF_PHYSICAL_PAGES        64
+#define PAGES_IN_PAGE_FILE              64
 
-// Deliberately use a physical page pool that is approximately 1% of the VA space.
-// This is, initially, 64 physical pages.
-#define NUMBER_OF_PHYSICAL_PAGES   ((VIRTUAL_ADDRESS_SIZE / PAGE_SIZE) / 64)
+// This is intentionally a power of two so we can use masking to stay within bounds.
+#define VA_SPAN                                         (NUMBER_OF_PHYSICAL_PAGES + PAGES_IN_PAGE_FILE - 1)
+#define VIRTUAL_ADDRESS_SIZE                            (VA_SPAN * PAGE_SIZE)
+#define VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS         (VIRTUAL_ADDRESS_SIZE / sizeof (ULONG_PTR))
 
 // PFN Data Structures
 PPFN PFN_array;
