@@ -14,6 +14,7 @@ VOID print_statistics(VOID) {
     printf("ACTIVE PAGE COUNT:\t\t%llu\t\tACTIVE PAGE PERCENTAGE:\t\t%.3f\n", active_page_count, 1.0 * active_page_count / allocated_frame_count);
     printf("MODIFIED PAGE COUNT:\t\t%llu\t\tMODIFIED PAGE PERCENTAGE:\t\t%.3f\n", modified_page_count, 1.0 * modified_page_count / allocated_frame_count);
     printf("STANDBY PAGE COUNT:\t\t%llu\t\tSTANDBY PAGE PERCENTAGE:\t\t%.3f\n", standby_page_count, 1.0 * standby_page_count / allocated_frame_count);
+    printf("\nFAULTS RESOLVED:\t\t%llu\t\tFAULTS UNRESOLVED:\t\t%llu\n", faults_resolved, faults_unresolved);
 }
 
 VOID schedule_tasks(VOID) {

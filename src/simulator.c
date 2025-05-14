@@ -94,12 +94,12 @@ VOID full_virtual_memory_test (VOID) {
 
     NULL_CHECK (kernal_write_va, "Could not reserve kernal write VA space.");
 
-    kernal_read_va = VirtualAlloc (NULL,
+    kernel_read_va = VirtualAlloc (NULL,
                       PAGE_SIZE * MAX_READ_BATCH_SIZE,
                       MEM_RESERVE | MEM_PHYSICAL,
                       PAGE_READWRITE);
 
-    NULL_CHECK (kernal_read_va, "Could not reserve kernal read VA space.");
+    NULL_CHECK (kernel_read_va, "Could not reserve kernal read VA space.");
 
     // Now perform random accesses
     for (int i = 0; i < MB (1); i += 1) {
@@ -130,6 +130,10 @@ VOID full_virtual_memory_test (VOID) {
         // If we were successful, we will do allow our usermode program to continue with its goal.
         if (fault_resolved){
             *arbitrary_va = (ULONG_PTR) arbitrary_va;
+            faults_resolved++;
+        }
+        else {
+            faults_unresolved++;
         }
     }
 

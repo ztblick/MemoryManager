@@ -43,7 +43,7 @@ VOID write_pages(int num_pages) {
         frames_to_write[i] = get_frame_from_PFN(pfn);
     }
 
-    // Map all pages to the kernal VA space
+    // Map all pages to the kernel VA space
     map_pages(num_pages, kernal_write_va, frames_to_write);
 
     // Get disk slot for this PTE
@@ -68,7 +68,7 @@ VOID write_pages(int num_pages) {
     // map_pte_to_disk(pte, disk_slot);    // TODO fix me!
 
     // Add page to the standby list
-    InsertHeadList(standby_list, &pfn->entry);
+    InsertTailList(standby_list, &pfn->entry);
     standby_page_count++;
 
 }

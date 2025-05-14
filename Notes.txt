@@ -4,10 +4,11 @@ Things to be done:
 
 Current goal:
 - Implement all states of the state machines for PTEs and PFNs.
+- Check that data is not lost in any transfer from the disk
 
 
 Priority Sub-Goals:
-- Resolve soft-fault issue
+- Resolve soft-fault issues: accurately remove pages from the middle of standby and modified lists
 - Create a data structure for disk metadata
 - Add disk, disk_map, and provide functionality for disk reads and disk writes
 - Create a VA_SPAN variable to connect num_pages, VA space size, and page file size

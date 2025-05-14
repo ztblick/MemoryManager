@@ -122,6 +122,13 @@ CreateSharedMemorySection (
 
 #endif
 
+PULONG_PTR zero_malloc(size_t bytes_to_allocate) {
+    PULONG_PTR destination = malloc(bytes_to_allocate);
+    NULL_CHECK(destination, "Zero malloc failed! page file.");
+    memset(destination, 0, bytes_to_allocate);
+    return destination;
+}
+
 // Initialize the above structures
 void initialize_data_structures(void) {
 
@@ -129,6 +136,8 @@ void initialize_data_structures(void) {
     active_page_count = 0;
     modified_page_count = 0;
     standby_page_count = 0;
+    faults_unresolved = 0;
+    faults_resolved = 0;
 
     // Initialize PTE array
     PTE_base = malloc(sizeof(PTE) * NUM_PTEs);
@@ -188,7 +197,11 @@ void initialize_data_structures(void) {
     }
 
     // Initialize page file.
-    page_file = malloc(PAGES_IN_PAGE_FILE * PAGE_SIZE);
+    page_file = zero_malloc(PAGES_IN_PAGE_FILE * PAGE_SIZE);
+
+    // Initialize page file metadata -- initially, this will be a bytemap to represent free or used pages in the page file.
+    page_file_metadata = (PBYTE) zero_malloc(PAGES_IN_PAGE_FILE);
+
 
 #if DEBUG
     printf("All data structures initialized!\n");

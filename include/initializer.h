@@ -8,6 +8,7 @@
 
 #define PAGE_SIZE                   4096
 #define MB(x)                       ((x) * 1024 * 1024)
+#define BITS_PER_BYTE               8
 
 // These will change as we decide how many pages to write out or read from to disk at once.
 #define MAX_WRITE_BATCH_SIZE        1
@@ -40,20 +41,27 @@ PLIST_ENTRY standby_list;
 // VA spaces
 PULONG_PTR application_va_base;
 PULONG_PTR kernal_write_va;
-PULONG_PTR kernal_read_va;
+PULONG_PTR kernel_read_va;
 
 // PTEs
 PPTE PTE_base;
 
 // Page File and Page File Metadata
 PULONG_PTR page_file;
-PULONG_PTR page_file_metadata;
+PBYTE page_file_metadata;
 
 // Statisitcs
 ULONG64 free_page_count;
 ULONG64 active_page_count;
 ULONG64 modified_page_count;
 ULONG64 standby_page_count;
+ULONG64 faults_unresolved;
+ULONG64 faults_resolved;
+
+/*
+ *  Malloc the given amount of space, then zero the memory.
+ */
+PULONG_PTR zero_malloc(size_t bytes_to_allocate);
 
 /*
  *  Initialize all data structures, as declared above.
