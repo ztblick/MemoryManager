@@ -7,24 +7,26 @@
 
 VOID trim_pages(VOID) {
 
+    // Initialize current pte
+    PPTE pte = PTE_base + trimmer_offset;
+
     // Flag to indicate if active page was trimmed
     BOOL trimmed = FALSE;
 
-    // Walks PTE region until a valid PTE is found to be trimmed.
-    PPTE pte = PTE_base;
-    while (pte < PTE_base + NUM_PTEs) {
+    // Walks PTE region until a valid PTE is found to be trimmed, beginning from one
+    // beyond previous last trimmed page.
+    while (!trimmed) {
 
         // When an active PTE is found, break.
         if (pte->memory_format.valid) {
             trimmed = TRUE;
             break;
         }
+        // Move on to the next pte
         pte++;
-    }
 
-    // If we reach the end of the PTE space, and no pages were trimmed, return.
-    if (!trimmed) {
-        return;
+        // Wrap around!
+        if (pte == (PTE_base + NUM_PTEs)) pte = PTE_base;
     }
 
     // Unmap the VA from this page
@@ -47,4 +49,9 @@ VOID trim_pages(VOID) {
 #if DEBUG
     printf("\nTrimmed one page to from active to modified.\n\n");
 #endif
+
+    // Return the new offset -- current pte plus one!
+    pte++;
+    if (pte == (PTE_base + NUM_PTEs)) pte = PTE_base;
+    trimmer_offset = pte - PTE_base;
 }

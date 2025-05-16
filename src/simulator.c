@@ -145,6 +145,7 @@ VOID full_virtual_memory_test (VOID) {
     VirtualFree (application_va_base, 0, MEM_RELEASE);
     unmap_all_pages();
     free_all_data();
+    FreeUserPhysicalPages(physical_page_handle, &allocated_frame_count, allocated_frame_numbers);
 }
 
 

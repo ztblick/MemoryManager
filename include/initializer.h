@@ -46,6 +46,9 @@ PULONG_PTR kernel_read_va;
 // PTEs
 PPTE PTE_base;
 
+// The initial trimmer_offset in the PTE region for the trimmer -- this will change over time.
+ULONG trimmer_offset;
+
 // Page File and Page File Metadata
 PULONG_PTR page_file;
 PBYTE page_file_metadata;

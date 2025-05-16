@@ -11,12 +11,14 @@ Priority Sub-Goals:
 - Resolve soft-fault issues: accurately remove pages from the middle of standby and modified lists
 - Create a data structure for disk metadata
 - Add disk, disk_map, and provide functionality for disk reads and disk writes
-- Create a VA_SPAN variable to connect num_pages, VA space size, and page file size
-
 
 Sub-goals:
 - Zero pages before assignment to new PTEs
 - Initiate aging and trimming based on projections
+
+BUGS:
+- Unable to unmap all pages when exiting -- some VAs are left in memory format that are not linked to a page :(
+
 
 
 ~~~ OLD THOUGHTS THAT ARE SEEMINGLY IRRELEVANT ~~~

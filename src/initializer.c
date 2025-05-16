@@ -139,6 +139,8 @@ void initialize_data_structures(void) {
     faults_unresolved = 0;
     faults_resolved = 0;
 
+    trimmer_offset = 0;
+
     // Initialize PTE array
     PTE_base = malloc(sizeof(PTE) * NUM_PTEs);
     if (!PTE_base) {
@@ -221,8 +223,12 @@ void unmap_pages(int num_pages, PULONG_PTR va) {
 }
 
 void unmap_all_pages(void) {
-    // TODO complete this
-    return;
+    for (PPTE pte = PTE_base; pte < PTE_base + NUM_PTEs; pte++) {
+        if (pte->disk_format.valid) {
+            PULONG_PTR va = get_VA_from_PTE(pte);
+            unmap_pages(1, va);
+        }
+    }
 }
 
 PPFN get_first_frame_from_list(PLIST_ENTRY head) {
