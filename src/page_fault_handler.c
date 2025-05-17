@@ -25,6 +25,13 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         fatal_error("Faulted on a hardware valid PTE.");
     }
 
+    // First, check for a soft fault:
+        // If our PTE's frame is on the modified list:
+            // remove the PFN from the modified list.
+            // put the PTE in the active state
+            // put the PFN in the active state
+
+
     // TODO add zero list
     // First, try to get a zeroed page!
 
@@ -77,25 +84,11 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
     *frame_number = get_frame_from_PFN(available_pfn);
     PPTE old_pte = available_pfn->PTE;
 
-    // Handle soft fault: if the old pte and the pte are the same, then simply update the PTE to be active
-    // TODO CURRENT BUG: this will not resolve a page fault! The program continuously loops with the same VA and page...
-    if (pte == old_pte) {
-#if DEBUG
-        printf("Soft fault on standby page!\n");
-#endif
-        map_pages(1, faulting_va, frame_number);
-        set_PTE_to_valid(pte, *frame_number);
-        SET_PFN_STATUS(available_pfn, PFN_ACTIVE);
-        // TODO Also, mark the disk slot as available
-    }
-
     // Handle hard fault: map new VA to this page, update PFN and PTE
-    else {
-        map_pages(1, faulting_va, frame_number);
-        set_PTE_to_valid(pte, *frame_number);
-        SET_PFN_STATUS(available_pfn, PFN_ACTIVE);
-        available_pfn->PTE = pte;
-    }
+    map_pages(1, faulting_va, frame_number);
+    set_PTE_to_valid(pte, *frame_number);
+    SET_PFN_STATUS(available_pfn, PFN_ACTIVE);
+    available_pfn->PTE = pte;
 
 #if DEBUG
     printf("Iteration %d: Successfully mapped and trimmed physical page %llu with PTE %p.\n", i, *frame_number, pte);

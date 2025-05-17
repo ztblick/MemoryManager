@@ -124,7 +124,7 @@ CreateSharedMemorySection (
 
 PULONG_PTR zero_malloc(size_t bytes_to_allocate) {
     PULONG_PTR destination = malloc(bytes_to_allocate);
-    NULL_CHECK(destination, "Zero malloc failed! page file.");
+    NULL_CHECK(destination, "Zero malloc failed!");
     memset(destination, 0, bytes_to_allocate);
     return destination;
 }
@@ -142,12 +142,7 @@ void initialize_data_structures(void) {
     trimmer_offset = 0;
 
     // Initialize PTE array
-    PTE_base = malloc(sizeof(PTE) * NUM_PTEs);
-    if (!PTE_base) {
-        fatal_error("Failed to allocate PTE array.");
-    }
-    // Zero the entire region so all PTEs are in the zeroed (never used) state
-    memset(PTE_base, 0, NUM_PTEs * sizeof(PTE));
+    PTE_base = (PPTE) zero_malloc(sizeof(PTE) * NUM_PTEs);
 
     // Initialize PFN sparse array
     PFN_array = VirtualAlloc    (NULL,
@@ -156,8 +151,7 @@ void initialize_data_structures(void) {
                                 PAGE_READWRITE);
 
     if (!PFN_array) {
-        printf("Failed to reserve VA space for PFN_array\n");
-        ExitProcess(1);
+        fatal_error("Failed to reserve VA space for PFN_array\n");
     }
 
     // Initialize lists for PFN state machine
@@ -179,9 +173,7 @@ void initialize_data_structures(void) {
     // Once the memory is successfully committed, the PFN should map to the region inside that page
     // That corresponds with the value of the frame number.
     for (ULONG64 i = 0; i < allocated_frame_count; i++) {
-        if (allocated_frame_numbers[i] == 0) {
-            continue; // skip frame number 0, as it is an invalid page of memory per our PTE encoding.
-        }
+
        LPVOID result = VirtualAlloc((LPVOID)(PFN_array + allocated_frame_numbers[i]),
                                     sizeof(PFN),
                                     MEM_COMMIT,
@@ -203,7 +195,6 @@ void initialize_data_structures(void) {
 
     // Initialize page file metadata -- initially, this will be a bytemap to represent free or used pages in the page file.
     page_file_metadata = (PBYTE) zero_malloc(PAGES_IN_PAGE_FILE);
-
 
 #if DEBUG
     printf("All data structures initialized!\n");

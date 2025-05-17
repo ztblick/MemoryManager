@@ -14,16 +14,23 @@
 #define NUM_PTEs                (VIRTUAL_ADDRESS_SIZE / PAGE_SIZE)
 
 typedef struct {
-    UINT64 frame_number : 40;   // 40 bits to hold the frame number
-    UINT64 unused : 23;         // Remaining bits reserved for later
     UINT64 valid : 1;           // Valid bit -- 1 indicating PTE is valid
+    UINT64 status : 1;          // 1 bit to encode transition (0) or on disk (1)
+    UINT64 readwrite : 1;       // Read/Write bit -- 0 for read privileges, 1 for write privileges
+    UINT64 dirty : 1;           // Dirty bit -- 0 for unmodified, 1 for modified
+    UINT64 accessed : 1;        // Accessed bit -- indicates if the page has been accessed to track frequency
+    UINT64 frame_number : 40;   // 40 bits to hold the frame number
+    UINT64 reserved : 19;       // Remaining bits reserved for later
 } VALID_PTE;
 
 typedef struct {
-    UINT64 disk_index : 22;     // 22 bits to hold the disk index
-    UINT64 unused : 40;         // Remaining bits reserved for later
-    UINT64 status : 1;          // 1 bit to encode transition (0) or on disk (1)
     UINT64 valid : 1;           // Valid bit -- 0 indicating PTE is invalid
+    UINT64 status : 1;          // 1 bit to encode transition (0) or on disk (1)
+    UINT64 readwrite : 1;       // Read/Write bit -- 0 for read privileges, 1 for write privileges
+    UINT64 dirty : 1;           // Dirty bit -- 0 for unmodified, 1 for modified
+    UINT64 accessed : 1;        // Accessed bit -- indicates if the page has been accessed to track frequency
+    UINT64 disk_index : 22;     // 22 bits to hold the disk index
+    UINT64 reserved : 37;       // Remaining bits reserved for later
 } INVALID_PTE;
 
 typedef struct {
