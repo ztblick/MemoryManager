@@ -7,7 +7,7 @@
 
 // This is my central controller for editing with a debug mode. All debug settings are enabled
 // and disabled by DEBUG.
-#define DEBUG                       0
+#define DEBUG                       1
 
 
 /*

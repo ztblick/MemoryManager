@@ -4,7 +4,6 @@
 
 #include "../include/initializer.h"
 #include "../include/pte.h"
-
 #include "../include/debug.h"
 
 // Returns the pte associated with the faulting VA. Divides the offset of the VA within the VA space
@@ -23,7 +22,7 @@ PVOID get_VA_from_PTE(PPTE pte) {
 // Using a strategy of not modifying the PTE one piece at a time, but all at once.
 void set_PTE_to_transition(PPTE pte) {
 
-    // Start by copying the whole PTE as raw bits
+    // Start by copying the whole PTE
     PTE temp;
     temp.memory_format = pte->memory_format;
 
@@ -42,7 +41,7 @@ void set_PTE_to_valid(PPTE pte, ULONG_PTR frame_number) {
     PTE temp = {0};
 
     // Set valid bit, set frame number
-    temp.memory_format.status = PTE_VALID;
+    temp.memory_format.valid = PTE_VALID;
     temp.memory_format.frame_number = frame_number;
 
     // Write back all bits at once to avoid partial modification
@@ -51,11 +50,23 @@ void set_PTE_to_valid(PPTE pte, ULONG_PTR frame_number) {
 
 void map_pte_to_disk(PPTE pte, size_t disk_index) {
 
-    pte->disk_format.disk_index = disk_index;
-    pte->disk_format.status = PTE_ON_DISK;
-    pte->disk_format.valid = PTE_INVALID;
+    // Start by copying the whole PTE
+    PTE temp;
+    temp.memory_format = pte->memory_format;
+
+    // Clear the frame number, add the disk index, update the status bits
+    temp.memory_format.frame_number = 0;
+    temp.disk_format.valid = PTE_INVALID;
+    temp.disk_format.status = PTE_ON_DISK;
+    temp.disk_format.disk_index = disk_index;
+
+    // Write back all bits at once to avoid partial modification
+    *pte = temp;
 }
 
-size_t get_disk_index_from_pte(PPTE pte) {
-    return (size_t)(pte - PTE_base);
+UINT64 get_disk_index_from_pte(PPTE pte) {
+    if (pte->disk_format.status != PTE_ON_DISK) {
+        fatal_error("Requested disk index from PTE not in disk format.");
+    }
+    return pte->disk_format.disk_index;
 }

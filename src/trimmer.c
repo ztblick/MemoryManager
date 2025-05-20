@@ -15,7 +15,7 @@ VOID trim_pages(VOID) {
 
     // Walks PTE region until a valid PTE is found to be trimmed, beginning from one
     // beyond previous last trimmed page.
-    while (!trimmed) {
+    for (int i = 0; i < NUM_PTEs; i++) {
 
         // When an active PTE is found, break.
         if (pte->memory_format.valid) {
@@ -28,17 +28,18 @@ VOID trim_pages(VOID) {
         // Wrap around!
         if (pte == (PTE_base + NUM_PTEs)) pte = PTE_base;
     }
-
-    // Unmap the VA from this page
-    if (MapUserPhysicalPages (get_VA_from_PTE(pte), 1, NULL) == FALSE) {
-        fatal_error("Could not unmap VA from physical page.");
+    if (!trimmed) {
+        fatal_error("No active PTEs to be trimmed...");
     }
 
-    // Set the PTE as memory format modified.
+    // Unmap the VA from this page
+    unmap_pages(1, get_VA_from_PTE(pte));
+
+    // Set the PTE as memory format transition.
     set_PTE_to_transition(pte);
 
     // Trim this page to the modified list
-    PPFN pfn = get_PFN_from_frame(pte->memory_format.frame_number);
+    PPFN pfn = get_PFN_from_PTE(pte);
     InsertHeadList(modified_list, &pfn->entry);
     modified_page_count++;
     active_page_count--;
@@ -50,7 +51,7 @@ VOID trim_pages(VOID) {
     printf("\nTrimmed one page to from active to modified.\n\n");
 #endif
 
-    // Return the new offset -- current pte plus one!
+    // Update the offset -- current pte plus one!
     pte++;
     if (pte == (PTE_base + NUM_PTEs)) pte = PTE_base;
     trimmer_offset = pte - PTE_base;

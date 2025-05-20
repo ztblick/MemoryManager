@@ -12,6 +12,13 @@ ULONG_PTR get_frame_from_PFN(PPFN pfn) {
     return pfn - PFN_array;
 }
 
+PPFN get_PFN_from_PTE(PPTE pte) {
+    if (pte->memory_format.status == PTE_ON_DISK) {
+        fatal_error("Frame number requested from disk format PTE.");
+    }
+    return PFN_array + pte->memory_format.frame_number;
+}
+
 PPFN get_PFN_from_frame(ULONG_PTR frame_number) {
     if (frame_number < min_frame_number || frame_number > max_frame_number) {
         fatal_error("Frame number out of bounds while attempting to get PFN from frame number.");

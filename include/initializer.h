@@ -40,7 +40,7 @@ PLIST_ENTRY standby_list;
 
 // VA spaces
 PULONG_PTR application_va_base;
-PULONG_PTR kernal_write_va;
+PULONG_PTR kernel_write_va;
 PULONG_PTR kernel_read_va;
 
 // PTEs

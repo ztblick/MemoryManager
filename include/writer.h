@@ -17,3 +17,6 @@ void write_pages_to_disk(PPTE pte, ULONG_PTR num_pages);
 
 
 void load_page_from_disk(PPTE pte, PVOID destination_va);
+
+
+UINT64 get_free_disk_index(void);

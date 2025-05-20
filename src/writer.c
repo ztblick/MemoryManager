@@ -7,6 +7,18 @@
 #include "../include/initializer.h"
 #include "../include/macros.h"
 
+UINT64 get_free_disk_index(void) {
+
+    UINT64 disk_index;
+    for (disk_index = 0; disk_index < PAGES_IN_PAGE_FILE; disk_index++) {
+        if (page_file_metadata[disk_index] == 0) {
+            return disk_index;
+        }
+    }
+    fatal_error("No empty pages in the page file!");
+    return 0;
+}
+
 VOID write_pages(int num_pages) {
 
     // First, check to see if there are any pages to write
@@ -19,9 +31,6 @@ VOID write_pages(int num_pages) {
 
     PPFN pfn;
     PPTE pte;
-
-    // TODO figure out how to quickly know how many pages can be batched together -- scheduler could do this
-
 
     // Get the frame numbers, then map kernal VA to them
     PULONG_PTR frames_to_write = malloc(sizeof(ULONG_PTR) * num_pages);
@@ -42,33 +51,45 @@ VOID write_pages(int num_pages) {
 
         frames_to_write[i] = get_frame_from_PFN(pfn);
     }
-
-    // Map all pages to the kernel VA space
-    map_pages(num_pages, kernal_write_va, frames_to_write);
-
-    // Get disk slot for this PTE
-    PULONG_PTR disk_slot = page_file + pte->disk_format.disk_index * PAGE_SIZE;
-
-    // Write page out to disk
-    // TODO update this with a reasonable disk slot strategy and attend to any issues with VA offset issues
-    // Current issue: cannot write 16 bytes after disk slot?
-    // memcpy(disk_slot, kernal_write_va, PAGE_SIZE);
-
-    // Un-map kernal VA
-    if (MapUserPhysicalPages (kernal_write_va, num_pages, NULL) == FALSE) {
-        fatal_error("Could not unmap Kernal VA to physical page.");
+    LPVOID result = VirtualAlloc((LPVOID)(kernel_write_va),
+                             PAGE_SIZE,
+                             MEM_RESERVE | MEM_PHYSICAL,
+                             PAGE_READWRITE);
+    if (result == NULL) {
+        fatal_error("Error: Failed to commit memory for kernal va for disk write.");
     }
 
-    // TODO eventually loop through and update all PTEs and all PFNs for the batch
+    // TODO
+    // Right now, this call to map_pages is failing. We need to use the degbugger to figure out why!
 
-    // Update PFN to be on disk
+    // Map all pages to the kernel VA space
+    map_pages(num_pages, kernel_write_va, frames_to_write);
+
+    // Get disk slot for this PTE
+    UINT64 disk_index = get_free_disk_index();
+
+    // Get the location to write to in page file
+    PULONG_PTR page_file_location = page_file + disk_index * PAGE_SIZE;
+
+    // Perform the write
+    memcpy(page_file_location, kernel_write_va, PAGE_SIZE * num_pages);
+    page_file_metadata[disk_index] = 1;
+
+    // Un-map kernal VA
+    unmap_pages(num_pages, kernel_write_va);
+
+    // Update PFN to be in standby state, add disk index
     SET_PFN_STATUS(pfn, PFN_STANDBY);
-
-    // Update PTE with disk slot
-    // map_pte_to_disk(pte, disk_slot);    // TODO fix me!
+    pfn->disk_index = disk_index;
 
     // Add page to the standby list
     InsertTailList(standby_list, &pfn->entry);
     standby_page_count++;
 
+    // Free the kernal VA so it will be available for the next write
+    if (!VirtualFree((LPVOID)(kernel_write_va), PAGE_SIZE, MEM_DECOMMIT)) {
+        fatal_error("Error: Could not decommit kernal VA memory.");
+    }
+
+    free(frames_to_write);
 }

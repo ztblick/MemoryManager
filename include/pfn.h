@@ -19,6 +19,7 @@
 typedef struct __pfn {
     LIST_ENTRY entry;
     ULONG_PTR status;
+    UINT64 disk_index;
     // TODO Think about reducing the size of the status field while keeping the size of PFN a power of 2
     PPTE PTE;
 } PFN, *PPFN;
@@ -32,3 +33,8 @@ ULONG_PTR get_frame_from_PFN(PPFN pfn);
  *  Returns PFN associated with this frame number.
  */
 PPFN get_PFN_from_frame(ULONG_PTR frame_number);
+
+/*
+ *  Returns PFN associated with this PTE.
+ */
+PPFN get_PFN_from_PTE(PPTE pte);

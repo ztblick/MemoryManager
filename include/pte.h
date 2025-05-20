@@ -64,4 +64,4 @@ void set_PTE_to_valid(PPTE pte, ULONG_PTR frame_number);
  *  These will likely be replaced with a call to the page file metadata
  */
 void map_pte_to_disk(PPTE pte, size_t disk_index);
-size_t get_disk_index_from_pte(PPTE pte);
+UINT64 get_disk_index_from_pte(PPTE pte);
