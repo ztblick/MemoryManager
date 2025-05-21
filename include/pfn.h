@@ -12,7 +12,10 @@
 #define PFN_STANDBY   0x3
 
 // Macros for easy analysis later.
-#define IS_PFN_FREE(pfn)            ((pfn)->status == PFN_STATUS_FREE)
+#define IS_PFN_FREE(pfn)            ((pfn)->status == PFN_FREE)
+#define IS_PFN_ACTIVE(pfn)            ((pfn)->status == PFN_ACTIVE)
+#define IS_PFN_MODIFIED(pfn)            ((pfn)->status == PFN_MODIFIED)
+#define IS_PFN_STANDBY(pfn)            ((pfn)->status == PFN_STANDBY)
 #define SET_PFN_STATUS(pfn, s)      ((pfn)->status = (s))
 
 // We need the list entry to be first, as its address is also the address of the PFN.

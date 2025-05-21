@@ -174,6 +174,10 @@ void initialize_data_structures(void) {
     // That corresponds with the value of the frame number.
     for (ULONG64 i = 0; i < allocated_frame_count; i++) {
 
+        if (allocated_frame_numbers[i] == 0) {
+            continue; // skip frame number 0, as it is an invalid page of memory per our PTE encoding.
+        }
+
        LPVOID result = VirtualAlloc((LPVOID)(PFN_array + allocated_frame_numbers[i]),
                                     sizeof(PFN),
                                     MEM_COMMIT,
@@ -190,8 +194,11 @@ void initialize_data_structures(void) {
         free_page_count++;
     }
 
+    // Initialize frame number array
+    frame_numbers_to_map = zero_malloc(MAX_WRITE_BATCH_SIZE * sizeof(ULONG_PTR));
+
     // Initialize page file.
-    page_file = zero_malloc(PAGES_IN_PAGE_FILE * PAGE_SIZE);
+    page_file = (char*) zero_malloc(PAGES_IN_PAGE_FILE * PAGE_SIZE);
 
     // Initialize page file metadata -- initially, this will be a bytemap to represent free or used pages in the page file.
     page_file_metadata = (PBYTE) zero_malloc(PAGES_IN_PAGE_FILE);

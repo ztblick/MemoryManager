@@ -87,12 +87,12 @@ VOID full_virtual_memory_test (VOID) {
 
     NULL_CHECK (application_va_base, "Could not reserve user VA space.");
 
-    // kernel_write_va = VirtualAlloc (NULL,
-    //                   PAGE_SIZE * MAX_WRITE_BATCH_SIZE,
-    //                   MEM_RESERVE | MEM_PHYSICAL,
-    //                   PAGE_READWRITE);
-    //
-    // NULL_CHECK (kernel_write_va, "Could not reserve kernal write VA space.");
+    kernel_write_va = VirtualAlloc (NULL,
+                      PAGE_SIZE * MAX_WRITE_BATCH_SIZE,
+                      MEM_RESERVE | MEM_PHYSICAL,
+                      PAGE_READWRITE);
+
+    NULL_CHECK (kernel_write_va, "Could not reserve kernal write VA space.");
 
     kernel_read_va = VirtualAlloc (NULL,
                       PAGE_SIZE * MAX_READ_BATCH_SIZE,

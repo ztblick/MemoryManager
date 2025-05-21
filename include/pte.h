@@ -40,8 +40,11 @@ typedef struct {
     };
 } PTE, *PPTE;
 
-#define IS_PTE_ZEROED(pte) ((pte)->memory_format.valid == 0 && (pte)->memory_format.frame_number == 0)
-#define IS_PTE_VALID(pte) ((pte)->memory_format.valid == 1)
+#define IS_PTE_ZEROED(pte) ((pte)->memory_format.valid == PTE_INVALID && (pte)->memory_format.frame_number == 0)
+#define IS_PTE_VALID(pte) ((pte)->memory_format.valid == PTE_VALID)
+#define IS_PTE_TRANSITION(pte) ((pte)->memory_format.status == PTE_IN_TRANSITION)
+#define IS_PTE_ON_DISK(pte) ((pte)->memory_format.status == PTE_ON_DISK && ((pte)->memory_format.valid == PTE_INVALID))
+
 
 
 /*

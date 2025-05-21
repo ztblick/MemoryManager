@@ -29,6 +29,7 @@
 PPFN PFN_array;
 ULONG_PTR max_frame_number;
 ULONG_PTR min_frame_number;
+PULONG_PTR frame_numbers_to_map;
 PULONG_PTR allocated_frame_numbers;
 ULONG_PTR allocated_frame_count;
 
@@ -50,7 +51,7 @@ PPTE PTE_base;
 ULONG trimmer_offset;
 
 // Page File and Page File Metadata
-PULONG_PTR page_file;
+char* page_file;
 PBYTE page_file_metadata;
 
 // Statisitcs

@@ -9,8 +9,7 @@ Current goal:
 
 Priority Sub-Goals:
 - Resolve soft-fault issues: accurately remove pages from the middle of standby and modified lists
-- Create a data structure for disk metadata
-- Add disk, disk_map, and provide functionality for disk reads and disk writes
+- Successfully read data from disk, updating metadata and pte/pfn appropriately
 
 Sub-goals:
 - Zero pages before assignment to new PTEs
