@@ -103,6 +103,11 @@ VOID full_virtual_memory_test (VOID) {
 
     // Now perform random accesses
     for (int i = 0; i < MB (1); i += 1) {
+
+#if DEBUG
+        printf("\n\n~~~~~~~~~~~~~~~\nBegin iteration %d...\n", i);
+#endif
+
         // Ask the scheduler to age, trim, and write as is necessary.
         schedule_tasks();
 
@@ -129,7 +134,6 @@ VOID full_virtual_memory_test (VOID) {
             // If we were successful, we will do allow our usermode program to continue with its goal.
             if (fault_resolved){
                 *arbitrary_va = (ULONG_PTR) arbitrary_va;
-                faults_resolved++;
             }
             else {
                 faults_unresolved++;
@@ -142,8 +146,8 @@ VOID full_virtual_memory_test (VOID) {
 
     // Now that we're done with our memory we can be a good
     // citizen and free it.
-    VirtualFree (application_va_base, 0, MEM_RELEASE);
     unmap_all_pages();
+    VirtualFree (application_va_base, 0, MEM_RELEASE);
     free_all_data();
     FreeUserPhysicalPages(physical_page_handle, &allocated_frame_count, allocated_frame_numbers);
 }

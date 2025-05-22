@@ -6,12 +6,13 @@
 #include "../include/debug.h"
 #include "../include/initializer.h"
 #include "../include/macros.h"
+#include "../include/page_fault_handler.h"
 
 UINT64 get_free_disk_index(void) {
 
-    UINT64 disk_index;
-    for (disk_index = 0; disk_index < PAGES_IN_PAGE_FILE; disk_index++) {
-        if (page_file_metadata[disk_index] == 0) {
+    for (UINT64 disk_index = 0; disk_index < PAGES_IN_PAGE_FILE; disk_index++) {
+
+        if (page_file_metadata[disk_index] == DISK_SLOT_EMPTY) {
             return disk_index;
         }
     }
@@ -56,11 +57,16 @@ VOID write_pages(int num_pages) {
     UINT64 disk_index = get_free_disk_index();
 
     // Get the location to write to in page file
-    char* page_file_location = page_file + disk_index * PAGE_SIZE;
+    char* page_file_location = get_page_file_offset(disk_index);
 
     // Perform the write
     memcpy(page_file_location, kernel_write_va, PAGE_SIZE * num_pages);
-    page_file_metadata[disk_index] = 1;
+    set_disk_slot(disk_index);
+
+    // TODO
+        // We should check the total contents of this page to see what is in it.
+        // We should also ask Landy about writing to and reading from specific regions
+        // within a page.
 
     // Un-map kernal VA
     unmap_pages(num_pages, kernel_write_va);
@@ -72,4 +78,8 @@ VOID write_pages(int num_pages) {
     // Add page to the standby list
     InsertTailList(standby_list, &pfn->entry);
     standby_page_count++;
+
+#if DEBUG
+    printf("Wrote one page out to disk, moved page to standby list!\n");
+#endif
 }

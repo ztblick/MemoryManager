@@ -14,7 +14,7 @@
 #include "initializer.h"
 
 // Initially, we will begin trimming and writing when we have less than 10% free pages available.
-#define FREE_PAGE_THRESHOLD     NUMBER_OF_PHYSICAL_PAGES / 10
+#define FREE_PAGE_THRESHOLD     NUMBER_OF_PHYSICAL_PAGES / 2
 
 /*
  * Analyzes consumption, then calls ager, trimmer, and writer appropriately.

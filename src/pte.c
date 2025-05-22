@@ -8,15 +8,30 @@
 
 // Returns the pte associated with the faulting VA. Divides the offset of the VA within the VA space
 // by the page_size, resulting in the index of the VA within the PTE array.
-PPTE get_PTE_from_VA(PULONG_PTR faulting_VA) {
-    ULONG_PTR va_offset = (ULONG_PTR)faulting_VA - (ULONG_PTR)application_va_base;
-    size_t pte_index = va_offset / PAGE_SIZE;
+PPTE get_PTE_from_VA(PULONG_PTR va) {
+    NULL_CHECK(va, "VA is null when getting PTE from VA!");
+    if (va > application_va_base + VIRTUAL_ADDRESS_SIZE ||
+        va < application_va_base) {
+        fatal_error("VA is invalid when getting PTE from VA.");
+    }
+
+    ULONG_PTR va_offset = (ULONG_PTR)va - (ULONG_PTR)application_va_base;
+    ULONG_PTR pte_index = va_offset / PAGE_SIZE;
+
     return PTE_base + pte_index;
 }
 
+// Returns the VA associated with the beginning of the region of VAs for this PTE.
 PVOID get_VA_from_PTE(PPTE pte) {
-    size_t index = (size_t)(pte - PTE_base);  // Already scaled correctly
-    return (PVOID)((char*)application_va_base + index * PAGE_SIZE);
+
+    NULL_CHECK(pte, "pte is null when getting VA from pte!");
+    if (pte > PTE_base + NUM_PTEs || pte < PTE_base) {
+        fatal_error("PTE is invalid when getting VA from PTE.");
+        }
+
+
+    ULONG_PTR index = (ULONG_PTR) (pte - PTE_base);  // Already scaled correctly
+    return (PVOID) ((ULONG_PTR) application_va_base + index * PAGE_SIZE);
 }
 
 // Using a strategy of not modifying the PTE one piece at a time, but all at once.
@@ -39,8 +54,10 @@ void set_PTE_to_valid(PPTE pte, ULONG_PTR frame_number) {
 
     // Start creating a zeroed PTE
     PTE temp = {0};
+    temp.memory_format = pte->memory_format;
 
     // Set valid bit, set frame number
+    temp.memory_format.status = 0;
     temp.memory_format.valid = PTE_VALID;
     temp.memory_format.frame_number = frame_number;
 
@@ -48,10 +65,14 @@ void set_PTE_to_valid(PPTE pte, ULONG_PTR frame_number) {
     *pte = temp;
 }
 
-void map_pte_to_disk(PPTE pte, size_t disk_index) {
+void map_pte_to_disk(PPTE pte, UINT64 disk_index) {
+
+    if (disk_index > MAX_DISK_INDEX) {
+        fatal_error("Disk index exceeds 22 bit limit!");
+    }
 
     // Start by copying the whole PTE
-    PTE temp;
+    PTE temp = {0};
     temp.memory_format = pte->memory_format;
 
     // Clear the frame number, add the disk index, update the status bits

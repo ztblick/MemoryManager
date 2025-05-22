@@ -52,7 +52,11 @@ ULONG trimmer_offset;
 
 // Page File and Page File Metadata
 char* page_file;
-PBYTE page_file_metadata;
+char* page_file_metadata;
+UINT64 empty_disk_slots;
+
+#define DISK_SLOT_IN_USE    1
+#define DISK_SLOT_EMPTY     0
 
 // Statisitcs
 ULONG64 free_page_count;
@@ -60,7 +64,8 @@ ULONG64 active_page_count;
 ULONG64 modified_page_count;
 ULONG64 standby_page_count;
 ULONG64 faults_unresolved;
-ULONG64 faults_resolved;
+ULONG64 hard_faults_resolved;
+ULONG64 soft_faults_resolved;
 
 /*
  *  Malloc the given amount of space, then zero the memory.

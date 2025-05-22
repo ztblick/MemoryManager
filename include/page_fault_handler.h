@@ -12,7 +12,18 @@
  */
 BOOL page_fault_handler(PULONG_PTR faulting_va, int i);
 
+
 /*
- *  Returns a page from the standby list or NULL if none can be returned.
+ *  Get a pointer to an offset in the page file!
  */
-PPFN get_standby_page(void);
+char* get_page_file_offset(UINT64 disk_slot);
+
+/*
+ *  Clears the given slot in the page file metadata
+ */
+void clear_disk_slot(UINT64 disk_slot);
+
+/*
+ *  Sets the given slot to occupied in the page file metadata.
+ */
+void set_disk_slot(UINT64 disk_slot);

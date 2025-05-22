@@ -136,8 +136,9 @@ void initialize_data_structures(void) {
     active_page_count = 0;
     modified_page_count = 0;
     standby_page_count = 0;
+    hard_faults_resolved = 0;
+    soft_faults_resolved = 0;
     faults_unresolved = 0;
-    faults_resolved = 0;
 
     trimmer_offset = 0;
 
@@ -190,6 +191,7 @@ void initialize_data_structures(void) {
 
         new_pfn->PTE = NULL;
         new_pfn->status = PFN_FREE;
+        new_pfn->disk_index = NO_DISK_INDEX;
         InsertHeadList(free_list, &new_pfn->entry);
         free_page_count++;
     }
@@ -201,7 +203,10 @@ void initialize_data_structures(void) {
     page_file = (char*) zero_malloc(PAGES_IN_PAGE_FILE * PAGE_SIZE);
 
     // Initialize page file metadata -- initially, this will be a bytemap to represent free or used pages in the page file.
-    page_file_metadata = (PBYTE) zero_malloc(PAGES_IN_PAGE_FILE);
+    page_file_metadata = (char*) zero_malloc(PAGES_IN_PAGE_FILE);
+
+    // Initialize disk slot tracker
+    empty_disk_slots = PAGES_IN_PAGE_FILE;
 
 #if DEBUG
     printf("All data structures initialized!\n");
@@ -243,6 +248,12 @@ void free_all_data(void) {
     VirtualFree (PFN_array, 0, MEM_RELEASE);
     free(PTE_base);
     free(page_file);
+    free(page_file_metadata);
+    free(frame_numbers_to_map);
+    free(zero_list);
+    free(free_list);
+    free(modified_list);
+    free(standby_list);
 }
 
 void set_max_frame_number(void) {

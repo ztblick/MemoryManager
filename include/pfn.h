@@ -11,6 +11,8 @@
 #define PFN_MODIFIED  0x2
 #define PFN_STANDBY   0x3
 
+#define NO_DISK_INDEX       (MAX_DISK_INDEX + 1)
+
 // Macros for easy analysis later.
 #define IS_PFN_FREE(pfn)            ((pfn)->status == PFN_FREE)
 #define IS_PFN_ACTIVE(pfn)            ((pfn)->status == PFN_ACTIVE)
@@ -31,6 +33,11 @@ typedef struct __pfn {
  *  Returns frame number associated with this PFN.
  */
 ULONG_PTR get_frame_from_PFN(PPFN pfn);
+
+/*
+ *  Transition PFN into its active state.
+ */
+VOID set_PFN_active(PPFN pfn, PPTE pte);
 
 /*
  *  Returns PFN associated with this frame number.

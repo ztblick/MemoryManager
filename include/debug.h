@@ -14,9 +14,9 @@
  *  Assert provides a quick check for a given true or false value, terminating if the condition is not met.
  */
 #if DEBUG
-#define assert(x)                   if (!x) { fatal_error("Assert failed.");}
+#define ASSERT(x)                   if (!x) { fatal_error("Assert failed.");}
 #else
-#define  assert(x)
+#define  ASSERT(x)
 #endif
 
 /*
