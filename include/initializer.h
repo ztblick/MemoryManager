@@ -10,6 +10,9 @@
 #define MB(x)                       ((x) * 1024 * 1024)
 #define BITS_PER_BYTE               8
 
+// This is the number of times the simulator will access a VA.
+#define ITERATIONS                  MB(1000)
+
 // These will change as we decide how many pages to write out or read from to disk at once.
 #define MAX_WRITE_BATCH_SIZE        1
 #define MAX_READ_BATCH_SIZE         1

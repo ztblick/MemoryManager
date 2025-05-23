@@ -82,7 +82,7 @@ void map_pte_to_disk(PPTE pte, UINT64 disk_index) {
     temp.disk_format.disk_index = disk_index;
 
     // Write back all bits at once to avoid partial modification
-    *pte = temp;
+    WriteULong64NoFence((DWORD64*) pte, temp.entire_pte);
 }
 
 UINT64 get_disk_index_from_pte(PPTE pte) {

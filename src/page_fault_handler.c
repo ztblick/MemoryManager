@@ -37,6 +37,15 @@ void set_disk_slot(UINT64 disk_slot) {
 }
 
 
+BOOL validate_page(PULONG_PTR va) {
+    PULONG_PTR page_start = (PULONG_PTR) ((ULONG_PTR) va / 0x1000 * 0x1000);
+    for (PULONG_PTR spot = page_start; spot < application_va_base + VIRTUAL_ADDRESS_SIZE; spot++) {
+        if (*spot != 0 && *spot > (ULONG_PTR) page_start && *spot < (ULONG_PTR) (application_va_base + VIRTUAL_ADDRESS_SIZE))
+            return TRUE;
+    }
+    return FALSE;
+ }
+
 BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
 #if DEBUG
     printf("\nResolving page fault...\n\n");
@@ -100,7 +109,8 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
 #if DEBUG
         printf("VA: %p\n", faulting_va);
         printf("Value stored: %llu\n", *faulting_va);
-        ASSERT((ULONG_PTR)faulting_va == *faulting_va);
+        if (!validate_page(faulting_va))
+            fatal_error("Page read from memory has invalid contents :(");
 #endif
 
         return TRUE;
@@ -162,7 +172,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         map_pages(1, kernel_read_va, frame_numbers_to_map);
 
         // Zero the page before transferring new data into it
-        memset(kernel_read_va, 0, PAGE_SIZE);
+        // memset(kernel_read_va, 0, PAGE_SIZE);
 
         // Copy data from page file into physical pages
         memcpy(kernel_read_va, get_page_file_offset(disk_slot), PAGE_SIZE);
@@ -182,7 +192,8 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
     if (IS_PTE_ON_DISK(pte)) {
         printf("VA: %p\n", faulting_va);
         printf("Value stored: %llu\n", *faulting_va);
-        ASSERT((ULONG_PTR)faulting_va == *faulting_va);
+        if (!validate_page(faulting_va))
+            fatal_error("Page read from memory has invalid contents :(");
     }
 #endif
 

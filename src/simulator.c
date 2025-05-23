@@ -102,7 +102,7 @@ VOID full_virtual_memory_test (VOID) {
     NULL_CHECK (kernel_read_va, "Could not reserve kernal read VA space.");
 
     // Now perform random accesses
-    for (int i = 0; i < MB (1); i += 1) {
+    for (int i = 0; i < ITERATIONS; i += 1) {
 
 #if DEBUG
         printf("\n\n~~~~~~~~~~~~~~~\nBegin iteration %d...\n", i);
@@ -142,7 +142,7 @@ VOID full_virtual_memory_test (VOID) {
     }
 
 
-    printf ("full_virtual_memory_test : finished accessing %u random virtual addresses\n", MB (1));
+    printf ("full_virtual_memory_test : finished accessing %u random virtual addresses\n", ITERATIONS);
 
     // Now that we're done with our memory we can be a good
     // citizen and free it.

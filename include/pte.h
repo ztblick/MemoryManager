@@ -31,6 +31,8 @@ typedef struct {
     UINT64 reserved : (64 - STATE_BITS - FRAME_NUMBER_BITS); // Remaining bits reserved for later
 } VALID_PTE;
 
+// TODO consider adding a third PTE format for transition state
+
 typedef struct {
     UINT64 valid : 1;                       // Valid bit -- 0 indicating PTE is invalid
     UINT64 status : 1;                      // 1 bit to encode transition (0) or on disk (1)
@@ -45,6 +47,7 @@ typedef struct {
     union {
         VALID_PTE memory_format;
         INVALID_PTE disk_format;
+        ULONG_PTR entire_pte;
     };
 } PTE, *PPTE;
 
