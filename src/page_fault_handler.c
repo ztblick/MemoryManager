@@ -39,8 +39,8 @@ void set_disk_slot(UINT64 disk_slot) {
 
 BOOL validate_page(PULONG_PTR va) {
     PULONG_PTR page_start = (PULONG_PTR) ((ULONG_PTR) va / 0x1000 * 0x1000);
-    for (PULONG_PTR spot = page_start; spot < application_va_base + VIRTUAL_ADDRESS_SIZE; spot++) {
-        if (*spot != 0 && *spot > (ULONG_PTR) page_start && *spot < (ULONG_PTR) (application_va_base + VIRTUAL_ADDRESS_SIZE))
+    for (PULONG_PTR spot = page_start; spot < page_start + PAGE_SIZE / 8; spot++) {
+        if (*spot != 0 && *spot >= (ULONG_PTR) page_start && *spot <= (ULONG_PTR) (page_start + PAGE_SIZE - 1))
             return TRUE;
     }
     return FALSE;
@@ -106,12 +106,8 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         soft_faults_resolved++;
 
         // ENSURE THAT MEMORY READ BACK IS VALID!
-#if DEBUG
-        printf("VA: %p\n", faulting_va);
-        printf("Value stored: %llu\n", *faulting_va);
         if (!validate_page(faulting_va))
             fatal_error("Page read from memory has invalid contents :(");
-#endif
 
         return TRUE;
     }
@@ -188,14 +184,8 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
     map_pages(1, faulting_va, frame_numbers_to_map);
 
     // ENSURE THAT MEMORY READ BACK IS VALID!
-#if DEBUG
-    if (IS_PTE_ON_DISK(pte)) {
-        printf("VA: %p\n", faulting_va);
-        printf("Value stored: %llu\n", *faulting_va);
-        if (!validate_page(faulting_va))
-            fatal_error("Page read from memory has invalid contents :(");
-    }
-#endif
+    if (IS_PTE_ON_DISK(pte) && !validate_page(faulting_va))
+        fatal_error("Page read from memory has invalid contents :(");
 
     // Update PTE and PFN
     set_PTE_to_valid(pte, *frame_numbers_to_map);
