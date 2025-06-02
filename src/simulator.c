@@ -6,21 +6,15 @@
 #include <stdlib.h>
 #include <windows.h>
 #include "../include/initializer.h"
-#include "../include/macros.h"
-#include "../include/pfn.h"
-#include "../include/pte.h"
 #include "../include/simulator.h"
 #include "../include/debug.h"
 #include "../include/page_fault_handler.h"
 #include "../include/scheduler.h"
 
-VOID full_virtual_memory_test (VOID) {
-    PULONG_PTR arbitrary_va;
+VOID setup_memory_test (VOID) {
+
     BOOL allocated;
-    BOOL page_faulted = FALSE;
-    BOOL fault_resolved = TRUE;
     BOOL privilege;
-    HANDLE physical_page_handle;
 
     // Acquire privilege to manage pages from the operating system.
     privilege = GetPrivilege ();
@@ -55,51 +49,25 @@ VOID full_virtual_memory_test (VOID) {
                 allocated_frame_count,
                 NUMBER_OF_PHYSICAL_PAGES);
     }
+}
 
-    // Find largest frame number for PFN array
-    set_max_frame_number();
+PULONG_PTR get_arbitrary_va(PULONG_PTR p) {
+    // Randomly access different portions of the virtual address space.
+    unsigned random_number = rand () * rand () * rand ();
+    random_number %= VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS;
 
-    // Initialize major data structures
-    initialize_data_structures();
+    // Ensure the write to the arbitrary virtual address doesn't
+    // straddle a PAGE_SIZE boundary.
+    random_number &= ~0x7;
+    return p + random_number;
+}
 
-#if SUPPORT_MULTIPLE_VA_TO_SAME_PAGE
-    MEM_EXTENDED_PARAMETER parameter = { 0 };
-    //
-    // Allocate a MEM_PHYSICAL region that is "connected" to the AWE section
-    // created above.
-    //
-    parameter.Type = MemExtendedParameterUserPhysicalHandle;
-    parameter.Handle = physical_page_handle;
-    p = VirtualAlloc2 (NULL,
-                       NULL,
-                       virtual_address_size,
-                       MEM_RESERVE | MEM_PHYSICAL,
-                       PAGE_READWRITE,
-                       &parameter,
-                       1);
-#else
-    // Reserve user virtual address space.
-    application_va_base = VirtualAlloc (NULL,
-                      VIRTUAL_ADDRESS_SIZE,
-                      MEM_RESERVE | MEM_PHYSICAL,
-                      PAGE_READWRITE);
-#endif
+void run_user_app_simulation(void) {
 
-    NULL_CHECK (application_va_base, "Could not reserve user VA space.");
-
-    kernel_write_va = VirtualAlloc (NULL,
-                      PAGE_SIZE * MAX_WRITE_BATCH_SIZE,
-                      MEM_RESERVE | MEM_PHYSICAL,
-                      PAGE_READWRITE);
-
-    NULL_CHECK (kernel_write_va, "Could not reserve kernal write VA space.");
-
-    kernel_read_va = VirtualAlloc (NULL,
-                      PAGE_SIZE * MAX_READ_BATCH_SIZE,
-                      MEM_RESERVE | MEM_PHYSICAL,
-                      PAGE_READWRITE);
-
-    NULL_CHECK (kernel_read_va, "Could not reserve kernal read VA space.");
+    // Adding variables only necessary to kick off fault handler!
+    PULONG_PTR arbitrary_va;
+    BOOL page_faulted = FALSE;
+    BOOL fault_resolved = TRUE;
 
     // Now perform random accesses
     for (int i = 0; i < ITERATIONS; i += 1) {
@@ -108,7 +76,7 @@ VOID full_virtual_memory_test (VOID) {
         printf("\n\n~~~~~~~~~~~~~~~\nBegin iteration %d...\n", i);
 #endif
 
-        // Ask the scheduler to age, trim, and write as is necessary.
+        // Ask the scheduler to age, trim, and write as is necessary.   // TODO remove this once you have these running on their own threads
         schedule_tasks();
 
         // Randomly access different portions of the virtual address space.
@@ -136,37 +104,37 @@ VOID full_virtual_memory_test (VOID) {
                 *arbitrary_va = (ULONG_PTR) arbitrary_va;
             }
             else {
-                faults_unresolved++;
+                fatal_error("User app attempted to access invalid VA.");
             }
         }
     }
+}
 
+void terminate_memory_test(void) {
 
     printf ("full_virtual_memory_test : finished accessing %u random virtual addresses\n", ITERATIONS);
 
-    // Now that we're done with our memory we can be a good
-    // citizen and free it.
+    // Now that we're done with our memory we can be a good citizen and free it.
     unmap_all_pages();
     VirtualFree (application_va_base, 0, MEM_RELEASE);
     free_all_data();
     FreeUserPhysicalPages(physical_page_handle, &allocated_frame_count, allocated_frame_numbers);
 }
 
+VOID main (int argc, char** argv) {
 
-PULONG_PTR get_arbitrary_va(PULONG_PTR p) {
-    // Randomly access different portions of the virtual address space.
-    unsigned random_number = rand () * rand () * rand ();
-    random_number %= VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS;
+    // Get privileges and execute boilerplate code.
+    setup_memory_test();
 
-    // Ensure the write to the arbitrary virtual address doesn't
-    // straddle a PAGE_SIZE boundary.
-    random_number &= ~0x7;
-    return p + random_number;
-}
+    // Initialize major data structures
+    initialize_data_structures();
 
-VOID
-main (int argc, char** argv) {
+    // Start helper threads -- scheduler, writer, trimmer!
+    // TODO initiate helper threads here
 
-    // Test our very complicated usermode virtual implementation.
-    full_virtual_memory_test ();
+    // Run test with a simulated user app.
+    run_user_app_simulation();
+
+    // Free all memory and end the simulation.
+    terminate_memory_test();
 }

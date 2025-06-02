@@ -8,22 +8,28 @@
 #include "../include/macros.h"
 #include "../include/page_fault_handler.h"
 
+// Returns a disk index from 1 to PAGES_IN_PAGE_FILE
+// It is important to note that the indices are off by one, as the value of 0 is reserved
+// for a PFN that is not mapped to a disk slot
 UINT64 get_free_disk_index(void) {
 
-    for (UINT64 disk_index = 0; disk_index < PAGES_IN_PAGE_FILE; disk_index++) {
+    for (UINT64 disk_index = MIN_DISK_INDEX; disk_index <= PAGES_IN_PAGE_FILE; disk_index++) {
 
         if (page_file_metadata[disk_index] == DISK_SLOT_EMPTY) {
             return disk_index;
         }
     }
-    fatal_error("No empty pages in the page file!");        // TODO figure out why this is getting called!
+    fatal_error("No empty pages in the page file!");
     return 0;
 }
 
 VOID write_pages(int num_pages) {
 
+    // Initialize frame number array
+    PULONG_PTR frame_numbers_to_map = zero_malloc(MAX_WRITE_BATCH_SIZE * sizeof(ULONG_PTR));
+
     // First, check to see if there are any pages to write
-    if (IsListEmpty(modified_list) || num_pages == 0) {
+    if (IsListEmpty(&modified_list) || num_pages == 0) {
 #if DEBUG
         printf("No modified pages to write to disk.\n");
 #endif
@@ -37,7 +43,7 @@ VOID write_pages(int num_pages) {
     for (int i = 0; i < num_pages; i++) {
 
         // Get the next modified page for this batch
-        pfn = get_first_frame_from_list(modified_list);
+        pfn = get_first_frame_from_list(&modified_list);
         modified_page_count--;
 
         // Get the transition PTE associated with this page
@@ -63,11 +69,6 @@ VOID write_pages(int num_pages) {
     memcpy(page_file_location, kernel_write_va, PAGE_SIZE * num_pages);
     set_disk_slot(disk_index);
 
-    // TODO
-        // We should check the total contents of this page to see what is in it.
-        // We should also ask Landy about writing to and reading from specific regions
-        // within a page.
-
     // Un-map kernal VA
     unmap_pages(num_pages, kernel_write_va);
 
@@ -76,8 +77,11 @@ VOID write_pages(int num_pages) {
     pfn->disk_index = disk_index;
 
     // Add page to the standby list
-    InsertTailList(standby_list, &pfn->entry);
+    InsertTailList(&standby_list, &pfn->entry);
     standby_page_count++;
+
+    // Free frame number array
+    free(frame_numbers_to_map);
 
 #if DEBUG
     printf("Wrote one page out to disk, moved page to standby list!\n");

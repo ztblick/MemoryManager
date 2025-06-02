@@ -9,9 +9,10 @@
 #define PAGE_SIZE                   4096
 #define MB(x)                       ((x) * 1024 * 1024)
 #define BITS_PER_BYTE               8
+#define BYTES_PER_VA                8
 
 // This is the number of times the simulator will access a VA.
-#define ITERATIONS                  MB(1000)
+#define ITERATIONS                  MB(1)
 
 // These will change as we decide how many pages to write out or read from to disk at once.
 #define MAX_WRITE_BATCH_SIZE        1
@@ -32,15 +33,14 @@
 PPFN PFN_array;
 ULONG_PTR max_frame_number;
 ULONG_PTR min_frame_number;
-PULONG_PTR frame_numbers_to_map;
 PULONG_PTR allocated_frame_numbers;
 ULONG_PTR allocated_frame_count;
 
 // Page lists
-PLIST_ENTRY zero_list;
-PLIST_ENTRY free_list;
-PLIST_ENTRY modified_list;
-PLIST_ENTRY standby_list;
+LIST_ENTRY zero_list;
+LIST_ENTRY free_list;
+LIST_ENTRY modified_list;
+LIST_ENTRY standby_list;
 
 // VA spaces
 PULONG_PTR application_va_base;

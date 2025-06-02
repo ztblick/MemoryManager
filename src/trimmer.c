@@ -44,7 +44,7 @@ VOID trim_pages(VOID) {
 
     // Trim this page to the modified list
     PPFN pfn = get_PFN_from_PTE(pte);
-    InsertTailList(modified_list, &pfn->entry);
+    InsertTailList(&modified_list, &pfn->entry);
     modified_page_count++;
     active_page_count--;
 

@@ -2,26 +2,34 @@
 // Created by zblickensderfer on 5/5/2025.
 //
 
+/*
+ *  IMPORTANT NOTE ABOUT DISK SLOTS:
+ *  Disk slots and disk indices are 1-indexed. The value stored in the PFN will be 1-indexed.
+ *  This is done to allow 0 to be the value of a disk index for a PFN that is NOT mapped to disk.
+ *  Pages in the page file are 0-indexed.
+ *  So, any time we go from disk index to page file index (or in reverse) we will need a -1.
+ */
+
 #include "../include/page_fault_handler.h"
 #include "../include/initializer.h"
 #include "../include/debug.h"
 #include "../include/macros.h"
-#include "../include/writer.h"
 
+// Masks off the last bits to round the VA up to the previous page boundary.
 PULONG_PTR get_beginning_of_VA_region(PULONG_PTR va) {
-    return get_VA_from_PTE(get_PTE_from_VA(va));
+    return (PULONG_PTR) ((ULONG_PTR) va & ~(PAGE_SIZE - 1));
 }
 
-
+// Since disk slot is from 1 to PAGES_IN_PAGE_FILE, we must decrement it when getting the offset.
 char* get_page_file_offset(UINT64 disk_slot) {
-    if (disk_slot > MAX_DISK_INDEX) {
+    if (disk_slot > MAX_DISK_INDEX || disk_slot < MIN_DISK_INDEX) {
         fatal_error("Attempted to map to page file offset with disk slot exceeding 22 bit limit!");
     }
-    return (page_file + disk_slot * PAGE_SIZE);
+    return (page_file + (disk_slot - 1) * PAGE_SIZE);
 }
 
 void clear_disk_slot(UINT64 disk_slot) {
-    if (disk_slot > MAX_DISK_INDEX) {
+    if (disk_slot > MAX_DISK_INDEX || disk_slot < MIN_DISK_INDEX) {
         fatal_error("Attempted to clear disk slot disk slot exceeding 22 bit limit!");
     }
     page_file_metadata[disk_slot] = (char) DISK_SLOT_EMPTY;
@@ -29,7 +37,7 @@ void clear_disk_slot(UINT64 disk_slot) {
 }
 
 void set_disk_slot(UINT64 disk_slot) {
-    if (disk_slot > MAX_DISK_INDEX) {
+    if (disk_slot > MAX_DISK_INDEX || disk_slot < MIN_DISK_INDEX) {
         fatal_error("Attempted to clear disk slot disk slot exceeding 22 bit limit!");
     }
     page_file_metadata[disk_slot] = (char) DISK_SLOT_IN_USE;
@@ -38,15 +46,32 @@ void set_disk_slot(UINT64 disk_slot) {
 
 
 BOOL validate_page(PULONG_PTR va) {
-    PULONG_PTR page_start = (PULONG_PTR) ((ULONG_PTR) va / 0x1000 * 0x1000);
-    for (PULONG_PTR spot = page_start; spot < page_start + PAGE_SIZE / 8; spot++) {
-        if (*spot != 0 && *spot >= (ULONG_PTR) page_start && *spot <= (ULONG_PTR) (page_start + PAGE_SIZE - 1))
+    PULONG_PTR page_start = get_beginning_of_VA_region(va);
+    for (PULONG_PTR spot = page_start; spot < page_start + PAGE_SIZE / BYTES_PER_VA; spot++) {
+        if (*spot == (ULONG_PTR) spot)
             return TRUE;
     }
     return FALSE;
  }
 
 BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
+
+    // When should the fault handler be allowed to fail? There are only two situations:
+        // A - a hardware failure. This is beyond the scope of this program.
+        // B - the user provides an invalid VA (beyond the VA space allocated)
+    // This handles situation B:
+    if (faulting_va < application_va_base || faulting_va > application_va_base + VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS)
+        return FALSE;
+
+    // This wil hold the physical frame number that we are mapping to the faulting VA.
+    ULONG_PTR frame_numbers_to_map;
+
+    // This variable exists to capture the state of the pte associated with the VA's PTE.
+    // This is necessary to perform page validation (which only happens on disk-format PTEs) after the
+    // PTE has been moved from disk to valid. Without this, there would be no way to know if the PTE
+    // had previously been on disk, as the PTE itself has changed its state.
+    BYTE pte_entry_state;
+
 #if DEBUG
     printf("\nResolving page fault...\n\n");
 #endif
@@ -61,6 +86,9 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
     if (pte->memory_format.valid == 1) {
         fatal_error("Faulted on a hardware valid PTE.");
     }
+
+    // Set entry pte state
+    pte_entry_state = pte->memory_format.status;
 
     // SOFT FAULT RESOLUTION
     // If the PTE has been mapped before and is NOT in its disk format,
@@ -83,7 +111,8 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
 #endif
         }
         // Otherwise, we know this page mut be in its standby state.
-        else if (IS_PFN_STANDBY(available_pfn)) {
+        else {
+            ASSERT(IS_PFN_STANDBY(available_pfn));
             standby_page_count--;
             clear_disk_slot(available_pfn->disk_index);
 #if DEBUG
@@ -95,8 +124,8 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         // Remove the page from its list (standby or modified) and map the VA to it.
         RemoveEntryList(&available_pfn->entry);
         active_page_count++;
-        *frame_numbers_to_map = pte->memory_format.frame_number;
-        map_pages(1, faulting_va, frame_numbers_to_map);
+        frame_numbers_to_map = pte->memory_format.frame_number;
+        map_pages(1, faulting_va, &frame_numbers_to_map);
 
         // Update the PTE and PFN to the active state.
         set_PFN_active(available_pfn, pte);
@@ -105,10 +134,8 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         // Update statistics
         soft_faults_resolved++;
 
-        // ENSURE THAT MEMORY READ BACK IS VALID!
-        if (!validate_page(faulting_va))
-            fatal_error("Page read from memory has invalid contents :(");
-
+        // Ensure that memory read back into the page is valid.
+        ASSERT(validate_page(faulting_va));
         return TRUE;
     }
 
@@ -117,11 +144,11 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         fatal_error("Faulting VA is not in disk state or zeroed state...");
     }
 
-    // HARD FAULT RESOLUTION
+    // FIRST FAULT / HARD FAULT RESOLUTION
     // First: get a free or standby page
-    if (!IsListEmpty(free_list)) {
+    if (!IsListEmpty(&free_list)) {
         // Get the next free page.
-        available_pfn = get_first_frame_from_list(free_list);
+        available_pfn = get_first_frame_from_list(&free_list);
         NULL_CHECK(available_pfn, "Free page was null :(");
         free_page_count--;
         active_page_count++;
@@ -131,10 +158,10 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
     }
 
     // If no page is available on the zero or free list, then we will repurpose one from the standby list
-    else if (!IsListEmpty(standby_list)) {
+    else if (!IsListEmpty(&standby_list)) {
 
         // Remove the standby page from the standby list
-        available_pfn = get_first_frame_from_list(standby_list);
+        available_pfn = get_first_frame_from_list(&standby_list);
         NULL_CHECK(available_pfn, "Standby page was null :(");
         standby_page_count--;
         active_page_count++;
@@ -148,6 +175,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
 #endif
     }
     // If no pages are available, return with an error message.
+    // TODO remove this possibility -- wait for another page!
     else {
 #if DEBUG
         printf("Fault handler could not resolve fault as no pages were available on zero, free, or standby!");
@@ -156,7 +184,10 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
     }
 
     // Get the frame number
-    *frame_numbers_to_map = get_frame_from_PFN(available_pfn);
+    frame_numbers_to_map = get_frame_from_PFN(available_pfn);
+
+    // Map the kernel VA to the available frame
+    map_pages(1, kernel_read_va, &frame_numbers_to_map);
 
     // Now that we have a page, let's check if we need to do a disk read.
     // If PTE is zeroed, do not do the disk read. But if the PTE is on the disk, read its contents back!
@@ -164,35 +195,37 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         // Get location of new pte on disk
         UINT64 disk_slot = pte->disk_format.disk_index;
 
-        // Map the kernel VA to the available frame
-        map_pages(1, kernel_read_va, frame_numbers_to_map);
-
-        // Zero the page before transferring new data into it
-        // memset(kernel_read_va, 0, PAGE_SIZE);
-
         // Copy data from page file into physical pages
         memcpy(kernel_read_va, get_page_file_offset(disk_slot), PAGE_SIZE);
 
         // Mark disk slot as available
         clear_disk_slot(disk_slot);
+    }
+    // Otherwise, our PTE is in its zeroed state. In this case, it is possible we are about to give it a page that
+    // has memory on it that needs to be zeroed. Let's zero that memory now.
+    else {
+        ASSERT(IS_PTE_ZEROED(pte));
 
-        // Unmap page from kernel VA
-        unmap_pages(1, kernel_read_va);
+        // Zero the page
+        memset(kernel_read_va, 0, PAGE_SIZE);
     }
 
-    // Map page to user VA
-    map_pages(1, faulting_va, frame_numbers_to_map);
+    // Unmap page from kernel VA
+    unmap_pages(1, kernel_read_va);
 
-    // ENSURE THAT MEMORY READ BACK IS VALID!
-    if (IS_PTE_ON_DISK(pte) && !validate_page(faulting_va))
-        fatal_error("Page read from memory has invalid contents :(");
+    // Map page to user VA
+    map_pages(1, faulting_va, &frame_numbers_to_map);
 
     // Update PTE and PFN
-    set_PTE_to_valid(pte, *frame_numbers_to_map);
+    set_PTE_to_valid(pte, frame_numbers_to_map);
     set_PFN_active(available_pfn, pte);
 
+    // Ensure that the page contents correctly contain the relevant VA!
+    if (pte_entry_state == PTE_ON_DISK && !validate_page(faulting_va)) // Replace this reference to pte with reference to entry state variable
+        fatal_error("Page read from memory has invalid contents :(");
+
 #if DEBUG
-    printf("Iteration %d: Successfully mapped and trimmed physical page %llu with PTE %p.\n", i, *frame_numbers_to_map, pte);
+    printf("Iteration %d: Successfully mapped and trimmed physical page %llu with PTE %p.\n", i, frame_numbers_to_map, pte);
 #endif
     hard_faults_resolved++;
     return TRUE;

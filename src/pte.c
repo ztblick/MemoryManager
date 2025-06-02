@@ -39,30 +39,30 @@ void set_PTE_to_transition(PPTE pte) {
 
     // Start by copying the whole PTE
     PTE temp;
-    temp.memory_format = pte->memory_format;
+    temp.transition_format = pte->transition_format;
 
     // Clear the valid and status bits
-    temp.memory_format.valid = PTE_INVALID;
-    temp.memory_format.status = PTE_IN_TRANSITION;
+    temp.transition_format.valid = PTE_INVALID;
+    temp.transition_format.status = PTE_IN_TRANSITION;
 
     // Write back all bits at once to avoid partial modification
-    *pte = temp;
+    WriteULong64NoFence((DWORD64*) pte, temp.entire_pte);
 }
 
-// TODO Set other bits, such as accessed, dirty, readwrite, etc.
 void set_PTE_to_valid(PPTE pte, ULONG_PTR frame_number) {
 
     // Start creating a zeroed PTE
     PTE temp = {0};
+
+    // This copies over all data from the PTE.
     temp.memory_format = pte->memory_format;
 
     // Set valid bit, set frame number
-    temp.memory_format.status = 0;
     temp.memory_format.valid = PTE_VALID;
     temp.memory_format.frame_number = frame_number;
 
     // Write back all bits at once to avoid partial modification
-    *pte = temp;
+    WriteULong64NoFence((DWORD64*) pte, temp.entire_pte);
 }
 
 void map_pte_to_disk(PPTE pte, UINT64 disk_index) {
@@ -76,7 +76,7 @@ void map_pte_to_disk(PPTE pte, UINT64 disk_index) {
     temp.memory_format = pte->memory_format;
 
     // Clear the frame number, add the disk index, update the status bits
-    temp.memory_format.frame_number = 0;
+    temp.memory_format.frame_number = NO_FRAME_ASSIGNED;
     temp.disk_format.valid = PTE_INVALID;
     temp.disk_format.status = PTE_ON_DISK;
     temp.disk_format.disk_index = disk_index;

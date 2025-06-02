@@ -16,10 +16,13 @@
 #define STATE_BITS              5
 
 #define DISK_INDEX_BITS         22
-#define MAX_DISK_INDEX          (PAGES_IN_PAGE_FILE - 1)
+#define MAX_DISK_INDEX          PAGES_IN_PAGE_FILE
 
 #define FRAME_NUMBER_BITS       40
 #define MAX_FRAME_NUMBER        ((1U << FRAME_NUMBER_BITS) - 1)
+
+// This is the default value given to the frame_number field for a PTE that has no connected frame.
+#define NO_FRAME_ASSIGNED       0
 
 typedef struct {
     UINT64 valid : 1;                       // Valid bit -- 1 indicating PTE is valid
@@ -31,7 +34,15 @@ typedef struct {
     UINT64 reserved : (64 - STATE_BITS - FRAME_NUMBER_BITS); // Remaining bits reserved for later
 } VALID_PTE;
 
-// TODO consider adding a third PTE format for transition state
+typedef struct {
+    UINT64 valid : 1;                       // Valid bit -- 1 indicating PTE is valid
+    UINT64 status : 1;                      // 1 bit to encode transition (0) or on disk (1)
+    UINT64 readwrite : 1;                   // Read/Write bit -- 0 for read privileges, 1 for write privileges
+    UINT64 dirty : 1;                       // Dirty bit -- 0 for unmodified, 1 for modified
+    UINT64 accessed : 1;                    // Accessed bit -- indicates if the page has been accessed to track frequency
+    UINT64 frame_number : FRAME_NUMBER_BITS;// 40 bits to hold the frame number
+    UINT64 reserved : (64 - STATE_BITS - FRAME_NUMBER_BITS); // Remaining bits reserved for later
+} TRANSITION_PTE;
 
 typedef struct {
     UINT64 valid : 1;                       // Valid bit -- 0 indicating PTE is invalid
@@ -46,16 +57,16 @@ typedef struct {
 typedef struct {
     union {
         VALID_PTE memory_format;
+        TRANSITION_PTE transition_format;
         INVALID_PTE disk_format;
         ULONG_PTR entire_pte;
     };
 } PTE, *PPTE;
 
-#define IS_PTE_ZEROED(pte) ((pte)->memory_format.valid == PTE_INVALID && (pte)->memory_format.frame_number == 0)
-#define IS_PTE_VALID(pte) ((pte)->memory_format.valid == PTE_VALID)
-#define IS_PTE_TRANSITION(pte) ((pte)->memory_format.status == PTE_IN_TRANSITION)
-#define IS_PTE_ON_DISK(pte) ((pte)->memory_format.status == PTE_ON_DISK && ((pte)->memory_format.valid == PTE_INVALID))
-
+#define IS_PTE_ZEROED(pte)      ((pte)->memory_format.valid == PTE_INVALID && (pte)->memory_format.frame_number == NO_FRAME_ASSIGNED)
+#define IS_PTE_VALID(pte)       ((pte)->memory_format.valid == PTE_VALID)
+#define IS_PTE_TRANSITION(pte)  ((pte)->transition_format.valid == PTE_INVALID && (pte)->transition_format.status == PTE_IN_TRANSITION)
+#define IS_PTE_ON_DISK(pte)     ((pte)->disk_format.valid == PTE_INVALID && (pte)->disk_format.status == PTE_ON_DISK)
 
 
 /*

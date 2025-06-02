@@ -5,6 +5,13 @@
 #include "../include/debug.h"
 #include "../include/initializer.h"
 
+
+VOID create_zeroed_pfn(PPFN new_pfn) {
+    new_pfn->status = PFN_FREE;
+    new_pfn->PTE = NULL;
+    new_pfn->disk_index = NO_DISK_INDEX;
+}
+
 ULONG_PTR get_frame_from_PFN(PPFN pfn) {
     if (pfn < PFN_array) {
         fatal_error("PFN out of bounds while attempting to get frame number from PFN.");

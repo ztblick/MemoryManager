@@ -14,16 +14,20 @@
  *  Assert provides a quick check for a given true or false value, terminating if the condition is not met.
  */
 #if DEBUG
-#define ASSERT(x)                   if (!x) { fatal_error("Assert failed.");}
+#define ASSERT(x)                   if (!x) {DebugBreak();}
 #else
-#define  ASSERT(x)
+#define  ASSERT(x)                  if (!x) {DebugBreak();}
 #endif
 
 /*
  *  Null check provides a quick way to determine if a given variable is null, and calls fatal error
  *  with the given message parameter.
  */
-#define NULL_CHECK(x, msg)       if (x == NULL) {fatal_error(msg); }
+#if DEBUG
+#define NULL_CHECK(x, msg)       if (x == NULL) {DebugBreak();}
+#else
+#define NULL_CHECK(x, msg)       if (x == NULL) {DebugBreak();}
+#endif
 
 // Color settings for fatal error.
 #define COLOR_RED "\x1b[31m"

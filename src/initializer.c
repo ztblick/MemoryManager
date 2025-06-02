@@ -142,6 +142,9 @@ void initialize_data_structures(void) {
 
     trimmer_offset = 0;
 
+    // Find largest frame number for PFN array
+    set_max_frame_number();
+
     // Initialize PTE array
     PTE_base = (PPTE) zero_malloc(sizeof(PTE) * NUM_PTEs);
 
@@ -156,17 +159,10 @@ void initialize_data_structures(void) {
     }
 
     // Initialize lists for PFN state machine
-    zero_list = malloc(sizeof(LIST_ENTRY));
-    InitializeListHead(zero_list);
-
-    free_list = malloc(sizeof(LIST_ENTRY));
-    InitializeListHead(free_list);
-
-    modified_list = malloc(sizeof(LIST_ENTRY));
-    InitializeListHead(modified_list);
-
-    standby_list = malloc(sizeof(LIST_ENTRY));
-    InitializeListHead(standby_list);
+    InitializeListHead(&zero_list);
+    InitializeListHead(&free_list);
+    InitializeListHead(&modified_list);
+    InitializeListHead(&standby_list);
 
     // Create all PFNs, adding them to the free list
     // Note -- it is critical to not save the returned value of VirtualAlloc as the VA of the PFN.
@@ -175,7 +171,7 @@ void initialize_data_structures(void) {
     // That corresponds with the value of the frame number.
     for (ULONG64 i = 0; i < allocated_frame_count; i++) {
 
-        if (allocated_frame_numbers[i] == 0) {
+        if (allocated_frame_numbers[i] == NO_FRAME_ASSIGNED) {
             continue; // skip frame number 0, as it is an invalid page of memory per our PTE encoding.
         }
 
@@ -187,26 +183,61 @@ void initialize_data_structures(void) {
             fatal_error("Error: Failed to commit memory for PFN.");
         }
 
+        // Initialize the new PFN, then insert it to the free list.
         PPFN new_pfn = PFN_array + allocated_frame_numbers[i];
-
-        new_pfn->PTE = NULL;
-        new_pfn->status = PFN_FREE;
-        new_pfn->disk_index = NO_DISK_INDEX;
-        InsertHeadList(free_list, &new_pfn->entry);
+        create_zeroed_pfn(new_pfn);
+        InsertHeadList(&free_list, &new_pfn->entry);
         free_page_count++;
     }
-
-    // Initialize frame number array
-    frame_numbers_to_map = zero_malloc(MAX_WRITE_BATCH_SIZE * sizeof(ULONG_PTR));
 
     // Initialize page file.
     page_file = (char*) zero_malloc(PAGES_IN_PAGE_FILE * PAGE_SIZE);
 
     // Initialize page file metadata -- initially, this will be a bytemap to represent free or used pages in the page file.
-    page_file_metadata = (char*) zero_malloc(PAGES_IN_PAGE_FILE);
+    // The +1 is here because 0 is not a valid disk slot (reserved to represent a disk slot that is not connected)
+    page_file_metadata = (char*) zero_malloc(PAGES_IN_PAGE_FILE + 1);
 
     // Initialize disk slot tracker
     empty_disk_slots = PAGES_IN_PAGE_FILE;
+
+    // Initialize kernel VA space
+    kernel_write_va = VirtualAlloc (NULL,
+                  PAGE_SIZE * MAX_WRITE_BATCH_SIZE,
+                  MEM_RESERVE | MEM_PHYSICAL,
+                  PAGE_READWRITE);
+
+    NULL_CHECK (kernel_write_va, "Could not reserve kernal write VA space.");
+
+    kernel_read_va = VirtualAlloc (NULL,
+                      PAGE_SIZE * MAX_READ_BATCH_SIZE,
+                      MEM_RESERVE | MEM_PHYSICAL,
+                      PAGE_READWRITE);
+
+    NULL_CHECK (kernel_read_va, "Could not reserve kernal read VA space.");
+
+#if SUPPORT_MULTIPLE_VA_TO_SAME_PAGE
+    MEM_EXTENDED_PARAMETER parameter = { 0 };
+    //
+    // Allocate a MEM_PHYSICAL region that is "connected" to the AWE section
+    // created above.
+    //
+    parameter.Type = MemExtendedParameterUserPhysicalHandle;
+    parameter.Handle = physical_page_handle;
+    p = VirtualAlloc2 (NULL,
+                       NULL,
+                       virtual_address_size,
+                       MEM_RESERVE | MEM_PHYSICAL,
+                       PAGE_READWRITE,
+                       &parameter,
+                       1);
+#else
+    // Reserve user virtual address space.
+    application_va_base = VirtualAlloc (NULL,
+                      VIRTUAL_ADDRESS_SIZE,
+                      MEM_RESERVE | MEM_PHYSICAL,
+                      PAGE_READWRITE);
+#endif
+    NULL_CHECK (application_va_base, "Could not reserve user VA space.");
 
 #if DEBUG
     printf("All data structures initialized!\n");
@@ -249,11 +280,6 @@ void free_all_data(void) {
     free(PTE_base);
     free(page_file);
     free(page_file_metadata);
-    free(frame_numbers_to_map);
-    free(zero_list);
-    free(free_list);
-    free(modified_list);
-    free(standby_list);
 }
 
 void set_max_frame_number(void) {
