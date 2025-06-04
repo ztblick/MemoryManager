@@ -6,13 +6,21 @@
 #include <Windows.h>
 #include "pfn.h"
 
+#define NUM_SYSTEM_THREADS          1
+
+// This is the number of threads that run the simulating thread -- which become fault-handling threads.
+#define NUM_USER_THREADS            8
+
 #define PAGE_SIZE                   4096
 #define MB(x)                       ((x) * 1024 * 1024)
 #define BITS_PER_BYTE               8
 #define BYTES_PER_VA                8
 
+// This is the number of times the system is tested.
+#define NUM_TESTS                   1
+
 // This is the number of times the simulator will access a VA.
-#define ITERATIONS                  MB(1)
+#define ITERATIONS                  10000
 
 // These will change as we decide how many pages to write out or read from to disk at once.
 #define MAX_WRITE_BATCH_SIZE        1
@@ -28,6 +36,13 @@
 #define VA_SPAN                                         (NUMBER_OF_PHYSICAL_PAGES + PAGES_IN_PAGE_FILE - 1)
 #define VIRTUAL_ADDRESS_SIZE                            (VA_SPAN * PAGE_SIZE)
 #define VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS         (VIRTUAL_ADDRESS_SIZE / sizeof (ULONG_PTR))
+
+// Thread information
+#define DEFAULT_SECURITY        ((LPSECURITY_ATTRIBUTES) NULL)
+#define DEFAULT_STACK_SIZE      0
+#define DEFAULT_CREATION_FLAGS  0
+#define AUTO_RESET              FALSE
+#define MANUAL_RESET            TRUE
 
 // PFN Data Structures
 PPFN PFN_array;
@@ -61,7 +76,28 @@ UINT64 empty_disk_slots;
 #define DISK_SLOT_IN_USE    1
 #define DISK_SLOT_EMPTY     0
 
-// Statisitcs
+// Handles
+HANDLE physical_page_handle;
+
+// Events
+HANDLE initiate_trimming_event;
+HANDLE initiate_writing_event;
+HANDLE standby_pages_ready_event;
+HANDLE system_start_event;
+HANDLE system_exit_event;
+
+// Locks
+CRITICAL_SECTION page_fault_lock;
+CRITICAL_SECTION kernal_read_lock;
+CRITICAL_SECTION kernal_write_lock;
+
+// Threads
+PHANDLE user_threads;
+PHANDLE system_threads;
+PULONG user_thread_ids;
+PULONG system_thread_ids;
+
+// Statistics
 ULONG64 free_page_count;
 ULONG64 active_page_count;
 ULONG64 modified_page_count;
@@ -78,7 +114,7 @@ PULONG_PTR zero_malloc(size_t bytes_to_allocate);
 /*
  *  Initialize all data structures, as declared above.
  */
-void initialize_data_structures(void);
+void initialize_system(void);
 
 /*
  *  Find the largest physical frame number.

@@ -61,11 +61,12 @@ typedef struct {
         INVALID_PTE disk_format;
         ULONG_PTR entire_pte;
     };
+    CRITICAL_SECTION lock;
 } PTE, *PPTE;
 
 #define IS_PTE_ZEROED(pte)      ((pte)->memory_format.valid == PTE_INVALID && (pte)->memory_format.frame_number == NO_FRAME_ASSIGNED)
 #define IS_PTE_VALID(pte)       ((pte)->memory_format.valid == PTE_VALID)
-#define IS_PTE_TRANSITION(pte)  ((pte)->transition_format.valid == PTE_INVALID && (pte)->transition_format.status == PTE_IN_TRANSITION)
+#define IS_PTE_TRANSITION(pte)  ((pte)->transition_format.valid == PTE_INVALID && (pte)->transition_format.status == PTE_IN_TRANSITION && (pte)->transition_format.frame_number != NO_FRAME_ASSIGNED)
 #define IS_PTE_ON_DISK(pte)     ((pte)->disk_format.valid == PTE_INVALID && (pte)->disk_format.status == PTE_ON_DISK)
 
 

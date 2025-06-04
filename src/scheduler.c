@@ -17,7 +17,6 @@ VOID print_statistics(VOID) {
     printf("EMPTY DISK SLOTS:\t\t%llu\n", empty_disk_slots);
     printf("\nHARD FAULTS RESOLVED:\t%llu\t\tSOFT FAULTS RESOLVED:\t\t%llu\n", hard_faults_resolved, soft_faults_resolved);
     printf("FAULTS UNRESOLVED:\t\t%llu\n", faults_unresolved);
-
 }
 
 VOID schedule_tasks(VOID) {
@@ -32,6 +31,9 @@ VOID schedule_tasks(VOID) {
     }
     if (empty_disk_slots > 0) {
         write_pages(WRITE_BATCH_SIZE);
+
+        // Broadcast to waiting user threads that there are standby pages ready.
+        SetEvent(standby_pages_ready_event);
     }
 #if DEBUG
     printf("\nDone with scheduled tasks!\n");

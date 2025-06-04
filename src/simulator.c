@@ -11,46 +11,6 @@
 #include "../include/page_fault_handler.h"
 #include "../include/scheduler.h"
 
-VOID setup_memory_test (VOID) {
-
-    BOOL allocated;
-    BOOL privilege;
-
-    // Acquire privilege to manage pages from the operating system.
-    privilege = GetPrivilege ();
-    if (privilege == FALSE) {
-        fatal_error ("full_virtual_memory_test : could not get privilege.");
-    }
-
-#if SUPPORT_MULTIPLE_VA_TO_SAME_PAGE
-    physical_page_handle = CreateSharedMemorySection ();
-    if (physical_page_handle == NULL) {
-        printf ("CreateFileMapping2 failed, error %#x\n", GetLastError ());
-        return;
-    }
-#else
-    physical_page_handle = GetCurrentProcess ();
-#endif
-
-    // Grab physical pages from the OS
-    allocated_frame_count = NUMBER_OF_PHYSICAL_PAGES;
-    allocated_frame_numbers = malloc (NUMBER_OF_PHYSICAL_PAGES * sizeof (ULONG_PTR));
-    NULL_CHECK (allocated_frame_numbers, "full_virtual_memory_test : could not allocate array to hold physical page numbers.");
-
-    allocated = AllocateUserPhysicalPages (physical_page_handle,
-                                           &allocated_frame_count,
-                                           allocated_frame_numbers);
-    if (allocated == FALSE) {
-        fatal_error ("full_virtual_memory_test : could not allocate physical pages.");
-    }
-    if (allocated_frame_count != NUMBER_OF_PHYSICAL_PAGES) {
-
-        printf ("full_virtual_memory_test : allocated only %llu pages out of %u pages requested\n",
-                allocated_frame_count,
-                NUMBER_OF_PHYSICAL_PAGES);
-    }
-}
-
 PULONG_PTR get_arbitrary_va(PULONG_PTR p) {
     // Randomly access different portions of the virtual address space.
     unsigned random_number = rand () * rand () * rand ();
@@ -64,77 +24,112 @@ PULONG_PTR get_arbitrary_va(PULONG_PTR p) {
 
 void run_user_app_simulation(void) {
 
+    // Wait for system start event before beginning!
+    WaitForSingleObject(system_start_event, INFINITE);
+
     // Adding variables only necessary to kick off fault handler!
     PULONG_PTR arbitrary_va;
     BOOL page_faulted = FALSE;
-    BOOL fault_resolved = TRUE;
+    BOOL fault_handler_accessed_correctly = TRUE;
 
     // Now perform random accesses
     for (int i = 0; i < ITERATIONS; i += 1) {
 
-#if DEBUG
-        printf("\n\n~~~~~~~~~~~~~~~\nBegin iteration %d...\n", i);
-#endif
-
+        EnterCriticalSection(&page_fault_lock);
         // Ask the scheduler to age, trim, and write as is necessary.   // TODO remove this once you have these running on their own threads
         schedule_tasks();
+        LeaveCriticalSection(&page_fault_lock);
+
 
         // Randomly access different portions of the virtual address space.
-        // If we faulted before, use the previous address!
-        if (fault_resolved) {
-            arbitrary_va = get_arbitrary_va(application_va_base);
-        }
+        arbitrary_va = get_arbitrary_va(application_va_base);
 
         // Attempt to write the virtual address into memory page.
-        page_faulted = FALSE;
-        __try {
-            *arbitrary_va = (ULONG_PTR) arbitrary_va;
-        } __except (EXCEPTION_EXECUTE_HANDLER) {
-            page_faulted = TRUE;
-        }
-
-        // Begin handling page faults
-        if (page_faulted) {
-
-            // Fault handler maps the VA to its new page
-            fault_resolved = page_fault_handler(arbitrary_va, i);
-
-            // If we were successful, we will do allow our usermode program to continue with its goal.
-            if (fault_resolved){
+        do {
+            page_faulted = FALSE;
+            __try {
                 *arbitrary_va = (ULONG_PTR) arbitrary_va;
+            } __except (EXCEPTION_EXECUTE_HANDLER) {
+
+                // Set faulted flag (for second try)
+                page_faulted = TRUE;
+
+                // Fault handler maps the VA to its new page
+                fault_handler_accessed_correctly = page_fault_handler(arbitrary_va, i);
+
+                // If we were successful, we will do allow our usermode program to continue with its goal.
+                if (!fault_handler_accessed_correctly){
+                    fatal_error("User app attempted to access invalid VA.");
+                }
             }
-            else {
-                fatal_error("User app attempted to access invalid VA.");
-            }
-        }
+        } while (page_faulted);
     }
 }
 
-void terminate_memory_test(void) {
+void free_locks(void) {
+    DeleteCriticalSection(&page_fault_lock);
 
-    printf ("full_virtual_memory_test : finished accessing %u random virtual addresses\n", ITERATIONS);
+}
+
+void free_events(void) {
+    free(user_threads);
+    free(system_threads);
+    free(user_thread_ids);
+    free(system_thread_ids);
+
+    CloseHandle(system_start_event);
+    CloseHandle(standby_pages_ready_event);
+}
+
+void free_data_and_shut_down(void) {
 
     // Now that we're done with our memory we can be a good citizen and free it.
     unmap_all_pages();
     VirtualFree (application_va_base, 0, MEM_RELEASE);
     free_all_data();
     FreeUserPhysicalPages(physical_page_handle, &allocated_frame_count, allocated_frame_numbers);
+    free_locks();
+    free_events();
+}
+
+void begin_system_test(void) {
+    // System is initialized! Broadcast system start event.
+    SetEvent(system_start_event);
+
+    // This waits for the tests to finish running before exiting the function
+    // Our controlling thread will wait for this function to finish before exiting the test and reporting stats
+    WaitForMultipleObjects(NUM_USER_THREADS, user_threads, TRUE, INFINITE);
 }
 
 VOID main (int argc, char** argv) {
 
-    // Get privileges and execute boilerplate code.
-    setup_memory_test();
+    ULONG64 cumulative_time = 0;
+    for (ULONG i = 0; i < NUM_TESTS; i++) {
 
-    // Initialize major data structures
-    initialize_data_structures();
+        // Initialize all data structures, events, threads, and handles. Get physical pages from OS.
+        initialize_system();
 
-    // Start helper threads -- scheduler, writer, trimmer!
-    // TODO initiate helper threads here
+        // Set up a timer to evaluate speed
+        ULONG64 start_time = GetTickCount64();
 
-    // Run test with a simulated user app.
-    run_user_app_simulation();
+        // Run system test. This will broadcast the system start event to all listening threads,
+        // including the user threads. This begins the user app simulation, which begins faulting.
+        // This function will wait for all user app threads to finish before returning.
+        begin_system_test();
 
-    // Free all memory and end the simulation.
-    terminate_memory_test();
+        // Grab the time to evaluate speed
+        ULONG64 end_time = GetTickCount64();
+
+        // Free all memory and end the simulation.
+        free_data_and_shut_down();
+
+        // Print statistics
+        cumulative_time += end_time - start_time;
+        printf("Program terminated successfully. Time elapsed: %llu milliseconds.\n", end_time - start_time);
+        printf ("Finished accessing %u random virtual addresses.\n", ITERATIONS * NUM_USER_THREADS);
+    }
+    printf("Over %u tests, we averaged %llu milliseconds, which is %llu milliseconds per thread.\n",
+            NUM_TESTS,
+            cumulative_time / NUM_TESTS,
+            cumulative_time / NUM_TESTS / NUM_USER_THREADS);
 }

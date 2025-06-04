@@ -6,6 +6,7 @@
 #include "../include/macros.h"
 #include "../include/pfn.h"
 #include "../include/pte.h"
+#include "../include/simulator.h"
 #include "../include/scheduler.h"
 
 BOOL GetPrivilege (VOID) {
@@ -89,39 +90,6 @@ BOOL GetPrivilege (VOID) {
     return TRUE;
 }
 
-#if SUPPORT_MULTIPLE_VA_TO_SAME_PAGE
-
-HANDLE
-CreateSharedMemorySection (
-    VOID
-    )
-{
-    HANDLE section;
-    MEM_EXTENDED_PARAMETER parameter = { 0 };
-
-    //
-    // Create an AWE section.  Later we deposit pages into it and/or
-    // return them.
-    //
-
-    parameter.Type = MemSectionExtendedParameterUserPhysicalFlags;
-    parameter.ULong = 0;
-
-    section = CreateFileMapping2 (INVALID_HANDLE_VALUE,
-                                  NULL,
-                                  SECTION_MAP_READ | SECTION_MAP_WRITE,
-                                  PAGE_READWRITE,
-                                  SEC_RESERVE,
-                                  0,
-                                  NULL,
-                                  &parameter,
-                                  1);
-
-    return section;
-}
-
-#endif
-
 PULONG_PTR zero_malloc(size_t bytes_to_allocate) {
     PULONG_PTR destination = malloc(bytes_to_allocate);
     NULL_CHECK(destination, "Zero malloc failed!");
@@ -129,9 +97,7 @@ PULONG_PTR zero_malloc(size_t bytes_to_allocate) {
     return destination;
 }
 
-// Initialize the above structures
-void initialize_data_structures(void) {
-
+void initialize_statistics(void) {
     free_page_count = 0;
     active_page_count = 0;
     modified_page_count = 0;
@@ -139,14 +105,64 @@ void initialize_data_structures(void) {
     hard_faults_resolved = 0;
     soft_faults_resolved = 0;
     faults_unresolved = 0;
+}
 
-    trimmer_offset = 0;
+// Initialize all global critical sections
+void initialize_locks(void) {
+    InitializeCriticalSection (&page_fault_lock);
+    InitializeCriticalSection(&kernal_read_lock);
+    InitializeCriticalSection(&kernal_write_lock);
+}
 
-    // Find largest frame number for PFN array
-    set_max_frame_number();
+void initialize_physical_pages(void) {
 
-    // Initialize PTE array
+    BOOL allocated;
+    BOOL privilege;
+    // Acquire privilege to manage pages from the operating system.
+    privilege = GetPrivilege ();
+    if (privilege == FALSE) {
+        fatal_error ("full_virtual_memory_test : could not get privilege.");
+    }
+    physical_page_handle = GetCurrentProcess ();
+
+    // Grab physical pages from the OS
+    allocated_frame_count = NUMBER_OF_PHYSICAL_PAGES;
+    allocated_frame_numbers = malloc (NUMBER_OF_PHYSICAL_PAGES * sizeof (ULONG_PTR));
+    NULL_CHECK (allocated_frame_numbers, "full_virtual_memory_test : could not allocate array to hold physical page numbers.");
+
+    allocated = AllocateUserPhysicalPages (physical_page_handle,
+                                           &allocated_frame_count,
+                                           allocated_frame_numbers);
+    if (allocated == FALSE) {
+        fatal_error ("full_virtual_memory_test : could not allocate physical pages.");
+    }
+    if (allocated_frame_count != NUMBER_OF_PHYSICAL_PAGES) {
+
+        printf ("full_virtual_memory_test : allocated only %llu pages out of %u pages requested\n",
+                allocated_frame_count,
+                NUMBER_OF_PHYSICAL_PAGES);
+    }
+}
+
+void initialize_page_table(void) {
+    // Allocate and zero all PTE data.
     PTE_base = (PPTE) zero_malloc(sizeof(PTE) * NUM_PTEs);
+
+    // Initialize all PTE locks
+    for (PPTE pte = PTE_base; pte < PTE_base + NUM_PTEs; pte++) {
+        InitializeCriticalSection(&pte->lock);
+    }
+}
+
+void initialize_page_lists(void) {
+    // Initialize lists for PFN state machine
+    InitializeListHead(&zero_list);
+    InitializeListHead(&free_list);
+    InitializeListHead(&modified_list);
+    InitializeListHead(&standby_list);
+}
+
+void initialize_PFN_data(void) {
 
     // Initialize PFN sparse array
     PFN_array = VirtualAlloc    (NULL,
@@ -157,12 +173,6 @@ void initialize_data_structures(void) {
     if (!PFN_array) {
         fatal_error("Failed to reserve VA space for PFN_array\n");
     }
-
-    // Initialize lists for PFN state machine
-    InitializeListHead(&zero_list);
-    InitializeListHead(&free_list);
-    InitializeListHead(&modified_list);
-    InitializeListHead(&standby_list);
 
     // Create all PFNs, adding them to the free list
     // Note -- it is critical to not save the returned value of VirtualAlloc as the VA of the PFN.
@@ -175,10 +185,10 @@ void initialize_data_structures(void) {
             continue; // skip frame number 0, as it is an invalid page of memory per our PTE encoding.
         }
 
-       LPVOID result = VirtualAlloc((LPVOID)(PFN_array + allocated_frame_numbers[i]),
-                                    sizeof(PFN),
-                                    MEM_COMMIT,
-                                    PAGE_READWRITE);
+        LPVOID result = VirtualAlloc((LPVOID)(PFN_array + allocated_frame_numbers[i]),
+                                     sizeof(PFN),
+                                     MEM_COMMIT,
+                                     PAGE_READWRITE);
         if (result == NULL) {
             fatal_error("Error: Failed to commit memory for PFN.");
         }
@@ -189,6 +199,9 @@ void initialize_data_structures(void) {
         InsertHeadList(&free_list, &new_pfn->entry);
         free_page_count++;
     }
+}
+
+void initialize_page_file_and_metadata(void) {
 
     // Initialize page file.
     page_file = (char*) zero_malloc(PAGES_IN_PAGE_FILE * PAGE_SIZE);
@@ -199,7 +212,9 @@ void initialize_data_structures(void) {
 
     // Initialize disk slot tracker
     empty_disk_slots = PAGES_IN_PAGE_FILE;
+}
 
+void initialize_kernel_VA_spaces(void) {
     // Initialize kernel VA space
     kernel_write_va = VirtualAlloc (NULL,
                   PAGE_SIZE * MAX_WRITE_BATCH_SIZE,
@@ -214,34 +229,94 @@ void initialize_data_structures(void) {
                       PAGE_READWRITE);
 
     NULL_CHECK (kernel_read_va, "Could not reserve kernal read VA space.");
+}
 
-#if SUPPORT_MULTIPLE_VA_TO_SAME_PAGE
-    MEM_EXTENDED_PARAMETER parameter = { 0 };
-    //
-    // Allocate a MEM_PHYSICAL region that is "connected" to the AWE section
-    // created above.
-    //
-    parameter.Type = MemExtendedParameterUserPhysicalHandle;
-    parameter.Handle = physical_page_handle;
-    p = VirtualAlloc2 (NULL,
-                       NULL,
-                       virtual_address_size,
-                       MEM_RESERVE | MEM_PHYSICAL,
-                       PAGE_READWRITE,
-                       &parameter,
-                       1);
-#else
+void initialize_user_VA_space(void) {
     // Reserve user virtual address space.
     application_va_base = VirtualAlloc (NULL,
                       VIRTUAL_ADDRESS_SIZE,
                       MEM_RESERVE | MEM_PHYSICAL,
                       PAGE_READWRITE);
-#endif
-    NULL_CHECK (application_va_base, "Could not reserve user VA space.");
 
-#if DEBUG
-    printf("All data structures initialized!\n");
-#endif
+    NULL_CHECK (application_va_base, "Could not reserve user VA space.");
+}
+
+void initialize_threads(void) {
+
+    // Initialize handles to for each thread.
+    user_threads = (PHANDLE) zero_malloc(NUM_USER_THREADS * sizeof(HANDLE));
+    system_threads = (PHANDLE) zero_malloc(NUM_SYSTEM_THREADS * sizeof(HANDLE));
+    user_thread_ids = (PULONG) zero_malloc(NUM_USER_THREADS * sizeof(ULONG));
+    system_thread_ids = (PULONG) zero_malloc(NUM_SYSTEM_THREADS * sizeof(ULONG));
+
+    // Create user threads, each of which are running the user app simulation.
+    for (ULONG64 i = 0; i < NUM_USER_THREADS; i++) {
+        user_threads[i] = CreateThread (DEFAULT_SECURITY,
+                               DEFAULT_STACK_SIZE,
+                               (LPTHREAD_START_ROUTINE) run_user_app_simulation,
+                               (LPVOID) i,
+                               DEFAULT_CREATION_FLAGS,
+                               &user_thread_ids[i]);
+
+        NULL_CHECK(user_threads[i], "Could not create user threads.");
+    }
+
+    // TODO initialize system threads for writing, trimming, etc.
+}
+
+void initialize_events(void) {
+    system_start_event = CreateEvent(NULL, MANUAL_RESET, FALSE, NULL);
+    NULL_CHECK(system_start_event, "Could not intialize system start event.");
+
+    standby_pages_ready_event = CreateEvent(NULL, AUTO_RESET, FALSE, NULL);
+    NULL_CHECK(system_start_event, "Could not intialize standby pages ready event.");
+
+    initiate_trimming_event = CreateEvent(NULL, AUTO_RESET, FALSE, NULL);
+    NULL_CHECK(initiate_trimming_event, "Could not initialize trimming event.");
+
+    initiate_writing_event = CreateEvent(NULL, AUTO_RESET, FALSE, NULL);
+    NULL_CHECK(initiate_writing_event, "Could not initialize writing event.");
+}
+
+// Initialize the above structures
+void initialize_system(void) {
+
+    // Initialize statistics to track page consumption (for scheduler).
+    initialize_statistics();
+
+    // TODO remove this once trimmer runs on its own thread.
+    trimmer_offset = 0;
+
+    // Get the privilege and physical pages from the OS.
+    initialize_physical_pages();
+
+    // Find largest frame number for PFN array
+    set_max_frame_number();
+
+    // Initialize PTEs
+    initialize_page_table();
+
+    // Initialize page lists
+    initialize_page_lists();
+
+    // Initialize all PFN data
+    initialize_PFN_data();
+
+    // Initialize all page file and metadata
+    initialize_page_file_and_metadata();
+
+    // Initialize VA spaces
+    initialize_kernel_VA_spaces();
+    initialize_user_VA_space();
+
+    // Initialize events
+    initialize_threads();
+
+    // Initialize threads
+    initialize_events();
+
+    // Initialize all locks on global data structures.
+    initialize_locks();
 }
 
 void map_pages(int num_pages, PULONG_PTR va, PULONG_PTR frame_numbers) {
@@ -265,6 +340,7 @@ void unmap_all_pages(void) {
     }
 }
 
+// TODO move to page list file, wait for lock on list head before removing.
 PPFN get_first_frame_from_list(PLIST_ENTRY head) {
     if (IsListEmpty(head)) {
         return NULL;

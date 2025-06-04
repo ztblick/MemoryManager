@@ -1,0 +1,14 @@
+Data is in milliseconds
+
+ITERATIONS      1 Thread    2 Threads   4 Threads   8 Threads
+1000            6           34          65          150
+per thread      6           17          16          18
+
+10000           67          328         546         1140
+per thread      67          164
+
+100000          786         3369
+per thread      786         1684
+
+MB(1)           6364        35333
+per thread      6364        17666

@@ -4,7 +4,7 @@
 
 #pragma once
 
-HANDLE physical_page_handle;
+
 
 /*
  *  Provides an arbitrary VA from the application's VA space.
@@ -13,4 +13,4 @@ PULONG_PTR get_arbitrary_va(PULONG_PTR p);
 
 void run_user_app_simulation(void);
 
-void terminate_memory_test(void);
+void free_data_and_shut_down(void);

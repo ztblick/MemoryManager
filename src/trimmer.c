@@ -5,6 +5,8 @@
 #include "../include/initializer.h"
 #include "../include/trimmer.h"
 
+// TODO create this on its own thread. Remove trimmer_offset from global variables.
+
 VOID trim_pages(VOID) {
 
     #if DEBUG
@@ -33,7 +35,10 @@ VOID trim_pages(VOID) {
         if (pte == (PTE_base + NUM_PTEs)) pte = PTE_base;
     }
     if (!trimmed) {
-        fatal_error("No active PTEs to be trimmed...");
+#if DEBUG
+        printf("No active PTEs to be trimmed...");
+#endif
+        return;
     }
 
     // Unmap the VA from this page
