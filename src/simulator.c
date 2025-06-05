@@ -40,7 +40,6 @@ void run_user_app_simulation(void) {
         schedule_tasks();
         LeaveCriticalSection(&page_fault_lock);
 
-
         // Randomly access different portions of the virtual address space.
         arbitrary_va = get_arbitrary_va(application_va_base);
 

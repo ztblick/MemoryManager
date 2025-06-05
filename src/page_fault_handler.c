@@ -44,25 +44,30 @@ void set_disk_slot(UINT64 disk_slot) {
     empty_disk_slots--;
 }
 
-
+/*
+ *  Here, we check to see if a page read back from memory is valid.
+ *  There are two cases where it can be valid:
+ *  1. The page contains the stamp from a VA that previously faulted on it.
+ *  2. The page was about to be stamped, but before it could be, it was taken from
+ *  the VA, causing another fault. In this case, a page to be validated could be zeroed,
+ *  and that's okay.
+ */
 BOOL validate_page(PULONG_PTR va) {
+    BOOL all_zeros = TRUE;
     PULONG_PTR page_start = get_beginning_of_VA_region(va);
     for (PULONG_PTR spot = page_start; spot < page_start + PAGE_SIZE / BYTES_PER_VA; spot++) {
         if (*spot == (ULONG_PTR) spot)
             return TRUE;
+        if (*spot != 0)
+            all_zeros = FALSE;
     }
-    return FALSE;
+    return all_zeros;
  }
 
-// If we cannot access the VA, return FALSE.
-BOOL va_faults_on_access(PULONG_PTR va) {
-    __try {
-        *va = (ULONG_PTR) va;
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        return TRUE;
-    }
-    return FALSE;
+// If we cannot access the VA, return TRUE. If we CAN access the VA, return FALSE.
+BOOL va_faults_on_access(PPTE pte) {
+
+    return pte->memory_format.valid == PTE_INVALID;
 }
 
 BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
@@ -83,6 +88,9 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
     // had previously been on disk, as the PTE itself has changed its state.
     BYTE pte_entry_state;
 
+    // The PFN associated with the page that will be mapped to the faulting VA.
+    PPFN available_pfn;
+
 #if DEBUG
     printf("\nResolving page fault...\n\n");
 #endif
@@ -95,18 +103,15 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
 
         EnterCriticalSection(&page_fault_lock);
 
+        // Grab the PTE for the VA
+        PPTE pte = get_PTE_from_VA(faulting_va);
+
         // Check to see if your page fault has been resolved while you were waiting.
-        if (!va_faults_on_access(faulting_va)) {
+        if (!va_faults_on_access(pte)) {
 
             LeaveCriticalSection(&page_fault_lock);
             return TRUE;
         }
-
-        // The PFN associated with the page that will be mapped to the faulting VA.
-        PPFN available_pfn = NULL;
-
-        // Grab the PTE for the VA
-        PPTE pte = get_PTE_from_VA(faulting_va);
 
         // If we faulted on a valid VA, something is very wrong
         if (pte->memory_format.valid == 1) {
@@ -202,7 +207,6 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
             continue;
         }
 
-
         // Get the frame number
         frame_numbers_to_map = get_frame_from_PFN(available_pfn);
 
@@ -248,6 +252,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         printf("Iteration %d: Successfully mapped and trimmed physical page %llu with PTE %p.\n", i, frame_numbers_to_map, pte);
 #endif
         hard_faults_resolved++;
+
         LeaveCriticalSection(&page_fault_lock);
         return TRUE;
     }

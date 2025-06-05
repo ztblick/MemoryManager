@@ -1,14 +1,16 @@
 Data is in milliseconds
 
+Benchmarks performed with one critical section shared by user threads for ALL global data.
+
 ITERATIONS      1 Thread    2 Threads   4 Threads   8 Threads
 1000            6           34          65          150
 per thread      6           17          16          18
 
-10000           67          328         546         1140
-per thread      67          164
+10000           41          250         520         983
+per thread      41          125         130         120
 
-100000          786         3369
-per thread      786         1684
+100000          402         2652        5187        7816
+per thread      402         1326        1296        977
 
 MB(1)           6364        35333
 per thread      6364        17666

@@ -17,7 +17,7 @@
 #define BYTES_PER_VA                8
 
 // This is the number of times the system is tested.
-#define NUM_TESTS                   1
+#define NUM_TESTS                   4
 
 // This is the number of times the simulator will access a VA.
 #define ITERATIONS                  10000
