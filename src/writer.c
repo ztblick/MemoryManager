@@ -29,7 +29,7 @@ VOID write_pages(int num_pages) {
     PULONG_PTR frame_numbers_to_map = zero_malloc(MAX_WRITE_BATCH_SIZE * sizeof(ULONG_PTR));
 
     // First, check to see if there are any pages to write
-    if (IsListEmpty(&modified_list) || num_pages == 0) {
+    if (is_page_list_empty(&modified_list) || num_pages == 0) {
 #if DEBUG
         printf("No modified pages to write to disk.\n");
 #endif
@@ -43,7 +43,7 @@ VOID write_pages(int num_pages) {
     for (int i = 0; i < num_pages; i++) {
 
         // Get the next modified page for this batch
-        pfn = get_first_frame_from_list(&modified_list);
+        pfn = pop_from_list_head(&modified_list);
         modified_page_count--;
 
         // Get the transition PTE associated with this page
@@ -77,7 +77,7 @@ VOID write_pages(int num_pages) {
     pfn->disk_index = disk_index;
 
     // Add page to the standby list
-    InsertTailList(&standby_list, &pfn->entry);
+    insert_tail_list(&standby_list, &pfn->entry);
     standby_page_count++;
 
     // Free frame number array

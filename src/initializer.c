@@ -156,10 +156,10 @@ void initialize_page_table(void) {
 
 void initialize_page_lists(void) {
     // Initialize lists for PFN state machine
-    InitializeListHead(&zero_list);
-    InitializeListHead(&free_list);
-    InitializeListHead(&modified_list);
-    InitializeListHead(&standby_list);
+    initialize_page_list(&zero_list);
+    initialize_page_list(&free_list);
+    initialize_page_list(&modified_list);
+    initialize_page_list(&standby_list);
 }
 
 void initialize_PFN_data(void) {
@@ -196,7 +196,7 @@ void initialize_PFN_data(void) {
         // Initialize the new PFN, then insert it to the free list.
         PPFN new_pfn = PFN_array + allocated_frame_numbers[i];
         create_zeroed_pfn(new_pfn);
-        InsertHeadList(&free_list, &new_pfn->entry);
+        insert_head_list(&free_list, &new_pfn->entry);
         free_page_count++;
     }
 }
@@ -338,17 +338,6 @@ void unmap_all_pages(void) {
             unmap_pages(1, va);
         }
     }
-}
-
-// TODO move to page list file, wait for lock on list head before removing.
-PPFN get_first_frame_from_list(PLIST_ENTRY head) {
-    if (IsListEmpty(head)) {
-        return NULL;
-    }
-
-    PLIST_ENTRY entry = RemoveHeadList(head);
-    PPFN pfn = CONTAINING_RECORD(entry, PFN, entry);
-    return pfn;
 }
 
 void free_all_data(void) {

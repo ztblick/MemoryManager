@@ -3,6 +3,7 @@
 //
 
 #include "../include/scheduler.h"
+#include "../include/initializer.h"
 #include "../include/ager.h"
 #include "../include/trimmer.h"
 #include "../include/writer.h"

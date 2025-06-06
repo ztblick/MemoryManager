@@ -5,11 +5,17 @@
 #pragma once
 #include <Windows.h>
 #include "pfn.h"
+#include "page_list.h"
 
-#define NUM_SYSTEM_THREADS          1
+#define NUM_SYSTEM_THREADS          0        // TODO Remove me
+#define NUM_SCHEDULING_THREADS      1
+#define NUM_AGING_THREADS           0
+#define NUM_TRIMMING_THREADS        1
+#define NUM_WRITING_THREADS         1
+
 
 // This is the number of threads that run the simulating thread -- which become fault-handling threads.
-#define NUM_USER_THREADS            8
+#define NUM_USER_THREADS            2
 
 #define PAGE_SIZE                   4096
 #define MB(x)                       ((x) * 1024 * 1024)
@@ -17,7 +23,7 @@
 #define BYTES_PER_VA                8
 
 // This is the number of times the system is tested.
-#define NUM_TESTS                   4
+#define NUM_TESTS                   1
 
 // This is the number of times the simulator will access a VA.
 #define ITERATIONS                  10000
@@ -52,10 +58,10 @@ PULONG_PTR allocated_frame_numbers;
 ULONG_PTR allocated_frame_count;
 
 // Page lists
-LIST_ENTRY zero_list;
-LIST_ENTRY free_list;
-LIST_ENTRY modified_list;
-LIST_ENTRY standby_list;
+PAGE_LIST zero_list;
+PAGE_LIST free_list;
+PAGE_LIST modified_list;
+PAGE_LIST standby_list;
 
 // VA spaces
 PULONG_PTR application_va_base;
@@ -120,11 +126,6 @@ void initialize_system(void);
  *  Find the largest physical frame number.
  */
 void set_max_frame_number(void);
-
-/*
- *  Gets the PFN for the head frame on any given list, or NULL if the list is empty.
- */
-PPFN get_first_frame_from_list(PLIST_ENTRY head);
 
 /*
  *  Frees all data allocated by initializer.

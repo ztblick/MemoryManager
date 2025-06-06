@@ -173,9 +173,9 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
 
         // FIRST FAULT / HARD FAULT RESOLUTION
         // First: get a free or standby page
-        if (!IsListEmpty(&free_list)) {
+        if (!is_page_list_empty(&free_list)) {
             // Get the next free page.
-            available_pfn = get_first_frame_from_list(&free_list);
+            available_pfn = pop_from_list_head(&free_list);
             NULL_CHECK(available_pfn, "Free page was null :(");
             free_page_count--;
             active_page_count++;
@@ -185,10 +185,10 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         }
 
         // If no page is available on the zero or free list, then we will repurpose one from the standby list
-        else if (!IsListEmpty(&standby_list)) {
+        else if (!is_page_list_empty(&standby_list)) {
 
             // Remove the standby page from the standby list
-            available_pfn = get_first_frame_from_list(&standby_list);
+            available_pfn = pop_from_list_head(&standby_list);
             NULL_CHECK(available_pfn, "Standby page was null :(");
             standby_page_count--;
             active_page_count++;
