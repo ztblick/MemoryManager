@@ -23,18 +23,20 @@ UINT64 get_free_disk_index(void) {
     return 0;
 }
 
-VOID write_pages(int num_pages) {
+VOID write_pages(VOID) {
 
     // Initialize frame number array
     PULONG_PTR frame_numbers_to_map = zero_malloc(MAX_WRITE_BATCH_SIZE * sizeof(ULONG_PTR));
 
     // First, check to see if there are any pages to write
-    if (is_page_list_empty(&modified_list) || num_pages == 0) {
+    if (is_page_list_empty(&modified_list)) {
 #if DEBUG
         printf("No modified pages to write to disk.\n");
 #endif
         return;
     }
+
+    int num_pages = WRITE_BATCH_SIZE;
 
     PPFN pfn;
     PPTE pte;
@@ -86,4 +88,27 @@ VOID write_pages(int num_pages) {
 #if DEBUG
     printf("Wrote one page out to disk, moved page to standby list!\n");
 #endif
+}
+
+VOID write_pages_thread(VOID) {
+
+    ULONG index;
+    HANDLE events[2];
+    events[ACTIVE_EVENT_INDEX] = initiate_writing_event;
+    events[EXIT_EVENT_INDEX] = system_exit_event;
+
+    // Wait for system start event before entering waiting state!
+    WaitForSingleObject(system_start_event, INFINITE);
+
+    while (TRUE) {
+
+        // Wait for one of two events: initiate writing (which calls write_pages), or exit, which...exits!
+        index = WaitForMultipleObjects(ARRAYSIZE(events), events, FALSE, INFINITE);
+
+        if (index == EXIT_EVENT_INDEX) {
+            return;
+        }
+
+        write_pages();
+    }
 }

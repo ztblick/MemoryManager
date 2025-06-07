@@ -7,15 +7,12 @@
 #include "pfn.h"
 #include "page_list.h"
 
-#define NUM_SYSTEM_THREADS          0        // TODO Remove me
+// This is the number of threads that run the simulating thread -- which become fault-handling threads.
+#define NUM_USER_THREADS            1
 #define NUM_SCHEDULING_THREADS      1
 #define NUM_AGING_THREADS           0
 #define NUM_TRIMMING_THREADS        1
 #define NUM_WRITING_THREADS         1
-
-
-// This is the number of threads that run the simulating thread -- which become fault-handling threads.
-#define NUM_USER_THREADS            2
 
 #define PAGE_SIZE                   4096
 #define MB(x)                       ((x) * 1024 * 1024)
@@ -85,11 +82,15 @@ UINT64 empty_disk_slots;
 // Handles
 HANDLE physical_page_handle;
 
+#define ACTIVE_EVENT_INDEX    0
+#define EXIT_EVENT_INDEX      1
+
 // Events
+HANDLE system_start_event;
+HANDLE initiate_aging_event;
 HANDLE initiate_trimming_event;
 HANDLE initiate_writing_event;
 HANDLE standby_pages_ready_event;
-HANDLE system_start_event;
 HANDLE system_exit_event;
 
 // Locks
@@ -97,11 +98,19 @@ CRITICAL_SECTION page_fault_lock;
 CRITICAL_SECTION kernal_read_lock;
 CRITICAL_SECTION kernal_write_lock;
 
-// Threads
+// Thread handles
 PHANDLE user_threads;
-PHANDLE system_threads;
+PHANDLE scheduling_threads;
+PHANDLE aging_threads;
+PHANDLE trimming_threads;
+PHANDLE writing_threads;
+
+// Thread IDs
 PULONG user_thread_ids;
-PULONG system_thread_ids;
+PULONG scheduling_thread_ids;
+PULONG aging_thread_ids;
+PULONG trimming_thread_ids;
+PULONG writing_thread_ids;
 
 // Statistics
 ULONG64 free_page_count;

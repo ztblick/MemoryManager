@@ -21,23 +21,32 @@ VOID print_statistics(VOID) {
 }
 
 VOID schedule_tasks(VOID) {
+    DWORD status;
 
-#if DEBUG
-    printf("Beginning scheduled tasks...\n");
-    print_statistics();
-#endif
-    if (free_page_count < FREE_PAGE_THRESHOLD) {
-        age_active_ptes();
-        trim_pages();
-    }
-    if (empty_disk_slots > 0) {
-        write_pages(WRITE_BATCH_SIZE);
+    WaitForSingleObject(system_start_event, INFINITE);
 
-        // Broadcast to waiting user threads that there are standby pages ready.
-        SetEvent(standby_pages_ready_event);
+    while (TRUE) {
+        // If there is sufficient need, age and trim pages for anticipated page faults.
+        if (free_page_count < FREE_PAGE_THRESHOLD) {
+            SetEvent(initiate_aging_event);
+            SetEvent(initiate_trimming_event);
+        }
+
+        // If there is sufficient need, write pages out to disk to free up pages for anticipated page faults.
+        if (empty_disk_slots > 0) {
+            SetEvent(initiate_writing_event);
+
+            // Broadcast to waiting user threads that there are standby pages ready.
+            SetEvent(standby_pages_ready_event);
+        }
+
+        // Wait for a set amount of time before scheduling again.
+        // Of course, if the system exit event is received, we will immediately break out of the thread.
+        status = WaitForSingleObject(system_exit_event, SCHEDULER_DELAY_IN_MILLISECONDS);
+
+        // If the system exit event is received, we will scheduling and return.
+        if (status == WAIT_OBJECT_0) {
+            break;
+        }
     }
-#if DEBUG
-    printf("\nDone with scheduled tasks!\n");
-    print_statistics();
-#endif
 }

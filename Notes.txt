@@ -3,20 +3,11 @@ Things to be done:
 
 
 Current goal:
-- Implement all states of the state machines for PTEs and PFNs.
-- Check that data is not lost in any transfer from the disk
+- Implement multithreading on scheduler, trimmer, writer threads.
 
-
-Priority Sub-Goals:
-- Resolve soft-fault issues: accurately remove pages from the middle of standby and modified lists
-- Successfully read data from disk, updating metadata and pte/pfn appropriately
-
-Sub-goals:
-- Zero pages before assignment to new PTEs
-- Initiate aging and trimming based on projections
 
 BUGS:
-- Unable to unmap all pages when exiting -- some VAs are left in memory format that are not linked to a page :(
+- Right now, the LAST user thread can be left waiting for the pages ready event forever...
 
 
 
@@ -37,15 +28,6 @@ Bootup:
     - initialize other list heads (DONE)
     - initialize page table (malloc) (DONE)
     - initialize page file (malloc) (DONE)
-
-
-Things to figure out
-    - how to map 4k of VA space to each PTE
-    - how to find correct parameter for mapUser once I've found the offset of a page (from sparse array)?
-
-
-Fault handler:
- - Figure out the specific order for this to be executed!
 
 
  First attempt:

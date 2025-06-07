@@ -3,11 +3,13 @@
 #include <windows.h>
 #include "../include/initializer.h"
 #include "../include/debug.h"
-#include "../include/macros.h"
+#include "../include/ager.h"
 #include "../include/pfn.h"
 #include "../include/pte.h"
 #include "../include/simulator.h"
+#include "../include/writer.h"
 #include "../include/scheduler.h"
+#include "../include/trimmer.h"
 
 BOOL GetPrivilege (VOID) {
     struct {
@@ -245,9 +247,16 @@ void initialize_threads(void) {
 
     // Initialize handles to for each thread.
     user_threads = (PHANDLE) zero_malloc(NUM_USER_THREADS * sizeof(HANDLE));
-    system_threads = (PHANDLE) zero_malloc(NUM_SYSTEM_THREADS * sizeof(HANDLE));
+    aging_threads = (PHANDLE) zero_malloc(NUM_AGING_THREADS * sizeof(HANDLE));
+    scheduling_threads = (PHANDLE) zero_malloc(NUM_SCHEDULING_THREADS * sizeof(HANDLE));
+    trimming_threads = (PHANDLE) zero_malloc(NUM_TRIMMING_THREADS * sizeof(HANDLE));
+    writing_threads = (PHANDLE) zero_malloc(NUM_WRITING_THREADS * sizeof(HANDLE));
+
     user_thread_ids = (PULONG) zero_malloc(NUM_USER_THREADS * sizeof(ULONG));
-    system_thread_ids = (PULONG) zero_malloc(NUM_SYSTEM_THREADS * sizeof(ULONG));
+    aging_thread_ids = (PULONG) zero_malloc(NUM_AGING_THREADS * sizeof(ULONG));
+    scheduling_thread_ids = (PULONG) zero_malloc(NUM_SCHEDULING_THREADS * sizeof(ULONG));
+    trimming_thread_ids = (PULONG) zero_malloc(NUM_TRIMMING_THREADS * sizeof(ULONG));
+    writing_thread_ids = (PULONG) zero_malloc(NUM_WRITING_THREADS * sizeof(ULONG));
 
     // Create user threads, each of which are running the user app simulation.
     for (ULONG64 i = 0; i < NUM_USER_THREADS; i++) {
@@ -261,21 +270,73 @@ void initialize_threads(void) {
         NULL_CHECK(user_threads[i], "Could not create user threads.");
     }
 
-    // TODO initialize system threads for writing, trimming, etc.
+    // Create system scheduling threads
+    for (ULONG64 i = 0; i < NUM_SCHEDULING_THREADS; i++) {
+        scheduling_threads[i] = CreateThread (DEFAULT_SECURITY,
+                               DEFAULT_STACK_SIZE,
+                               (LPTHREAD_START_ROUTINE) schedule_tasks,
+                               (LPVOID) i,
+                               DEFAULT_CREATION_FLAGS,
+                               &scheduling_thread_ids[i]);
+
+        NULL_CHECK(scheduling_threads[i], "Could not create scheduling threads.");
+    }
+
+    // Create system aging threads
+    for (ULONG64 i = 0; i < NUM_AGING_THREADS; i++) {
+        aging_threads[i] = CreateThread (DEFAULT_SECURITY,
+                               DEFAULT_STACK_SIZE,
+                               (LPTHREAD_START_ROUTINE) age_active_ptes,
+                               (LPVOID) i,
+                               DEFAULT_CREATION_FLAGS,
+                               &aging_thread_ids[i]);
+
+        NULL_CHECK(aging_threads[i], "Could not create aging threads.");
+    }
+
+    // Create system trimming threads
+    for (ULONG64 i = 0; i < NUM_TRIMMING_THREADS; i++) {
+        trimming_threads[i] = CreateThread (DEFAULT_SECURITY,
+                               DEFAULT_STACK_SIZE,
+                               (LPTHREAD_START_ROUTINE) trim_pages_thread,
+                               (LPVOID) i,
+                               DEFAULT_CREATION_FLAGS,
+                               &trimming_thread_ids[i]);
+
+        NULL_CHECK(trimming_threads[i], "Could not create trimming threads.");
+    }
+
+    // Create system writing threads
+    for (ULONG64 i = 0; i < NUM_WRITING_THREADS; i++) {
+        writing_threads[i] = CreateThread (DEFAULT_SECURITY,
+                               DEFAULT_STACK_SIZE,
+                               (LPTHREAD_START_ROUTINE) write_pages_thread,
+                               (LPVOID) i,
+                               DEFAULT_CREATION_FLAGS,
+                               &writing_thread_ids[i]);
+
+        NULL_CHECK(writing_threads[i], "Could not create writing threads.");
+    }
 }
 
 void initialize_events(void) {
     system_start_event = CreateEvent(NULL, MANUAL_RESET, FALSE, NULL);
     NULL_CHECK(system_start_event, "Could not intialize system start event.");
 
-    standby_pages_ready_event = CreateEvent(NULL, AUTO_RESET, FALSE, NULL);
-    NULL_CHECK(system_start_event, "Could not intialize standby pages ready event.");
+    initiate_aging_event = CreateEvent(NULL, AUTO_RESET, FALSE, NULL);
+    NULL_CHECK(initiate_aging_event, "Could not intialize aging event.");
 
     initiate_trimming_event = CreateEvent(NULL, AUTO_RESET, FALSE, NULL);
     NULL_CHECK(initiate_trimming_event, "Could not initialize trimming event.");
 
     initiate_writing_event = CreateEvent(NULL, AUTO_RESET, FALSE, NULL);
     NULL_CHECK(initiate_writing_event, "Could not initialize writing event.");
+
+    standby_pages_ready_event = CreateEvent(NULL, AUTO_RESET, FALSE, NULL);
+    NULL_CHECK(standby_pages_ready_event, "Could not intialize standby pages ready event.");
+
+    system_exit_event = CreateEvent(NULL, MANUAL_RESET, FALSE, NULL);
+    NULL_CHECK(system_exit_event, "Could not intialize system exit event.");
 }
 
 // Initialize the above structures

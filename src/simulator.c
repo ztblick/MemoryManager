@@ -72,9 +72,16 @@ void free_locks(void) {
 
 void free_events(void) {
     free(user_threads);
-    free(system_threads);
+    free(scheduling_threads);
+    free(aging_threads);
+    free(trimming_threads);
+    free(writing_threads);
+
     free(user_thread_ids);
-    free(system_thread_ids);
+    free(scheduling_thread_ids);
+    free(aging_thread_ids);
+    free(trimming_thread_ids);
+    free(writing_thread_ids);
 
     CloseHandle(system_start_event);
     CloseHandle(standby_pages_ready_event);
@@ -98,6 +105,9 @@ void begin_system_test(void) {
     // This waits for the tests to finish running before exiting the function
     // Our controlling thread will wait for this function to finish before exiting the test and reporting stats
     WaitForMultipleObjects(NUM_USER_THREADS, user_threads, TRUE, INFINITE);
+
+    // Test is finished! Tell all threads to stop.
+    SetEvent(system_exit_event);
 }
 
 VOID main (int argc, char** argv) {

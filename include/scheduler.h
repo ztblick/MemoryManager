@@ -14,7 +14,9 @@
 #include "initializer.h"
 
 // Initially, we will begin trimming and writing when we have less than 10% free pages available.
-#define FREE_PAGE_THRESHOLD     NUMBER_OF_PHYSICAL_PAGES / 2
+// TODO change this to look at the total amount of the active set (?) that is in a non-available state (active or modified)
+#define FREE_PAGE_THRESHOLD                 NUMBER_OF_PHYSICAL_PAGES / 2
+#define SCHEDULER_DELAY_IN_MILLISECONDS     100
 
 /*
  * Analyzes consumption, then calls ager, trimmer, and writer appropriately.

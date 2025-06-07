@@ -65,3 +65,26 @@ VOID trim_pages(VOID) {
     if (pte == (PTE_base + NUM_PTEs)) pte = PTE_base;
     trimmer_offset = pte - PTE_base;
 }
+
+VOID trim_pages_thread(VOID) {
+
+    ULONG index;
+    HANDLE events[2];
+    events[ACTIVE_EVENT_INDEX] = initiate_trimming_event;
+    events[EXIT_EVENT_INDEX] = system_exit_event;
+
+    // Wait for system start event before entering waiting state!
+    WaitForSingleObject(system_start_event, INFINITE);
+
+    while (TRUE) {
+
+        // Wait for one of two events: initiate writing (which calls write_pages), or exit, which...exits!
+        index = WaitForMultipleObjects(ARRAYSIZE(events), events, FALSE, INFINITE);
+
+        if (index == EXIT_EVENT_INDEX) {
+            return;
+        }
+
+        trim_pages();
+    }
+}
