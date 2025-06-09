@@ -5,7 +5,6 @@
 #include "../include/initializer.h"
 #include "../include/trimmer.h"
 
-// TODO create this on its own thread. Remove trimmer_offset from global variables.
 
 VOID trim_pages(VOID) {
 
@@ -23,10 +22,15 @@ VOID trim_pages(VOID) {
     // beyond previous last trimmed page.
     for (int i = 0; i < NUM_PTEs; i++) {
 
-        // When an active PTE is found, break.
-        if (pte->memory_format.valid) {
-            trimmed = TRUE;
-            break;
+        // Try to acquire the PTE lock
+        if (TryEnterCriticalSection(&pte->lock)) {
+            // When an active PTE is found, break.
+            if (pte->memory_format.valid) {
+                trimmed = TRUE;
+                break;
+            }
+            // If the PTE is not valid, release its lock.
+            LeaveCriticalSection(&pte->lock);
         }
         // Move on to the next pte
         pte++;
@@ -41,6 +45,10 @@ VOID trim_pages(VOID) {
         return;
     }
 
+    // Get the PFN lock
+    PPFN pfn = get_PFN_from_PTE(pte);
+    EnterCriticalSection(&pfn->lock);
+
     // Unmap the VA from this page
     unmap_pages(1, get_VA_from_PTE(pte));
 
@@ -48,13 +56,16 @@ VOID trim_pages(VOID) {
     set_PTE_to_transition(pte);
 
     // Trim this page to the modified list
-    PPFN pfn = get_PFN_from_PTE(pte);
-    insert_tail_list(&modified_list, &pfn->entry);
+    lock_list_then_insert_to_tail(&modified_list, &pfn->entry);
     modified_page_count++;
     active_page_count--;
 
     // Set PFN status as modified
     SET_PFN_STATUS(pfn, PFN_MODIFIED);
+
+    // Leave PFN, PTE critical sections
+    LeaveCriticalSection(&pfn->lock);
+    LeaveCriticalSection(&pte->lock);
 
 #if DEBUG
     printf("\nTrimmed one page to from active to modified.\n\n");
@@ -87,7 +98,7 @@ VOID trim_pages_thread(VOID) {
         if (index == EXIT_EVENT_INDEX) {
             return;
         }
-
+        // TODO eventually remove these guards!
         EnterCriticalSection(&page_fault_lock);
         trim_pages();
         LeaveCriticalSection(&page_fault_lock);

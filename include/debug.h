@@ -3,7 +3,7 @@
 //
 
 #pragma once
-#include "initializer.h"
+#include <Windows.h>
 
 // This is my central controller for editing with a debug mode. All debug settings are enabled
 // and disabled by DEBUG.

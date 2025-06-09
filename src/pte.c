@@ -59,6 +59,7 @@ void set_PTE_to_valid(PPTE pte, ULONG_PTR frame_number) {
 
     // Set valid bit, set frame number
     temp.memory_format.valid = PTE_VALID;
+    temp.memory_format.status = PTE_STATUS_BIT_FOR_VALID;
     temp.memory_format.frame_number = frame_number;
 
     // Write back all bits at once to avoid partial modification

@@ -129,11 +129,16 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
             // Ensure that the page is either modified or standby.
             ASSERT(!IS_PFN_ACTIVE(available_pfn) && !IS_PFN_FREE(available_pfn));
 
+            // This page list variable is necessary to know which page list we will remove from.
+            // This allows us to decrement its size without calling one of its removal methods.
+            PAGE_LIST list_to_decrement;
+
             // If the page is in its modified state, we will remove it from the modified list,
             // Make its status active, map it to its VA, and update the PTE.
             // Since it is not in the disk slot yet, there is no need to update its disk metadata.
             if (IS_PFN_MODIFIED(available_pfn)) {
                 modified_page_count--;
+                list_to_decrement = modified_list;
 #if DEBUG
                 printf("Resolving soft fault with modified page...\n");
 #endif
@@ -143,6 +148,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
                 ASSERT(IS_PFN_STANDBY(available_pfn));
                 standby_page_count--;
                 clear_disk_slot(available_pfn->disk_index);
+                list_to_decrement = standby_list;
 #if DEBUG
                 printf("Resolving soft fault with standby page, clearing disk slot %llu\n", available_pfn->disk_index);
 #endif
@@ -151,6 +157,8 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
             // Regardless of standby or modified, these steps should happen to perform a soft fault!
             // Remove the page from its list (standby or modified) and map the VA to it.
             RemoveEntryList(&available_pfn->entry);
+            decrement_list_size(&list_to_decrement);
+
             active_page_count++;
             frame_numbers_to_map = pte->memory_format.frame_number;
             map_pages(1, faulting_va, &frame_numbers_to_map);
@@ -175,7 +183,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         // First: get a free or standby page
         if (!is_page_list_empty(&free_list)) {
             // Get the next free page.
-            available_pfn = pop_from_list_head(&free_list);
+            available_pfn = lock_list_then_pop_from_head(&free_list);
             NULL_CHECK(available_pfn, "Free page was null :(");
             free_page_count--;
             active_page_count++;
@@ -188,7 +196,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         else if (!is_page_list_empty(&standby_list)) {
 
             // Remove the standby page from the standby list
-            available_pfn = pop_from_list_head(&standby_list);
+            available_pfn = lock_list_then_pop_from_head(&standby_list);
             NULL_CHECK(available_pfn, "Standby page was null :(");
             standby_page_count--;
             active_page_count++;

@@ -111,9 +111,20 @@ void initialize_statistics(void) {
 
 // Initialize all global critical sections
 void initialize_locks(void) {
-    InitializeCriticalSection (&page_fault_lock);
-    InitializeCriticalSection(&kernal_read_lock);
-    InitializeCriticalSection(&kernal_write_lock);
+
+    // TODO eventually remove me once all fine-grained locks have been added.
+    // Initialize overarching lock
+    InitializeCriticalSection(&page_fault_lock);
+
+    // Initialize locks for kernel read/write VA space
+    InitializeCriticalSection(&kernel_read_lock);
+    InitializeCriticalSection(&kernel_write_lock);
+
+    // Initialize one lock for each disk slot -- the +1 is because we do not use 0 as a valid disk slot.
+    disk_metadata_locks = (PCRITICAL_SECTION) zero_malloc((PAGES_IN_PAGE_FILE + 1) * sizeof(CRITICAL_SECTION));
+    for (int i = MIN_DISK_INDEX; i <= PAGES_IN_PAGE_FILE; i++) {
+        InitializeCriticalSection(&disk_metadata_locks[i]);
+    }
 }
 
 void initialize_physical_pages(void) {
@@ -198,7 +209,7 @@ void initialize_PFN_data(void) {
         // Initialize the new PFN, then insert it to the free list.
         PPFN new_pfn = PFN_array + allocated_frame_numbers[i];
         create_zeroed_pfn(new_pfn);
-        insert_head_list(&free_list, &new_pfn->entry);
+        lock_list_then_insert_to_head(&free_list, &new_pfn->entry);
         free_page_count++;
     }
 }
@@ -403,6 +414,8 @@ void free_all_data(void) {
     free(PTE_base);
     free(page_file);
     free(page_file_metadata);
+
+    // TODO free all PTE, PFN, disk slot locks
 }
 
 void set_max_frame_number(void) {

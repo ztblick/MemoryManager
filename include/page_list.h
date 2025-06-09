@@ -6,6 +6,7 @@
 
 #include "../include/macros.h"
 #include "../include/PFN.h"
+#include "../include/debug.h"
 
 // A page list is the head of a doubly-linked list of pages.
 // When the list is empty, the head's entry's flink and blink point to the entry itself.
@@ -33,12 +34,17 @@ BOOL is_page_list_empty(PPAGE_LIST list);
 /*
  *  Adds a page to the head of the list.
  */
-VOID insert_head_list(PPAGE_LIST list, PLIST_ENTRY entry);
+VOID lock_list_then_insert_to_head(PPAGE_LIST list, PLIST_ENTRY entry);
 
 /*
  *  Adds a page to the tail of the list.
  */
-VOID insert_tail_list(PPAGE_LIST list, PLIST_ENTRY entry);
+VOID lock_list_then_insert_to_tail(PPAGE_LIST list, PLIST_ENTRY entry);
+
+/*
+ *  Decrements a list size, which is done when removing elements during a soft fault.
+ */
+VOID decrement_list_size(PPAGE_LIST list);
 
 /*
  *  Removes a page to the head of the list.
@@ -52,4 +58,10 @@ VOID insert_tail_list(PPAGE_LIST list, PLIST_ENTRY entry);
  *  Pops and returns from the head of the list.
  *  Returns NULL is the list is empty.
  */
-PPFN pop_from_list_head(PPAGE_LIST list);
+PPFN lock_list_then_pop_from_head(PPAGE_LIST list);
+
+/*
+ *  Returns the PFN at the head of the list, but does not remove it from the list.
+ *  Returns NULL is the list is empty.
+ */
+PPFN peek_from_list_head(PPAGE_LIST list);

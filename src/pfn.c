@@ -10,6 +10,7 @@ VOID create_zeroed_pfn(PPFN new_pfn) {
     new_pfn->status = PFN_FREE;
     new_pfn->PTE = NULL;
     new_pfn->disk_index = NO_DISK_INDEX;
+    InitializeCriticalSection(&new_pfn->lock);
 }
 
 ULONG_PTR get_frame_from_PFN(PPFN pfn) {
@@ -40,4 +41,26 @@ VOID set_PFN_active(PPFN pfn, PPTE pte) {
     SET_PFN_STATUS(pfn, PFN_ACTIVE);
     pfn->PTE = pte;
     pfn->disk_index = NO_DISK_INDEX;
+}
+
+/*
+ *  Acquires the lock on a PFN, waiting as long as necessary.
+ */
+VOID lock_pfn(PPFN pfn) {
+    EnterCriticalSection(&pfn->lock);
+}
+
+
+/*
+ *  Tries to, but does not always, acquire the lock on a PFN.
+ */
+BOOL try_lock_pfn(PPFN pfn) {
+    return TryEnterCriticalSection(&pfn->lock);
+}
+
+/*
+ *  Releases the lock on a PFN.
+ */
+VOID unlock_pfn(PPFN pfn) {
+    LeaveCriticalSection(&pfn->lock);
 }

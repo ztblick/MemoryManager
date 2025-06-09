@@ -14,9 +14,7 @@ BOOL is_page_list_empty(PPAGE_LIST list) {
     return IsListEmpty(&list->head);
 }
 
-PPFN pop_from_list_head(PPAGE_LIST list) {
-
-    // TODO add PFN locking here?
+PPFN lock_list_then_pop_from_head(PPAGE_LIST list) {
 
     EnterCriticalSection(&list->lock);
 
@@ -32,7 +30,13 @@ PPFN pop_from_list_head(PPAGE_LIST list) {
     return pfn;
 }
 
-VOID insert_tail_list(PPAGE_LIST list, PLIST_ENTRY entry) {
+VOID decrement_list_size(PPAGE_LIST list) {
+
+    ASSERT(list->list_size > 0);
+    list->list_size--;
+}
+
+VOID lock_list_then_insert_to_tail(PPAGE_LIST list, PLIST_ENTRY entry) {
 
     EnterCriticalSection(&list->lock);
     InsertTailList(&list->head, entry);
@@ -40,9 +44,20 @@ VOID insert_tail_list(PPAGE_LIST list, PLIST_ENTRY entry) {
     LeaveCriticalSection(&list->lock);
 }
 
-VOID insert_head_list(PPAGE_LIST list, PLIST_ENTRY entry) {
+VOID lock_list_then_insert_to_head(PPAGE_LIST list, PLIST_ENTRY entry) {
     EnterCriticalSection(&list->lock);
     InsertHeadList(&list->head, entry);
     list->list_size++;
     LeaveCriticalSection(&list->lock);
+}
+
+PPFN peek_from_list_head(PPAGE_LIST list) {
+
+    if (is_page_list_empty(list)) {
+        return NULL;
+    }
+
+    PLIST_ENTRY entry = list->head.Flink;
+    PPFN pfn = CONTAINING_RECORD(entry, PFN, entry);
+    return pfn;
 }

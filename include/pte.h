@@ -9,6 +9,8 @@
 #define PTE_IN_TRANSITION       0
 #define PTE_ON_DISK             1
 
+#define PTE_STATUS_BIT_FOR_VALID    0       // This is used to prevent the PTE from having a 1 (representing on disk) when read back into valid format
+
 #define NUM_PTEs                (VIRTUAL_ADDRESS_SIZE / PAGE_SIZE)
 
 #define STATE_BITS              5

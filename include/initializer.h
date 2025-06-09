@@ -8,7 +8,7 @@
 #include "page_list.h"
 
 // This is the number of threads that run the simulating thread -- which become fault-handling threads.
-#define NUM_USER_THREADS            8
+#define NUM_USER_THREADS            2
 
 // These are the number of threads running background tasks for the system -- scheduler, trimmer, writer
 #define NUM_SCHEDULING_THREADS      1
@@ -29,7 +29,7 @@
 #define NUM_TESTS                   1
 
 // This is the number of times the simulator will access a VA.
-#define ITERATIONS                  5000
+#define ITERATIONS                  1000
 
 // These will change as we decide how many pages to write out or read from to disk at once.
 #define MAX_WRITE_BATCH_SIZE        1
@@ -98,8 +98,9 @@ HANDLE system_exit_event;
 
 // Locks
 CRITICAL_SECTION page_fault_lock;
-CRITICAL_SECTION kernal_read_lock;
-CRITICAL_SECTION kernal_write_lock;
+CRITICAL_SECTION kernel_read_lock;
+CRITICAL_SECTION kernel_write_lock;
+PCRITICAL_SECTION disk_metadata_locks;
 
 // Thread handles
 PHANDLE user_threads;

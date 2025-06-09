@@ -14,7 +14,12 @@ BUGS:
   are any free disk slots. That said, there is one stanby page available to be trimmed.
   For some reason, no disk slot is open and ready. Why wasn't this a problem originally?
 
+~~~~ LOCK ORDERS ~~~~
 
+A - PTE lock
+B - PFN lock
+C - list head lock
+D - disk slot lock
 
 ~~~ OLD THOUGHTS THAT ARE SEEMINGLY IRRELEVANT ~~~
 
