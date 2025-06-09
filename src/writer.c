@@ -109,6 +109,8 @@ VOID write_pages_thread(VOID) {
             return;
         }
 
+        EnterCriticalSection(&page_fault_lock);
         write_pages();
+        LeaveCriticalSection(&page_fault_lock);
     }
 }

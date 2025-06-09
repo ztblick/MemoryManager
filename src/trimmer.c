@@ -76,6 +76,9 @@ VOID trim_pages_thread(VOID) {
     // Wait for system start event before entering waiting state!
     WaitForSingleObject(system_start_event, INFINITE);
 
+    // Initialize trimmer offset to begin at the start of the PTE region.
+    trimmer_offset = 0;
+
     while (TRUE) {
 
         // Wait for one of two events: initiate writing (which calls write_pages), or exit, which...exits!
@@ -85,6 +88,8 @@ VOID trim_pages_thread(VOID) {
             return;
         }
 
+        EnterCriticalSection(&page_fault_lock);
         trim_pages();
+        LeaveCriticalSection(&page_fault_lock);
     }
 }

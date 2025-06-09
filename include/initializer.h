@@ -8,11 +8,17 @@
 #include "page_list.h"
 
 // This is the number of threads that run the simulating thread -- which become fault-handling threads.
-#define NUM_USER_THREADS            1
+#define NUM_USER_THREADS            8
+
+// These are the number of threads running background tasks for the system -- scheduler, trimmer, writer
 #define NUM_SCHEDULING_THREADS      1
 #define NUM_AGING_THREADS           0
 #define NUM_TRIMMING_THREADS        1
 #define NUM_WRITING_THREADS         1
+
+// This is the amount of time the faulting thread will wait for the "pages ready" event -- otherwise, it tries again
+// on its own.
+#define PAGE_FAULT_WAIT_TIME        10
 
 #define PAGE_SIZE                   4096
 #define MB(x)                       ((x) * 1024 * 1024)
@@ -23,7 +29,7 @@
 #define NUM_TESTS                   1
 
 // This is the number of times the simulator will access a VA.
-#define ITERATIONS                  10000
+#define ITERATIONS                  5000
 
 // These will change as we decide how many pages to write out or read from to disk at once.
 #define MAX_WRITE_BATCH_SIZE        1
@@ -67,9 +73,6 @@ PULONG_PTR kernel_read_va;
 
 // PTEs
 PPTE PTE_base;
-
-// The initial trimmer_offset in the PTE region for the trimmer -- this will change over time.
-ULONG trimmer_offset;
 
 // Page File and Page File Metadata
 char* page_file;

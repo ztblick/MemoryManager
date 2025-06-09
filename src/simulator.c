@@ -35,11 +35,6 @@ void run_user_app_simulation(void) {
     // Now perform random accesses
     for (int i = 0; i < ITERATIONS; i += 1) {
 
-        EnterCriticalSection(&page_fault_lock);
-        // Ask the scheduler to age, trim, and write as is necessary.   // TODO remove this once you have these running on their own threads
-        schedule_tasks();
-        LeaveCriticalSection(&page_fault_lock);
-
         // Randomly access different portions of the virtual address space.
         arbitrary_va = get_arbitrary_va(application_va_base);
 

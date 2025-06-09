@@ -203,7 +203,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         // the page fault lock again.
         else {
             LeaveCriticalSection(&page_fault_lock);
-            WaitForSingleObject(standby_pages_ready_event, INFINITE);
+            WaitForSingleObject(standby_pages_ready_event, PAGE_FAULT_WAIT_TIME);
             continue;
         }
 

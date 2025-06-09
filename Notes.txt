@@ -9,6 +9,11 @@ Current goal:
 BUGS:
 - Right now, the LAST user thread can be left waiting for the pages ready event forever...
 
+- With multiple threads running, we see deadlock in a small, one-user thread test case.
+  This is because the writer is not being called because it does not think that there
+  are any free disk slots. That said, there is one stanby page available to be trimmed.
+  For some reason, no disk slot is open and ready. Why wasn't this a problem originally?
+
 
 
 ~~~ OLD THOUGHTS THAT ARE SEEMINGLY IRRELEVANT ~~~

@@ -345,9 +345,6 @@ void initialize_system(void) {
     // Initialize statistics to track page consumption (for scheduler).
     initialize_statistics();
 
-    // TODO remove this once trimmer runs on its own thread.
-    trimmer_offset = 0;
-
     // Get the privilege and physical pages from the OS.
     initialize_physical_pages();
 
