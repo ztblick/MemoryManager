@@ -56,7 +56,9 @@ VOID write_pages(VOID) {
     while (i < num_pages_in_write_batch) {
 
         // Get list lock
-        EnterCriticalSection(&modified_list.lock);
+        lock_list(&modified_list);
+
+        // TODO what if the list is empty? We will need to stop looping here...
 
         // Get the PFN for the page we want to try to use
         pfn = peek_from_list_head(&modified_list);
@@ -73,12 +75,14 @@ VOID write_pages(VOID) {
         decrement_list_size(&modified_list);
         modified_page_count--;
 
-        // Release the PFN lock, now that we have its information
-        // TODO Ask Landy...do we need the PFN lock here? Why?
+        // Update PFN status
+        SET_PFN_STATUS(pfn, PFN_MID_WRITE);
+
+        // Release the PFN lock, now that we pulled it off the modified list.
         unlock_pfn(pfn);
 
         // Unlock the modified list
-        LeaveCriticalSection(&modified_list.lock);
+        unlock_list(&modified_list);
 
         // Grab the frame number for mapping/unmapping
         frame_numbers_to_map[i] = get_frame_from_PFN(pfn);
@@ -110,15 +114,25 @@ VOID write_pages(VOID) {
     // Lock the PFN again
     lock_pfn(pfn);
 
-    // TODO check to see if this page was actually soft faulted! If so, invalidate the disk slot.
+    // If we had a soft fault on the page mid-write, we will need to undo this disk write.
+    // We will do so by clearing the disk slot and not modifying the PFN's status.
+    if (soft_fault_happened_mid_write(pfn)) {
+        clear_disk_slot(disk_index);
+    }
 
-    // Update PFN to be in standby state, add disk index
-    SET_PFN_STATUS(pfn, PFN_STANDBY);
-    pfn->disk_index = disk_index;
+    // Otherwise, we move along as normal: the page moves to standby, and we update the PFN with its disk slot.
+    else {
+        // Update PFN to be in standby state, add disk index
+        SET_PFN_STATUS(pfn, PFN_STANDBY);
+        pfn->disk_index = disk_index;
 
-    // Add page to the standby list
-    lock_list_then_insert_to_tail(&standby_list, &pfn->entry);
-    standby_page_count++;
+        // Add page to the standby list
+        lock_list_then_insert_to_tail(&standby_list, &pfn->entry);
+        standby_page_count++;
+
+        // Broadcast to waiting user threads that there are standby pages ready.
+        SetEvent(standby_pages_ready_event);
+    }
 
     // Release disk slot lock
     LeaveCriticalSection(&disk_metadata_locks[disk_index]);

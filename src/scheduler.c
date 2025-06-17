@@ -35,9 +35,6 @@ VOID schedule_tasks(VOID) {
         // If there is sufficient need, write pages out to disk to free up pages for anticipated page faults.
         if (empty_disk_slots > 0) {
             SetEvent(initiate_writing_event);
-
-            // Broadcast to waiting user threads that there are standby pages ready.
-            SetEvent(standby_pages_ready_event);
         }
 
         // Wait for a set amount of time before scheduling again.

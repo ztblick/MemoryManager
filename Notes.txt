@@ -6,13 +6,17 @@ Current goal:
 - Implement multithreading on scheduler, trimmer, writer threads.
 
 
-BUGS:
-- Right now, the LAST user thread can be left waiting for the pages ready event forever...
+NEXT SUB-GOALS:
+- Ask Landy...do we need to lock our disk slots? Why?
+- Add fine-grained locks to hard fault handler
+- Test and debug!
 
-- With multiple threads running, we see deadlock in a small, one-user thread test case.
-  This is because the writer is not being called because it does not think that there
-  are any free disk slots. That said, there is one stanby page available to be trimmed.
-  For some reason, no disk slot is open and ready. Why wasn't this a problem originally?
+LAST SESSION:
+- I locked and unlocked the PTE in the fault handler
+- I added methods to support the soft fault mid-write situation.
+- I added fine-grained locks for the soft fault resolution in the page fault handler
+- I added locking to the bit setting/clearing for disk slots, then realized this introduces an issue with double-locking
+in the writer thread...
 
 ~~~~ LOCK ORDERS ~~~~
 

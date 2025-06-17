@@ -23,15 +23,17 @@ VOID trim_pages(VOID) {
     for (int i = 0; i < NUM_PTEs; i++) {
 
         // Try to acquire the PTE lock
-        if (TryEnterCriticalSection(&pte->lock)) {
+        if (try_lock_pte(pte)) {
+
             // When an active PTE is found, break.
             if (pte->memory_format.valid) {
                 trimmed = TRUE;
                 break;
             }
+
             // If the PTE is not valid, release its lock.
-            LeaveCriticalSection(&pte->lock);
-        }
+            unlock_pte(pte);        }
+
         // Move on to the next pte
         pte++;
 
@@ -47,7 +49,9 @@ VOID trim_pages(VOID) {
 
     // Get the PFN lock
     PPFN pfn = get_PFN_from_PTE(pte);
-    EnterCriticalSection(&pfn->lock);
+    lock_pfn(pfn);
+
+    // TODO ensure that this PFN is still in its active state -- if not, we will need to try again.
 
     // Unmap the VA from this page
     unmap_pages(1, get_VA_from_PTE(pte));
@@ -64,8 +68,8 @@ VOID trim_pages(VOID) {
     SET_PFN_STATUS(pfn, PFN_MODIFIED);
 
     // Leave PFN, PTE critical sections
-    LeaveCriticalSection(&pfn->lock);
-    LeaveCriticalSection(&pte->lock);
+    unlock_pfn(pfn);
+    unlock_pte(pte);
 
 #if DEBUG
     printf("\nTrimmed one page to from active to modified.\n\n");

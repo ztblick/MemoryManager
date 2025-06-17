@@ -91,3 +91,20 @@ void set_PTE_to_valid(PPTE pte, ULONG_PTR frame_number);
  */
 void map_pte_to_disk(PPTE pte, UINT64 disk_index);
 UINT64 get_disk_index_from_pte(PPTE pte);
+
+
+/*
+ *  Waits until it can acquire the lock on the given PTE.
+ */
+VOID lock_pte(PPTE pte);
+
+/*
+ *  Attempts to lock the given PTE. Returns true if lock is acquired.
+ */
+BOOL try_lock_pte(PPTE pte);
+
+
+/*
+ *  Releases the lock held on the given PTE.
+ */
+VOID unlock_pte(PPTE pte);

@@ -38,6 +38,8 @@ PPFN get_PFN_from_frame(ULONG_PTR frame_number) {
 }
 
 VOID set_PFN_active(PPFN pfn, PPTE pte) {
+    // TODO Update this to read in all at once into the PFN to prevent word tearing
+
     SET_PFN_STATUS(pfn, PFN_ACTIVE);
     pfn->PTE = pte;
     pfn->disk_index = NO_DISK_INDEX;
@@ -63,4 +65,16 @@ BOOL try_lock_pfn(PPFN pfn) {
  */
 VOID unlock_pfn(PPFN pfn) {
     LeaveCriticalSection(&pfn->lock);
+}
+
+VOID set_soft_fault_write_bit(PPFN pfn) {
+    pfn->soft_fault_on_write = 1;
+}
+
+// Checks bit, clears it, then returns result.
+BOOL soft_fault_happened_mid_write(PPFN pfn) {
+    BOOL fault_occured = pfn->soft_fault_on_write;
+    pfn->soft_fault_on_write = 0;
+
+    return fault_occured;
 }

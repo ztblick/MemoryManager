@@ -27,3 +27,9 @@ void clear_disk_slot(UINT64 disk_slot);
  *  Sets the given slot to occupied in the page file metadata.
  */
 void set_disk_slot(UINT64 disk_slot);
+
+/*
+ *  These functions acquire and release locks on the given disk slot.
+ */
+void lock_disk_slot(UINT64 disk_slot);
+void unlock_disk_slot(UINT64 disk_slot);

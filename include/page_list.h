@@ -12,6 +12,14 @@
 // When the list is empty, the head's entry's flink and blink point to the entry itself.
 // The head also keeps track of the size of the list.
 // It also has the lock on the page list.
+
+/*
+ *  Our guiding rule on locks and page lists: to add/remove an entry from a list, you MUST have the lock
+ *  on that page AS WELL AS the lock on the list head. ONLY if you have BOTH locks may you add or remove a page
+ *  from a list.
+ */
+
+
 // Total size: 64 bytes. One (and only one) will fit in a cache line.
 typedef struct __page_list {
     LIST_ENTRY head;           // 16 bytes
@@ -32,12 +40,12 @@ VOID initialize_page_list(PPAGE_LIST list);
 BOOL is_page_list_empty(PPAGE_LIST list);
 
 /*
- *  Adds a page to the head of the list.
+ *  Adds a page to the head of the list. This assumes the page being added is already locked by the caller!
  */
 VOID lock_list_then_insert_to_head(PPAGE_LIST list, PLIST_ENTRY entry);
 
 /*
- *  Adds a page to the tail of the list.
+ *  Adds a page to the tail of the list. This assumes the page being added is already locked by the caller!
  */
 VOID lock_list_then_insert_to_tail(PPAGE_LIST list, PLIST_ENTRY entry);
 
@@ -47,12 +55,23 @@ VOID lock_list_then_insert_to_tail(PPAGE_LIST list, PLIST_ENTRY entry);
 VOID decrement_list_size(PPAGE_LIST list);
 
 /*
- *  Removes a page to the head of the list.
+ *  This pops an entry from the head of the list. It assumes nothing -- the programmer
+ *  must first be sure that the list is non-empty before calling this function.
  */
+PPFN pop_from_head_list(PPAGE_LIST list);
 
 /*
- *  Removes a page from the tail of the list.
+ *  Locks the list, then removes an entry from that list. If, for some reason, the page is not on that list,
+ *  then the function may behave in unexpected ways...
  */
+VOID lock_list_and_remove_page(PPAGE_LIST list, PPFN pfn);
+
+/*
+ *  Removes a page from its list. Does not acquire any locks. Does not assume ANYTHING -- the caller
+ *  must ensure that the entry is, in fact, on the given list!
+ */
+VOID remove_page_from_list(PPAGE_LIST list, PPFN pfn);
+
 
 /*
  *  Pops and returns from the head of the list.
@@ -65,3 +84,19 @@ PPFN lock_list_then_pop_from_head(PPAGE_LIST list);
  *  Returns NULL is the list is empty.
  */
 PPFN peek_from_list_head(PPAGE_LIST list);
+
+/*
+ *  Waits until it can acquire the lock on a given page list!
+ */
+VOID lock_list(PPAGE_LIST list);
+
+/*
+ *  Attempts to lock a given page list, but does not wait. Returns TRUE if the page list lock is acquired.
+ */
+BOOL try_lock_list(PPAGE_LIST list);
+
+
+/*
+ *  Unlocks a previously locked page list.
+ */
+VOID unlock_list(PPAGE_LIST list);
