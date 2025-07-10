@@ -30,7 +30,7 @@ void clear_disk_slot(UINT64 disk_slot) {
     }
 
     page_file_metadata[disk_slot] = (char) DISK_SLOT_EMPTY;
-    empty_disk_slots++;
+    InterlockedIncrement64(&empty_disk_slots);
 }
 
 void set_disk_slot(UINT64 disk_slot) {
@@ -39,7 +39,9 @@ void set_disk_slot(UINT64 disk_slot) {
     }
 
     page_file_metadata[disk_slot] = (char) DISK_SLOT_IN_USE;
-    empty_disk_slots--;
+
+    // Decrement the empty disk slot count without risking race conditions.
+    InterlockedDecrement64(&empty_disk_slots);
 }
 
 void lock_disk_slot(UINT64 disk_slot) {
@@ -97,18 +99,11 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
     // The PFN associated with the page that will be mapped to the faulting VA.
     PPFN available_pfn;
 
-#if DEBUG
-    printf("\nResolving page fault...\n\n");
-#endif
-
     // This while loop is here to provide the mechanism for the fault-handler to try again.
     // This occurs when there are no pages available, and the fault handler has to wait
     // for the pages_available event to be set by the writer.
     // In that circumstance, this thread will wake up, and then wait grab the lock again.
     while (TRUE) {
-
-        // TODO remove me
-        EnterCriticalSection(&page_fault_lock);
 
         // Grab the PTE for the VA
         PPTE pte = get_PTE_from_VA(faulting_va);
@@ -123,8 +118,6 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
             // we can release the PTE lock.
             unlock_pte(pte);
 
-            // TODO remove me
-            LeaveCriticalSection(&page_fault_lock);
             return TRUE;
         }
 
@@ -162,15 +155,10 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
                 // Make its status active, map it to its VA, and update the PTE.
                 // Since it is not in the disk slot yet, there is no need to update its disk metadata.
                 if (IS_PFN_MODIFIED(available_pfn)) {
-                    modified_page_count--;
                     list_to_decrement = modified_list;
-#if DEBUG
-                    printf("Resolving soft fault with modified page...\n");
-#endif
                 }
                 else {
                     ASSERT(IS_PFN_STANDBY(available_pfn));
-                    standby_page_count--;
 
                     // Acquire lock on disk slot, clear it, then release the lock.
                     lock_disk_slot(available_pfn->disk_index);
@@ -178,9 +166,6 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
                     unlock_disk_slot(available_pfn->disk_index);
 
                     list_to_decrement = standby_list;
-#if DEBUG
-                    printf("Resolving soft fault with standby page, clearing disk slot %llu\n", available_pfn->disk_index);
-#endif
                 }
 
                 // Remove the page from its list (standby or modified)
@@ -188,7 +173,6 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
             }
 
             // Regardless of standby or modified or mid-write, these steps should happen to perform a soft fault!
-            active_page_count++;
             frame_numbers_to_map = pte->memory_format.frame_number;
             map_pages(1, faulting_va, &frame_numbers_to_map);
 
@@ -197,7 +181,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
             set_PTE_to_valid(pte, pte->memory_format.frame_number);
 
             // Update statistics
-            soft_faults_resolved++;
+            InterlockedIncrement64(&soft_faults_resolved);
 
             // Ensure that memory read back into the page is valid.
             ASSERT(validate_page(faulting_va));
@@ -206,8 +190,6 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
             unlock_pfn(available_pfn);
             unlock_pte(pte);
 
-            // TODO remove me!
-            LeaveCriticalSection(&page_fault_lock);
             return TRUE;
         }
 
@@ -252,19 +234,19 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
             // Now that we have the PFN lock, let's pop it off the free list.
             remove_page_from_list(&free_list, available_pfn);
             ASSERT(available_pfn);
-            free_page_count--;
-            active_page_count++;
 
             // Finally, release the list lock!
             unlock_list(&free_list);
 
             // We have acquired a free page! Set this flag for future flow of control.
             free_page_acquired = TRUE;
+            break;
         }
 
         // If no page is available on the free list, then we will repurpose one from the standby list
         if (!free_page_acquired) {
 
+            // TODO write this out to its own function.
             while (!is_page_list_empty(&standby_list)) {
 
                 // Now, we will get more serious. Let's lock the free list
@@ -286,7 +268,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
                     continue;
                 }
 
-                // If the PFN is not still free (for some reason), then we shall release our locks and try again!
+                // If the PFN is not still standby (for some reason), then we shall release our locks and try again!
                 if (!IS_PFN_STANDBY(available_pfn)) {
                     unlock_list(&standby_list);
                     unlock_pfn(available_pfn);
@@ -296,8 +278,6 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
                 // Now that we have the PFN lock, let's pop it off the free list.
                 remove_page_from_list(&standby_list, available_pfn);
                 ASSERT(available_pfn);
-                standby_page_count--;
-                active_page_count++;
 
                 // Finally, release the list lock!
                 unlock_list(&standby_list);
@@ -308,6 +288,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
                 // Map the previous page's owner to its disk slot!
                 PPTE old_pte = available_pfn->PTE;
                 map_pte_to_disk(old_pte, available_pfn->disk_index);
+                break;
             }
         }
 
@@ -315,9 +296,6 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         // Once the event is triggered, return to the beginning of the loop, then wait for
         // the page fault lock again.
         if (!free_page_acquired && !standby_page_acquired) {
-
-            // TODO remove me!
-            LeaveCriticalSection(&page_fault_lock);
 
             unlock_pte(pte);
             WaitForSingleObject(standby_pages_ready_event, PAGE_FAULT_WAIT_TIME);
@@ -378,14 +356,11 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         ASSERT((pte_entry_state != PTE_ON_DISK || validate_page(faulting_va)));
 
         // Update statistics
-        hard_faults_resolved++;
+        InterlockedIncrement64(&hard_faults_resolved);
 
         // Release locks
         unlock_pfn(available_pfn);
         unlock_pte(pte);
-
-        // TODO remove me!
-        LeaveCriticalSection(&page_fault_lock);
         return TRUE;
     }
 }

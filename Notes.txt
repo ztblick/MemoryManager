@@ -5,11 +5,10 @@ Things to be done:
 Current goal:
 - Implement multithreading on scheduler, trimmer, writer threads.
 
-
 NEXT SUB-GOALS:
-- Ask Landy...do we need to lock our disk slots? Why?
-- Add fine-grained locks to hard fault handler
-- Test and debug!
+- Batch page writes, taking into account the fact that the number of available disk slots will not
+necessarily match the number of pages available to be written.
+- Remove page fault lock.
 
 LAST SESSION:
 - I locked and unlocked the PTE in the fault handler

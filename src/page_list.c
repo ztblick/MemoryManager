@@ -15,12 +15,20 @@ BOOL is_page_list_empty(PPAGE_LIST list) {
     return IsListEmpty(&list->head);
 }
 
+ULONG64 get_size(PPAGE_LIST list) {
+    return list->list_size;
+}
+
 PPFN pop_from_head_list(PPAGE_LIST list) {
 
     PLIST_ENTRY entry = RemoveHeadList(&list->head);
     PPFN pfn = CONTAINING_RECORD(entry, PFN, entry);
-    list->list_size--;
+    decrement_list_size(list);
     return pfn;
+}
+
+VOID increment_list_size(PPAGE_LIST list) {
+    list->list_size++;
 }
 
 VOID decrement_list_size(PPAGE_LIST list) {
@@ -45,14 +53,14 @@ VOID lock_list_then_insert_to_tail(PPAGE_LIST list, PLIST_ENTRY entry) {
 
     EnterCriticalSection(&list->lock);
     InsertTailList(&list->head, entry);
-    list->list_size++;
+    increment_list_size(list);
     LeaveCriticalSection(&list->lock);
 }
 
 VOID lock_list_then_insert_to_head(PPAGE_LIST list, PLIST_ENTRY entry) {
     EnterCriticalSection(&list->lock);
     InsertHeadList(&list->head, entry);
-    list->list_size++;
+    increment_list_size(list);
     LeaveCriticalSection(&list->lock);
 }
 

@@ -61,8 +61,9 @@ void run_user_app_simulation(void) {
 }
 
 void free_locks(void) {
-    DeleteCriticalSection(&page_fault_lock);
-
+    DeleteCriticalSection(&kernel_read_lock);
+    DeleteCriticalSection(&kernel_write_lock);
+    // TODO free all PTE, PFN, disk slot locks
 }
 
 void free_events(void) {
@@ -80,6 +81,9 @@ void free_events(void) {
 
     CloseHandle(system_start_event);
     CloseHandle(standby_pages_ready_event);
+    CloseHandle(initiate_aging_event);
+    CloseHandle(initiate_trimming_event);
+    CloseHandle(initiate_writing_event);
 }
 
 void free_data_and_shut_down(void) {

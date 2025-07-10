@@ -8,7 +8,7 @@
 #include "page_list.h"
 
 // This is the number of threads that run the simulating thread -- which become fault-handling threads.
-#define NUM_USER_THREADS            2
+#define NUM_USER_THREADS            4
 
 // These are the number of threads running background tasks for the system -- scheduler, trimmer, writer
 #define NUM_SCHEDULING_THREADS      1
@@ -77,7 +77,7 @@ PPTE PTE_base;
 // Page File and Page File Metadata
 char* page_file;
 char* page_file_metadata;
-UINT64 empty_disk_slots;
+ULONG64 empty_disk_slots;
 
 #define DISK_SLOT_IN_USE    1
 #define DISK_SLOT_EMPTY     0
@@ -97,7 +97,6 @@ HANDLE standby_pages_ready_event;
 HANDLE system_exit_event;
 
 // Locks
-CRITICAL_SECTION page_fault_lock;
 CRITICAL_SECTION kernel_read_lock;
 CRITICAL_SECTION kernel_write_lock;
 PCRITICAL_SECTION disk_metadata_locks;
@@ -121,7 +120,6 @@ ULONG64 free_page_count;
 ULONG64 active_page_count;
 ULONG64 modified_page_count;
 ULONG64 standby_page_count;
-ULONG64 faults_unresolved;
 ULONG64 hard_faults_resolved;
 ULONG64 soft_faults_resolved;
 

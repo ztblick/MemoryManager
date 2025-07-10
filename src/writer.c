@@ -37,28 +37,33 @@ UINT64 find_and_lock_free_disk_index(void) {
 
 VOID write_pages(VOID) {
 
+    // PFN for the current page being selected for disk write.
+    PPFN pfn;
+    int num_pages_batched = 0;
+    int num_pages_in_write_batch = WRITE_BATCH_SIZE;
+
     // First, check to see if there are any pages to write
     if (is_page_list_empty(&modified_list)) {
-#if DEBUG
-        printf("No modified pages to write to disk.\n");
-#endif
         return;
     }
-
-    PPFN pfn;
-    int num_pages_in_write_batch = WRITE_BATCH_SIZE;
 
     // Initialize frame number array
     PULONG_PTR frame_numbers_to_map = zero_malloc(num_pages_in_write_batch * sizeof(ULONG_PTR));
 
-    // Get all pages to write:
-    int i = 0;
-    while (i < num_pages_in_write_batch) {
+    // TODO grab disk slots while grabbing pages. Do not get too many of either.
+    // Get all pages to write
+    while (num_pages_batched < num_pages_in_write_batch) {
 
         // Get list lock
         lock_list(&modified_list);
 
-        // TODO what if the list is empty? We will need to stop looping here...
+        // If there are no longer pages on the modified list, stop looping. Unlock the modified list.
+        // Most importantly, we update the size of the write batch to our count.
+        if (get_size(&modified_list) == 0) {
+            unlock_list(&modified_list);
+            num_pages_in_write_batch = num_pages_batched;
+            break;
+        }
 
         // Get the PFN for the page we want to try to use
         pfn = peek_from_list_head(&modified_list);
@@ -66,14 +71,12 @@ VOID write_pages(VOID) {
         // Try to get the page lock out of order
         if (!try_lock_pfn(pfn)) {
             // If we can't get the lock, release the list lock, then try again.
-            LeaveCriticalSection(&modified_list.lock);
+            unlock_list(&modified_list);
             continue;
         }
 
         // Now that we have acquired the page lock, remove it from the modified list.
-        RemoveEntryList(&pfn->entry);
-        decrement_list_size(&modified_list);
-        modified_page_count--;
+        remove_page_from_list(&modified_list, pfn);
 
         // Update PFN status
         SET_PFN_STATUS(pfn, PFN_MID_WRITE);
@@ -85,9 +88,11 @@ VOID write_pages(VOID) {
         unlock_list(&modified_list);
 
         // Grab the frame number for mapping/unmapping
-        frame_numbers_to_map[i] = get_frame_from_PFN(pfn);
-        i++;
+        frame_numbers_to_map[num_pages_batched] = get_frame_from_PFN(pfn);
+        num_pages_batched++;
     }
+
+    // TODO batch the writes!
 
     // Grab kernel write lock
     EnterCriticalSection(&kernel_write_lock);
@@ -97,6 +102,7 @@ VOID write_pages(VOID) {
 
     // Get disk slot for this PTE
     UINT64 disk_index = find_and_lock_free_disk_index();
+
 
     // Get the location to write to in page file
     char* page_file_location = get_page_file_offset(disk_index);
@@ -128,7 +134,6 @@ VOID write_pages(VOID) {
 
         // Add page to the standby list
         lock_list_then_insert_to_tail(&standby_list, &pfn->entry);
-        standby_page_count++;
 
         // Broadcast to waiting user threads that there are standby pages ready.
         SetEvent(standby_pages_ready_event);
@@ -142,10 +147,6 @@ VOID write_pages(VOID) {
 
     // Free frame number array
     free(frame_numbers_to_map);
-
-#if DEBUG
-    printf("Wrote one page out to disk, moved page to standby list!\n");
-#endif
 }
 
 VOID write_pages_thread(VOID) {
@@ -166,9 +167,6 @@ VOID write_pages_thread(VOID) {
         if (index == EXIT_EVENT_INDEX) {
             return;
         }
-        // TODO when ready, remove these guards!
-        EnterCriticalSection(&page_fault_lock);
         write_pages();
-        LeaveCriticalSection(&page_fault_lock);
     }
 }

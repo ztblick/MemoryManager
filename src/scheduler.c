@@ -17,7 +17,6 @@ VOID print_statistics(VOID) {
     printf("STANDBY PAGE COUNT:\t\t%llu\t\tSTANDBY PAGE PERCENTAGE:\t%.2f%%\n", standby_page_count, 100.0 * standby_page_count / allocated_frame_count);
     printf("EMPTY DISK SLOTS:\t\t%llu\n", empty_disk_slots);
     printf("\nHARD FAULTS RESOLVED:\t%llu\t\tSOFT FAULTS RESOLVED:\t\t%llu\n", hard_faults_resolved, soft_faults_resolved);
-    printf("FAULTS UNRESOLVED:\t\t%llu\n", faults_unresolved);
 }
 
 VOID schedule_tasks(VOID) {
@@ -26,6 +25,16 @@ VOID schedule_tasks(VOID) {
     WaitForSingleObject(system_start_event, INFINITE);
 
     while (TRUE) {
+        // Get current counts.
+        free_page_count = get_size(&free_list);
+        modified_page_count = get_size(&modified_list);
+        standby_page_count = get_size(&standby_list);
+        active_page_count = NUMBER_OF_PHYSICAL_PAGES - free_page_count - modified_page_count - standby_page_count;
+
+#if DEBUG
+        print_statistics();
+#endif
+
         // If there is sufficient need, age and trim pages for anticipated page faults.
         if (free_page_count + standby_page_count < WORKING_SET_THRESHOLD) {
             SetEvent(initiate_aging_event);

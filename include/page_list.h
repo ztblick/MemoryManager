@@ -22,8 +22,8 @@
 
 // Total size: 64 bytes. One (and only one) will fit in a cache line.
 typedef struct __page_list {
-    LIST_ENTRY head;           // 16 bytes
-    ULONG_PTR list_size;        // 8 bytes
+    LIST_ENTRY head;            // 16 bytes
+    ULONG64 list_size;          // 8 bytes
     CRITICAL_SECTION lock;      // 40 bytes
 } PAGE_LIST, *PPAGE_LIST;
 
@@ -33,6 +33,11 @@ typedef struct __page_list {
  *  and sets the size to zero.
  */
 VOID initialize_page_list(PPAGE_LIST list);
+
+/*
+ *  Returns the length of the list when asked, with no guarantees about future length.
+ */
+ULONG64 get_size(PPAGE_LIST list);
 
 /*
  *  Check if the list is empty. Returns true or false.
@@ -48,6 +53,11 @@ VOID lock_list_then_insert_to_head(PPAGE_LIST list, PLIST_ENTRY entry);
  *  Adds a page to the tail of the list. This assumes the page being added is already locked by the caller!
  */
 VOID lock_list_then_insert_to_tail(PPAGE_LIST list, PLIST_ENTRY entry);
+
+/*
+ *  Increments the list size.
+ */
+VOID increment_list_size(PPAGE_LIST list);
 
 /*
  *  Decrements a list size, which is done when removing elements during a soft fault.

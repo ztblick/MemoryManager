@@ -7,7 +7,7 @@
 #include "macros.h"
 
 // The initial trimmer_offset in the PTE region for the trimmer -- this will change over time.
-ULONG trimmer_offset;
+PPTE pte_to_trim;
 
 /*
  *  Trims active pages, moving them to the modified or standby lists.

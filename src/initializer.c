@@ -106,15 +106,10 @@ void initialize_statistics(void) {
     standby_page_count = 0;
     hard_faults_resolved = 0;
     soft_faults_resolved = 0;
-    faults_unresolved = 0;
 }
 
 // Initialize all global critical sections
 void initialize_locks(void) {
-
-    // TODO eventually remove me once all fine-grained locks have been added.
-    // Initialize overarching lock
-    InitializeCriticalSection(&page_fault_lock);
 
     // Initialize locks for kernel read/write VA space
     InitializeCriticalSection(&kernel_read_lock);
@@ -210,7 +205,6 @@ void initialize_PFN_data(void) {
         PPFN new_pfn = PFN_array + allocated_frame_numbers[i];
         create_zeroed_pfn(new_pfn);
         lock_list_then_insert_to_head(&free_list, &new_pfn->entry);
-        free_page_count++;
     }
 }
 
@@ -414,8 +408,6 @@ void free_all_data(void) {
     free(PTE_base);
     free(page_file);
     free(page_file_metadata);
-
-    // TODO free all PTE, PFN, disk slot locks
 }
 
 void set_max_frame_number(void) {
