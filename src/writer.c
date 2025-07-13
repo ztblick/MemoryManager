@@ -103,7 +103,6 @@ VOID write_pages(VOID) {
     // Get disk slot for this PTE
     UINT64 disk_index = find_and_lock_free_disk_index();
 
-
     // Get the location to write to in page file
     char* page_file_location = get_page_file_offset(disk_index);
 

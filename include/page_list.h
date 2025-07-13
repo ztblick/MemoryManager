@@ -1,17 +1,14 @@
-//
-// Created by zblickensderfer on 6/5/2025.
-//
-
 #pragma once
 
 #include "../include/macros.h"
 #include "../include/PFN.h"
 #include "../include/debug.h"
 
-// A page list is the head of a doubly-linked list of pages.
-// When the list is empty, the head's entry's flink and blink point to the entry itself.
-// The head also keeps track of the size of the list.
-// It also has the lock on the page list.
+/*
+ * A page list is the head of a doubly-linked list of pages.
+ * When the list is empty, the head's entry's flink and blink point to the entry itself.
+ * The head also keeps track of the size of the list. It also has the lock on the page list.
+*/
 
 /*
  *  Our guiding rule on locks and page lists: to add/remove an entry from a list, you MUST have the lock
@@ -19,14 +16,12 @@
  *  from a list.
  */
 
-
 // Total size: 64 bytes. One (and only one) will fit in a cache line.
 typedef struct __page_list {
     LIST_ENTRY head;            // 16 bytes
     ULONG64 list_size;          // 8 bytes
     CRITICAL_SECTION lock;      // 40 bytes
 } PAGE_LIST, *PPAGE_LIST;
-
 
 /*
  *  Initialize a page list. This creates the critical section, initializes the list head,

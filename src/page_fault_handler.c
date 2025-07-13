@@ -149,13 +149,13 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
             else {
                 // This page list variable is necessary to know which page list we will remove from.
                 // This allows us to decrement its size without calling one of its removal methods.
-                PAGE_LIST list_to_decrement;
+                PPAGE_LIST list_to_decrement;
 
                 // If the page is in its modified state, we will remove it from the modified list,
                 // Make its status active, map it to its VA, and update the PTE.
                 // Since it is not in the disk slot yet, there is no need to update its disk metadata.
                 if (IS_PFN_MODIFIED(available_pfn)) {
-                    list_to_decrement = modified_list;
+                    list_to_decrement = &modified_list;
                 }
                 else {
                     ASSERT(IS_PFN_STANDBY(available_pfn));
@@ -165,11 +165,11 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
                     clear_disk_slot(available_pfn->disk_index);
                     unlock_disk_slot(available_pfn->disk_index);
 
-                    list_to_decrement = standby_list;
+                    list_to_decrement = &standby_list;
                 }
 
                 // Remove the page from its list (standby or modified)
-                lock_list_and_remove_page(&list_to_decrement, available_pfn);
+                lock_list_and_remove_page(list_to_decrement, available_pfn);
             }
 
             // Regardless of standby or modified or mid-write, these steps should happen to perform a soft fault!
@@ -247,6 +247,8 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         if (!free_page_acquired) {
 
             // TODO write this out to its own function.
+            // TODO think about the fact that there could be a race condition here.
+            // What if the list has pages added right after this check?
             while (!is_page_list_empty(&standby_list)) {
 
                 // Now, we will get more serious. Let's lock the free list
@@ -298,7 +300,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         if (!free_page_acquired && !standby_page_acquired) {
 
             unlock_pte(pte);
-            WaitForSingleObject(standby_pages_ready_event, PAGE_FAULT_WAIT_TIME);
+            WaitForSingleObject(standby_pages_ready_event, INFINITE);
             continue;
         }
 

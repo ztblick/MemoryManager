@@ -3,19 +3,20 @@ Things to be done:
 
 
 Current goal:
-- Implement multithreading on scheduler, trimmer, writer threads.
+- Implement fine-grained locks with batched writing to create a working, efficient multithreaded machine.
 
 NEXT SUB-GOALS:
 - Batch page writes, taking into account the fact that the number of available disk slots will not
 necessarily match the number of pages available to be written.
-- Remove page fault lock.
+
+- Debug race conditions which I suspect are causing the error with failed calls to mapUser.
+
+- Reduce PTE locks to single bits (leftmost bit) and/or PTE region locks
 
 LAST SESSION:
-- I locked and unlocked the PTE in the fault handler
-- I added methods to support the soft fault mid-write situation.
-- I added fine-grained locks for the soft fault resolution in the page fault handler
-- I added locking to the bit setting/clearing for disk slots, then realized this introduces an issue with double-locking
-in the writer thread...
+- I added InterlockedIncrements and Decrements to global counter variables to prevent race conditions.
+- I added all list size updates to the heads to prevent race conditions on their counts.
+- I removed the mega page fault lock!
 
 ~~~~ LOCK ORDERS ~~~~
 
