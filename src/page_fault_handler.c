@@ -52,6 +52,61 @@ void unlock_disk_slot(UINT64 disk_slot) {
     LeaveCriticalSection(&disk_metadata_locks[disk_slot]);
 }
 
+// TODO think about the fact that there could be a race condition here.
+// What if the list has pages added right after this check?
+BOOL try_acquire_page_from_list(PPFN * available_page_address, PPAGE_LIST list) {
+
+    // First, we will try to get a page. To do so, we will ask the list for its size (without a lock).
+    // If this returns a zero value, we can reasonably conclude that the list is empty
+    while (!is_page_list_empty(list)) {
+
+        // Now, we will get more serious. Let's lock the free list
+        // then try to acquire the lock on its first element.
+        lock_list(list);
+
+        // Let's make sure that the list is STILL empty...! If it's not, let's leave and try for standby pages.
+        if (is_page_list_empty(list)) {
+            unlock_list(list);
+            break;
+        }
+
+        PPFN pfn = peek_from_list_head(list);
+
+        // If we can't acquire the lock on the front page, let's release all our locks,
+        // then just try again!
+        if (!try_lock_pfn(pfn)) {
+            unlock_list(list);
+            continue;
+        }
+
+        // If the PFN is not still free or standby (for some reason), then we shall release our locks and try again!
+        if ((list == &free_list && !IS_PFN_FREE(pfn)) ||
+            (list == &standby_list && !IS_PFN_STANDBY(pfn))) {
+            unlock_list(list);
+            unlock_pfn(pfn);
+            continue;
+        }
+
+        // Now that we have the PFN lock, let's pop it off the free list.
+        remove_page_from_list(list, pfn);
+        ASSERT(pfn);
+
+        // If we are removing the last standby page, we will reset the "pages available" event.
+        if (list == &standby_list && is_page_list_empty(list)) {
+            ResetEvent(standby_pages_ready_event);
+        }
+
+        // Finally, release the list lock!
+        unlock_list(list);
+
+        // We have acquired a free page! Set this flag for future flow of control.
+        *available_page_address = pfn;
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
 /*
  *  Here, we check to see if a page read back from memory is valid.
  *  There are two cases where it can be valid:
@@ -196,101 +251,25 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         // Before resolving hard faults, double-check that the PTE thinks it should be hard faulting...
         ASSERT ((IS_PTE_ON_DISK(pte) || IS_PTE_ZEROED(pte)));
 
-        // FIRST FAULT / HARD FAULT RESOLUTION
+        //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+        // FIRST FAULT / HARD FAULT RESOLUTION //
+        //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+
         BOOL free_page_acquired = FALSE;
         BOOL standby_page_acquired = FALSE;
 
-        // First, we will try to get a free page. To do so, we will ask the list for its size (without a lock).
-        // If this returns a zero value, we can reasonably conclude that the list is empty, in which case we will
-        // look to the standby list instead.
-        while (!is_page_list_empty(&free_list)) {
-
-            // Now, we will get more serious. Let's lock the free list
-            // then try to acquire the lock on its first element.
-            lock_list(&free_list);
-
-            // Let's make sure that the list is STILL empty...! If it's not, let's leave and try for standby pages.
-            if (is_page_list_empty(&free_list)) {
-                unlock_list(&free_list);
-                break;
-            }
-
-            available_pfn = peek_from_list_head(&free_list);
-
-            // If we can't acquire the lock on the front page, let's release all our locks,
-            // then just try again!
-            if (!try_lock_pfn(available_pfn)) {
-                unlock_list(&free_list);
-                continue;
-            }
-
-            // If the PFN is not still free (for some reason), then we shall release our locks and try again!
-            if (!IS_PFN_FREE(available_pfn)) {
-                unlock_list(&free_list);
-                unlock_pfn(available_pfn);
-                continue;
-            }
-
-            // Now that we have the PFN lock, let's pop it off the free list.
-            remove_page_from_list(&free_list, available_pfn);
-            ASSERT(available_pfn);
-
-            // Finally, release the list lock!
-            unlock_list(&free_list);
-
-            // We have acquired a free page! Set this flag for future flow of control.
-            free_page_acquired = TRUE;
-            break;
-        }
+        // First, attempt to grab a free page.
+        free_page_acquired = try_acquire_page_from_list(&available_pfn, &free_list);
 
         // If no page is available on the free list, then we will repurpose one from the standby list
         if (!free_page_acquired) {
 
-            // TODO write this out to its own function.
-            // TODO think about the fact that there could be a race condition here.
-            // What if the list has pages added right after this check?
-            while (!is_page_list_empty(&standby_list)) {
+            standby_page_acquired = try_acquire_page_from_list(&available_pfn, &standby_list);
 
-                // Now, we will get more serious. Let's lock the free list
-                // then try to acquire the lock on its first element.
-                lock_list(&standby_list);
-
-                // Let's make sure that the list is STILL empty...! If it's not, let's leave and try for standby pages.
-                if (is_page_list_empty(&standby_list)) {
-                    unlock_list(&standby_list);
-                    break;
-                }
-
-                available_pfn = peek_from_list_head(&standby_list);
-
-                // If we can't acquire the lock on the front page, let's release all our locks,
-                // then just try again!
-                if (!try_lock_pfn(available_pfn)) {
-                    unlock_list(&standby_list);
-                    continue;
-                }
-
-                // If the PFN is not still standby (for some reason), then we shall release our locks and try again!
-                if (!IS_PFN_STANDBY(available_pfn)) {
-                    unlock_list(&standby_list);
-                    unlock_pfn(available_pfn);
-                    continue;
-                }
-
-                // Now that we have the PFN lock, let's pop it off the free list.
-                remove_page_from_list(&standby_list, available_pfn);
-                ASSERT(available_pfn);
-
-                // Finally, release the list lock!
-                unlock_list(&standby_list);
-
-                // Let's note that we acquired a standby page (to facilitate later flow of control).
-                standby_page_acquired = TRUE;
-
+            if (standby_page_acquired) {
                 // Map the previous page's owner to its disk slot!
                 PPTE old_pte = available_pfn->PTE;
                 map_pte_to_disk(old_pte, available_pfn->disk_index);
-                break;
             }
         }
 

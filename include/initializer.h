@@ -29,7 +29,7 @@
 #define NUM_TESTS                   1
 
 // This is the number of times the simulator will access a VA.
-#define ITERATIONS                  1000
+#define ITERATIONS                  10000
 
 // These will change as we decide how many pages to write out or read from to disk at once.
 #define MAX_WRITE_BATCH_SIZE        1
@@ -38,8 +38,8 @@
 #define READ_BATCH_SIZE             1
 
 // Pages in memory and page file, which are used to calculate VA span
-#define NUMBER_OF_PHYSICAL_PAGES        64
-#define PAGES_IN_PAGE_FILE              64
+#define NUMBER_OF_PHYSICAL_PAGES        512
+#define PAGES_IN_PAGE_FILE              512
 
 // This is intentionally a power of two so we can use masking to stay within bounds.
 #define VA_SPAN                                         (NUMBER_OF_PHYSICAL_PAGES + PAGES_IN_PAGE_FILE - 1)
@@ -127,6 +127,11 @@ ULONG64 soft_faults_resolved;
  *  Malloc the given amount of space, then zero the memory.
  */
 PULONG_PTR zero_malloc(size_t bytes_to_allocate);
+
+/*
+ *  Initialize a lock with a spin count that is high enough to show meaningful data on xperf.
+ */
+void initialize_lock(PCRITICAL_SECTION);
 
 /*
  *  Initialize all data structures, as declared above.

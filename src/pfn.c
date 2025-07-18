@@ -10,7 +10,7 @@ VOID create_zeroed_pfn(PPFN new_pfn) {
     new_pfn->status = PFN_FREE;
     new_pfn->PTE = NULL;
     new_pfn->disk_index = NO_DISK_INDEX;
-    InitializeCriticalSection(&new_pfn->lock);
+    initialize_lock(&new_pfn->lock);
 }
 
 ULONG_PTR get_frame_from_PFN(PPFN pfn) {

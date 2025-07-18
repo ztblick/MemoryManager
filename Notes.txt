@@ -7,11 +7,9 @@ Current goal:
 
 NEXT SUB-GOALS:
 - Batch page writes, taking into account the fact that the number of available disk slots will not
-necessarily match the number of pages available to be written.
+necessarily match the number of pages available to be written. (do this yourself)
 
-- Debug race conditions which I suspect are causing the error with failed calls to mapUser.
-
-- Reduce PTE locks to single bits (leftmost bit) and/or PTE region locks
+- Reduce PTE locks to single bits (leftmost bit) and/or PTE region locks (discuss with Landy)
 
 LAST SESSION:
 - I added InterlockedIncrements and Decrements to global counter variables to prevent race conditions.

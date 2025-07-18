@@ -108,17 +108,22 @@ void initialize_statistics(void) {
     soft_faults_resolved = 0;
 }
 
+void initialize_lock(PCRITICAL_SECTION lock) {
+    InitializeCriticalSection(lock);
+    SetCriticalSectionSpinCount(lock, ULONG_MAX);
+}
+
 // Initialize all global critical sections
 void initialize_locks(void) {
 
     // Initialize locks for kernel read/write VA space
-    InitializeCriticalSection(&kernel_read_lock);
-    InitializeCriticalSection(&kernel_write_lock);
+    initialize_lock(&kernel_read_lock);
+    initialize_lock(&kernel_write_lock);
 
     // Initialize one lock for each disk slot -- the +1 is because we do not use 0 as a valid disk slot.
     disk_metadata_locks = (PCRITICAL_SECTION) zero_malloc((PAGES_IN_PAGE_FILE + 1) * sizeof(CRITICAL_SECTION));
     for (int i = MIN_DISK_INDEX; i <= PAGES_IN_PAGE_FILE; i++) {
-        InitializeCriticalSection(&disk_metadata_locks[i]);
+        initialize_lock(&disk_metadata_locks[i]);
     }
 }
 
@@ -158,7 +163,7 @@ void initialize_page_table(void) {
 
     // Initialize all PTE locks
     for (PPTE pte = PTE_base; pte < PTE_base + NUM_PTEs; pte++) {
-        InitializeCriticalSection(&pte->lock);
+        initialize_lock(&pte->lock);
     }
 }
 
@@ -337,7 +342,7 @@ void initialize_events(void) {
     initiate_writing_event = CreateEvent(NULL, AUTO_RESET, FALSE, NULL);
     NULL_CHECK(initiate_writing_event, "Could not initialize writing event.");
 
-    standby_pages_ready_event = CreateEvent(NULL, AUTO_RESET, FALSE, NULL);
+    standby_pages_ready_event = CreateEvent(NULL, MANUAL_RESET, FALSE, NULL);
     NULL_CHECK(standby_pages_ready_event, "Could not intialize standby pages ready event.");
 
     system_exit_event = CreateEvent(NULL, MANUAL_RESET, FALSE, NULL);

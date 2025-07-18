@@ -1,5 +1,5 @@
 /*
- * Created by zblickensderfer on 5/6/2025.
+ * Created by Zach Blick on 5/6/2025.
  * Scheduler collects statistics on page consumption.
  * It then calls ager, trimmer, and writer to provide just enough pages
  * to keep simulator running smoothly.
@@ -13,9 +13,9 @@
 #pragma once
 #include "initializer.h"
 
-// Initially, we will begin trimming and writing when we have less than 50% free pages available.
-#define WORKING_SET_THRESHOLD                 NUMBER_OF_PHYSICAL_PAGES / 2
-#define SCHEDULER_DELAY_IN_MILLISECONDS     10
+// IWe will begin trimming and writing when our standby + free page count falls below this threshold.
+#define WORKING_SET_THRESHOLD                 NUMBER_OF_PHYSICAL_PAGES / 4
+#define SCHEDULER_DELAY_IN_MILLISECONDS       1
 
 /*
  * Analyzes consumption, then calls ager, trimmer, and writer appropriately.

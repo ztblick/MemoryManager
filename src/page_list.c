@@ -3,6 +3,8 @@
 //
 
 #include "../include/page_list.h"
+
+#include "../include/initializer.h"
 #include "../include/macros.h"
 
 VOID initialize_page_list(PPAGE_LIST list) {
@@ -41,6 +43,12 @@ VOID lock_list_and_remove_page(PPAGE_LIST list, PPFN pfn) {
     lock_list(list);
     RemoveEntryList(&pfn->entry);
     decrement_list_size(list);
+
+    // Check for cleared standby list!
+    if (list == &standby_list && is_page_list_empty(&standby_list)) {
+        ResetEvent(standby_pages_ready_event);
+    }
+
     unlock_list(list);
 }
 
