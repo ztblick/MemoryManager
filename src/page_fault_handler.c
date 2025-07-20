@@ -52,8 +52,6 @@ void unlock_disk_slot(UINT64 disk_slot) {
     LeaveCriticalSection(&disk_metadata_locks[disk_slot]);
 }
 
-// TODO think about the fact that there could be a race condition here.
-// What if the list has pages added right after this check?
 BOOL try_acquire_page_from_list(PPFN * available_page_address, PPAGE_LIST list) {
 
     // First, we will try to get a page. To do so, we will ask the list for its size (without a lock).
@@ -62,11 +60,11 @@ BOOL try_acquire_page_from_list(PPFN * available_page_address, PPAGE_LIST list) 
 
         // Now, we will get more serious. Let's lock the free list
         // then try to acquire the lock on its first element.
-        lock_list(list);
+        lock_list_exclusive(list);
 
         // Let's make sure that the list is STILL empty...! If it's not, let's leave and try for standby pages.
         if (is_page_list_empty(list)) {
-            unlock_list(list);
+            unlock_list_exclusive(list);
             break;
         }
 
@@ -75,14 +73,14 @@ BOOL try_acquire_page_from_list(PPFN * available_page_address, PPAGE_LIST list) 
         // If we can't acquire the lock on the front page, let's release all our locks,
         // then just try again!
         if (!try_lock_pfn(pfn)) {
-            unlock_list(list);
+            unlock_list_exclusive(list);
             continue;
         }
 
         // If the PFN is not still free or standby (for some reason), then we shall release our locks and try again!
         if ((list == &free_list && !IS_PFN_FREE(pfn)) ||
             (list == &standby_list && !IS_PFN_STANDBY(pfn))) {
-            unlock_list(list);
+            unlock_list_exclusive(list);
             unlock_pfn(pfn);
             continue;
         }
@@ -97,7 +95,7 @@ BOOL try_acquire_page_from_list(PPFN * available_page_address, PPAGE_LIST list) 
         }
 
         // Finally, release the list lock!
-        unlock_list(list);
+        unlock_list_exclusive(list);
 
         // We have acquired a free page! Set this flag for future flow of control.
         *available_page_address = pfn;
@@ -133,7 +131,90 @@ BOOL va_faults_on_access(PPTE pte) {
     return pte->memory_format.valid == PTE_INVALID;
 }
 
-BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
+BOOL resolve_soft_fault(PULONG_PTR faulting_va, PPTE pte) {
+
+    // This wil hold the physical frame number that we are mapping to the faulting VA.
+    ULONG_PTR frame_numbers_to_map;
+
+    // Since our PTE is in transition format, we can get its PFN.
+    PPFN available_pfn = get_PFN_from_PTE(pte);
+
+    // Lock the pfn
+    lock_pfn(available_pfn);
+
+    // Since we faulted on this transition-format PTE, what could have happened to its frame?
+    // It could be mid-write. It also could have been written out to the disk. It could also be hanging out
+    // on the modified list. We will need to address all of these situations.
+
+    // Ensure that the page is either modified or standby or mid-write.
+    ASSERT(!IS_PFN_ACTIVE(available_pfn) && !IS_PFN_FREE(available_pfn) && !IS_PFN_MID_WRITE(available_pfn));
+
+    // If the PFN is mid-write, then we will need to set its soft fault mid-write bit, which will
+    // tell the writer to clear the disk slot when it is finished writing.
+    if (IS_PFN_MID_WRITE(available_pfn)) {
+        set_soft_fault_write_bit(available_pfn);
+    }
+
+    // Otherwise, we know this page mut be in its standby or modified states.
+    else {
+        // This page list variable is necessary to know which page list we will remove from.
+        // This allows us to decrement its size without calling one of its removal methods.
+        PPAGE_LIST list_to_decrement;
+
+        // If the page is in its modified state, we will remove it from the modified list,
+        // Make its status active, map it to its VA, and update the PTE.
+        // Since it is not in the disk slot yet, there is no need to update its disk metadata.
+        if (IS_PFN_MODIFIED(available_pfn)) {
+            list_to_decrement = &modified_list;
+        }
+        else {
+            ASSERT(IS_PFN_STANDBY(available_pfn));
+
+            // Acquire lock on disk slot, clear it, then release the lock.
+            lock_disk_slot(available_pfn->disk_index);
+            clear_disk_slot(available_pfn->disk_index);
+            unlock_disk_slot(available_pfn->disk_index);
+
+            list_to_decrement = &standby_list;
+        }
+
+        // Remove the page from its list (standby or modified)
+        lock_list_and_remove_page(list_to_decrement, available_pfn);
+    }
+
+    // Regardless of standby or modified or mid-write, these steps should happen to perform a soft fault!
+    frame_numbers_to_map = pte->memory_format.frame_number;
+    map_pages(1, faulting_va, &frame_numbers_to_map);
+
+    // Update the PTE and PFN to the active state.
+    set_PFN_active(available_pfn, pte);
+    set_PTE_to_valid(pte, pte->memory_format.frame_number);
+
+    // Update statistics
+    InterlockedIncrement64(&soft_faults_resolved);
+
+    // Ensure that memory read back into the page is valid.
+    ASSERT(validate_page(faulting_va));
+
+    // Release locks and return!
+    unlock_pfn(available_pfn);
+    unlock_pte(pte);
+
+    return TRUE;
+}
+
+void check_to_initiate_trimming(void) {
+    free_page_count = get_size(&free_list);
+    standby_page_count = get_size(&standby_list);
+
+    // If there is sufficient need, age and trim pages for anticipated page faults.
+    if (free_page_count + standby_page_count < WORKING_SET_THRESHOLD) {
+        SetEvent(initiate_aging_event);
+        SetEvent(initiate_trimming_event);
+    }
+}
+
+BOOL page_fault_handler(PULONG_PTR faulting_va) {
 
     // When should the fault handler be allowed to fail? There are only two situations:
         // A - a hardware failure. This is beyond the scope of this program.
@@ -179,73 +260,12 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         // Set entry pte state
         pte_entry_state = pte->memory_format.status;
 
-        // SOFT FAULT RESOLUTION
+        //~~~~~~~~~~~~~~~~~~~~~~~//
+        // SOFT FAULT RESOLUTION //
+        //~~~~~~~~~~~~~~~~~~~~~~~//
         // If the PTE is in transition, we should be able to locate its PFN!
         if (IS_PTE_TRANSITION(pte)) {
-            available_pfn = get_PFN_from_PTE(pte);
-
-            // Lock the pfn
-            lock_pfn(available_pfn);
-
-            // Since we faulted on this transition-format PTE, what could have happened to its frame?
-            // It could be mid-write. It also could have been written out to the disk. It could also be hanging out
-            // on the modified list. We will need to address all of these situations.
-
-            // Ensure that the page is either modified or standby or mid-write.
-            ASSERT(!IS_PFN_ACTIVE(available_pfn) && !IS_PFN_FREE(available_pfn) && !IS_PFN_MID_WRITE(available_pfn));
-
-            // If the PFN is mid-write, then we will need to set its soft fault mid-write bit, which will
-            // tell the writer to clear the disk slot when it is finished writing.
-            if (IS_PFN_MID_WRITE(available_pfn)) {
-                set_soft_fault_write_bit(available_pfn);
-            }
-
-            // Otherwise, we know this page mut be in its standby or modified states.
-            else {
-                // This page list variable is necessary to know which page list we will remove from.
-                // This allows us to decrement its size without calling one of its removal methods.
-                PPAGE_LIST list_to_decrement;
-
-                // If the page is in its modified state, we will remove it from the modified list,
-                // Make its status active, map it to its VA, and update the PTE.
-                // Since it is not in the disk slot yet, there is no need to update its disk metadata.
-                if (IS_PFN_MODIFIED(available_pfn)) {
-                    list_to_decrement = &modified_list;
-                }
-                else {
-                    ASSERT(IS_PFN_STANDBY(available_pfn));
-
-                    // Acquire lock on disk slot, clear it, then release the lock.
-                    lock_disk_slot(available_pfn->disk_index);
-                    clear_disk_slot(available_pfn->disk_index);
-                    unlock_disk_slot(available_pfn->disk_index);
-
-                    list_to_decrement = &standby_list;
-                }
-
-                // Remove the page from its list (standby or modified)
-                lock_list_and_remove_page(list_to_decrement, available_pfn);
-            }
-
-            // Regardless of standby or modified or mid-write, these steps should happen to perform a soft fault!
-            frame_numbers_to_map = pte->memory_format.frame_number;
-            map_pages(1, faulting_va, &frame_numbers_to_map);
-
-            // Update the PTE and PFN to the active state.
-            set_PFN_active(available_pfn, pte);
-            set_PTE_to_valid(pte, pte->memory_format.frame_number);
-
-            // Update statistics
-            InterlockedIncrement64(&soft_faults_resolved);
-
-            // Ensure that memory read back into the page is valid.
-            ASSERT(validate_page(faulting_va));
-
-            // Release locks and return!
-            unlock_pfn(available_pfn);
-            unlock_pte(pte);
-
-            return TRUE;
+            return resolve_soft_fault(faulting_va, pte);
         }
 
         // Before resolving hard faults, double-check that the PTE thinks it should be hard faulting...
@@ -279,6 +299,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, int i) {
         if (!free_page_acquired && !standby_page_acquired) {
 
             unlock_pte(pte);
+            check_to_initiate_trimming();
             WaitForSingleObject(standby_pages_ready_event, INFINITE);
             continue;
         }

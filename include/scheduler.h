@@ -13,9 +13,7 @@
 #pragma once
 #include "initializer.h"
 
-// IWe will begin trimming and writing when our standby + free page count falls below this threshold.
-#define WORKING_SET_THRESHOLD                 NUMBER_OF_PHYSICAL_PAGES / 4
-#define SCHEDULER_DELAY_IN_MILLISECONDS       1
+#define SCHEDULER_DELAY_IN_MILLISECONDS       100
 
 /*
  * Analyzes consumption, then calls ager, trimmer, and writer appropriately.

@@ -7,29 +7,28 @@
 #include "pfn.h"
 #include "page_list.h"
 
+// This is the number of times the system is tested.
+#define NUM_TESTS                   1
+
+// This is the number of times the simulator will access a VA.
+#define ITERATIONS                  100000
+
 // This is the number of threads that run the simulating thread -- which become fault-handling threads.
-#define NUM_USER_THREADS            4
+#define NUM_USER_THREADS            2
 
 // These are the number of threads running background tasks for the system -- scheduler, trimmer, writer
-#define NUM_SCHEDULING_THREADS      1
+#define NUM_SCHEDULING_THREADS      0
 #define NUM_AGING_THREADS           0
 #define NUM_TRIMMING_THREADS        1
 #define NUM_WRITING_THREADS         1
-
-// This is the amount of time the faulting thread will wait for the "pages ready" event -- otherwise, it tries again
-// on its own.
-#define PAGE_FAULT_WAIT_TIME        10
 
 #define PAGE_SIZE                   4096
 #define MB(x)                       ((x) * 1024 * 1024)
 #define BITS_PER_BYTE               8
 #define BYTES_PER_VA                8
 
-// This is the number of times the system is tested.
-#define NUM_TESTS                   1
-
-// This is the number of times the simulator will access a VA.
-#define ITERATIONS                  10000
+// We will begin trimming and writing when our standby + free page count falls below this threshold.
+#define WORKING_SET_THRESHOLD                 NUMBER_OF_PHYSICAL_PAGES / 4
 
 // These will change as we decide how many pages to write out or read from to disk at once.
 #define MAX_WRITE_BATCH_SIZE        1
@@ -38,8 +37,8 @@
 #define READ_BATCH_SIZE             1
 
 // Pages in memory and page file, which are used to calculate VA span
-#define NUMBER_OF_PHYSICAL_PAGES        512
-#define PAGES_IN_PAGE_FILE              512
+#define NUMBER_OF_PHYSICAL_PAGES        64
+#define PAGES_IN_PAGE_FILE              64
 
 // This is intentionally a power of two so we can use masking to stay within bounds.
 #define VA_SPAN                                         (NUMBER_OF_PHYSICAL_PAGES + PAGES_IN_PAGE_FILE - 1)

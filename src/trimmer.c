@@ -5,7 +5,7 @@
 #include "../include/initializer.h"
 #include "../include/trimmer.h"
 
-
+// TODO batch trim
 VOID trim_pages(VOID) {
 
     // Initialize current pte
@@ -94,5 +94,6 @@ VOID trim_pages_thread(VOID) {
             return;
         }
         trim_pages();
+        SetEvent(initiate_writing_event);
     }
 }

@@ -16,11 +16,11 @@
  *  from a list.
  */
 
-// Total size: 64 bytes. One (and only one) will fit in a cache line.
+// Total size: 32 bytes. Two will fit in a cache line.
 typedef struct __page_list {
     LIST_ENTRY head;            // 16 bytes
     ULONG64 list_size;          // 8 bytes
-    CRITICAL_SECTION lock;      // 40 bytes
+    PSRWLOCK lock;               // 8 bytes
 } PAGE_LIST, *PPAGE_LIST;
 
 /*
@@ -93,15 +93,15 @@ PPFN peek_from_list_head(PPAGE_LIST list);
 /*
  *  Waits until it can acquire the lock on a given page list!
  */
-VOID lock_list(PPAGE_LIST list);
+VOID lock_list_exclusive(PPAGE_LIST list);
 
 /*
  *  Attempts to lock a given page list, but does not wait. Returns TRUE if the page list lock is acquired.
  */
-BOOL try_lock_list(PPAGE_LIST list);
+BOOL try_lock_list_exclusive(PPAGE_LIST list);
 
 
 /*
  *  Unlocks a previously locked page list.
  */
-VOID unlock_list(PPAGE_LIST list);
+VOID unlock_list_exclusive(PPAGE_LIST list);

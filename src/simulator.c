@@ -49,7 +49,7 @@ void run_user_app_simulation(void) {
                 page_faulted = TRUE;
 
                 // Fault handler maps the VA to its new page
-                fault_handler_accessed_correctly = page_fault_handler(arbitrary_va, i);
+                fault_handler_accessed_correctly = page_fault_handler(arbitrary_va);
 
                 // If we were successful, we will do allow our usermode program to continue with its goal.
                 if (!fault_handler_accessed_correctly){

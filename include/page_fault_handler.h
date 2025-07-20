@@ -10,7 +10,7 @@
 /*
  *  Resolve a page fault by mapping a page to the faulting VA, if possible. Not guaranteed, though.
  */
-BOOL page_fault_handler(PULONG_PTR faulting_va, int i);
+BOOL page_fault_handler(PULONG_PTR faulting_va);
 
 
 /*

@@ -209,7 +209,7 @@ void initialize_PFN_data(void) {
         // Initialize the new PFN, then insert it to the free list.
         PPFN new_pfn = PFN_array + allocated_frame_numbers[i];
         create_zeroed_pfn(new_pfn);
-        lock_list_then_insert_to_head(&free_list, &new_pfn->entry);
+        lock_list_then_insert_to_tail(&free_list, &new_pfn->entry);
     }
 }
 

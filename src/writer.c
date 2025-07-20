@@ -55,12 +55,12 @@ VOID write_pages(VOID) {
     while (num_pages_batched < num_pages_in_write_batch) {
 
         // Get list lock
-        lock_list(&modified_list);
+        lock_list_exclusive(&modified_list);
 
         // If there are no longer pages on the modified list, stop looping. Unlock the modified list.
         // Most importantly, we update the size of the write batch to our count.
         if (get_size(&modified_list) == 0) {
-            unlock_list(&modified_list);
+            unlock_list_exclusive(&modified_list);
             num_pages_in_write_batch = num_pages_batched;
             break;
         }
@@ -71,7 +71,7 @@ VOID write_pages(VOID) {
         // Try to get the page lock out of order
         if (!try_lock_pfn(pfn)) {
             // If we can't get the lock, release the list lock, then try again.
-            unlock_list(&modified_list);
+            unlock_list_exclusive(&modified_list);
             continue;
         }
 
@@ -82,10 +82,10 @@ VOID write_pages(VOID) {
         SET_PFN_STATUS(pfn, PFN_MID_WRITE);
 
         // Release the PFN lock, now that we pulled it off the modified list.
-        unlock_pfn(pfn);
+        // unlock_pfn(pfn);
 
         // Unlock the modified list
-        unlock_list(&modified_list);
+        unlock_list_exclusive(&modified_list);
 
         // Grab the frame number for mapping/unmapping
         frame_numbers_to_map[num_pages_batched] = get_frame_from_PFN(pfn);
@@ -117,7 +117,7 @@ VOID write_pages(VOID) {
     LeaveCriticalSection(&kernel_write_lock);
 
     // Lock the PFN again
-    lock_pfn(pfn);
+    // lock_pfn(pfn);
 
     // If we had a soft fault on the page mid-write, we will need to undo this disk write.
     // We will do so by clearing the disk slot and not modifying the PFN's status.

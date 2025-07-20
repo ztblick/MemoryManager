@@ -35,16 +35,10 @@ VOID schedule_tasks(VOID) {
         print_statistics();
 #endif
 
-        // If there is sufficient need, age and trim pages for anticipated page faults.
-        if (free_page_count + standby_page_count < WORKING_SET_THRESHOLD) {
-            SetEvent(initiate_aging_event);
-            SetEvent(initiate_trimming_event);
-        }
-
         // If there is sufficient need, write pages out to disk to free up pages for anticipated page faults.
-        if (empty_disk_slots > 0) {
-            SetEvent(initiate_writing_event);
-        }
+        // if (empty_disk_slots > 0) {
+        //     SetEvent(initiate_writing_event);
+        // }
 
         // Wait for a set amount of time before scheduling again.
         // Of course, if the system exit event is received, we will immediately break out of the thread.

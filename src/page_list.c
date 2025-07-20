@@ -10,7 +10,8 @@
 VOID initialize_page_list(PPAGE_LIST list) {
     InitializeListHead(&list->head);
     list->list_size = 0;
-    InitializeCriticalSection(&list->lock);
+    list->lock = malloc(sizeof(SRWLOCK));
+    InitializeSRWLock(list->lock);
 }
 
 BOOL is_page_list_empty(PPAGE_LIST list) {
@@ -30,26 +31,25 @@ PPFN pop_from_head_list(PPAGE_LIST list) {
 }
 
 VOID increment_list_size(PPAGE_LIST list) {
-    list->list_size++;
+    InterlockedIncrement64(&list->list_size);
 }
 
 VOID decrement_list_size(PPAGE_LIST list) {
-
     ASSERT(list->list_size > 0);
-    list->list_size--;
+    InterlockedDecrement64(&list->list_size);
 }
 
 VOID lock_list_and_remove_page(PPAGE_LIST list, PPFN pfn) {
-    lock_list(list);
+    lock_list_exclusive(list);
     RemoveEntryList(&pfn->entry);
-    decrement_list_size(list);
 
     // Check for cleared standby list!
     if (list == &standby_list && is_page_list_empty(&standby_list)) {
         ResetEvent(standby_pages_ready_event);
     }
 
-    unlock_list(list);
+    unlock_list_exclusive(list);
+    decrement_list_size(list);
 }
 
 VOID remove_page_from_list(PPAGE_LIST list, PPFN pfn) {
@@ -59,17 +59,17 @@ VOID remove_page_from_list(PPAGE_LIST list, PPFN pfn) {
 
 VOID lock_list_then_insert_to_tail(PPAGE_LIST list, PLIST_ENTRY entry) {
 
-    EnterCriticalSection(&list->lock);
+    lock_list_exclusive(list);
     InsertTailList(&list->head, entry);
+    unlock_list_exclusive(list);
     increment_list_size(list);
-    LeaveCriticalSection(&list->lock);
 }
 
 VOID lock_list_then_insert_to_head(PPAGE_LIST list, PLIST_ENTRY entry) {
-    EnterCriticalSection(&list->lock);
+    lock_list_exclusive(list);
     InsertHeadList(&list->head, entry);
+    unlock_list_exclusive(list);
     increment_list_size(list);
-    LeaveCriticalSection(&list->lock);
 }
 
 PPFN peek_from_list_head(PPAGE_LIST list) {
@@ -79,14 +79,14 @@ PPFN peek_from_list_head(PPAGE_LIST list) {
     return pfn;
 }
 
-VOID lock_list(PPAGE_LIST list) {
-    EnterCriticalSection(&list->lock);
+VOID lock_list_exclusive(PPAGE_LIST list) {
+    AcquireSRWLockExclusive(list->lock);
 }
 
-BOOL try_lock_list(PPAGE_LIST list) {
-    return TryEnterCriticalSection(&list->lock);
+BOOL try_lock_list_exclusive(PPAGE_LIST list) {
+    return TryAcquireSRWLockExclusive(list->lock);
 }
 
-VOID unlock_list(PPAGE_LIST list) {
-    LeaveCriticalSection(&list->lock);
+VOID unlock_list_exclusive(PPAGE_LIST list) {
+    ReleaseSRWLockExclusive(list->lock);
 }
