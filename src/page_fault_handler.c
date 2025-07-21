@@ -278,6 +278,9 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
         BOOL free_page_acquired = FALSE;
         BOOL standby_page_acquired = FALSE;
 
+        // If there is no soft fault, let's take this chance to initiate trimming (if necessary)
+        check_to_initiate_trimming();
+
         // First, attempt to grab a free page.
         free_page_acquired = try_acquire_page_from_list(&available_pfn, &free_list);
 
@@ -299,7 +302,6 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
         if (!free_page_acquired && !standby_page_acquired) {
 
             unlock_pte(pte);
-            check_to_initiate_trimming();
             WaitForSingleObject(standby_pages_ready_event, INFINITE);
             continue;
         }

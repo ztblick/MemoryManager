@@ -17,6 +17,7 @@
 // This is the default value given to a PFN's disk index variable. It is zero so there are never any issues
 // brought up by increasing the size of the page file.
 #define NO_DISK_INDEX                   0
+
 // This is the first acceptable disk index, since 0 is reserved to encode the empty slot.
 #define MIN_DISK_INDEX                  1
 

@@ -387,13 +387,13 @@ void initialize_system(void) {
     initialize_locks();
 }
 
-void map_pages(int num_pages, PULONG_PTR va, PULONG_PTR frame_numbers) {
+void map_pages(ULONG64 num_pages, PULONG_PTR va, PULONG_PTR frame_numbers) {
     if (MapUserPhysicalPages (va, num_pages, frame_numbers) == FALSE) {
         fatal_error("Could not map VA to page in MapUserPhysicalPages.");
     }
 }
 
-void unmap_pages(int num_pages, PULONG_PTR va) {
+void unmap_pages(ULONG64 num_pages, PULONG_PTR va) {
     if (MapUserPhysicalPages (va, num_pages, NULL) == FALSE) {
         fatal_error("Could not un-map old VA.");
     }

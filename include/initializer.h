@@ -14,7 +14,7 @@
 #define ITERATIONS                  100000
 
 // This is the number of threads that run the simulating thread -- which become fault-handling threads.
-#define NUM_USER_THREADS            2
+#define NUM_USER_THREADS            1
 
 // These are the number of threads running background tasks for the system -- scheduler, trimmer, writer
 #define NUM_SCHEDULING_THREADS      0
@@ -150,12 +150,12 @@ void free_all_data(void);
 /*
  *  Maps the given page (or pages) to the given VA.
  */
-void map_pages(int num_pages, PULONG_PTR va, PULONG_PTR frame_numbers);
+void map_pages(ULONG64 num_pages, PULONG_PTR va, PULONG_PTR frame_numbers);
 
 /*
  *  Un-maps the given page from the given VA.
  */
-void unmap_pages(int num_pages, PULONG_PTR va);
+void unmap_pages(ULONG64 num_pages, PULONG_PTR va);
 
 /*
  *  Unmaps all physical pages when user app is terminated.

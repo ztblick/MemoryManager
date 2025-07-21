@@ -8,13 +8,13 @@
 #include "../include/macros.h"
 #include "../include/page_fault_handler.h"
 
-// Returns a disk index from 1 to PAGES_IN_PAGE_FILE
+// Returns a disk index from 1 to PAGES_IN_PAGE_FILE, inclusive
 // It is important to note that the indices are off by one, as the value of 0 is reserved
 // for a PFN that is not mapped to a disk slot
 UINT64 find_and_lock_free_disk_index(void) {
 
     UINT64 disk_index = MIN_DISK_INDEX;
-    while (TRUE) {
+    for (; disk_index <= MAX_DISK_INDEX; disk_index++) {
         // Try to acquire the lock on this disk index
         if (TryEnterCriticalSection(&disk_metadata_locks[disk_index])) {
 
@@ -26,36 +26,77 @@ UINT64 find_and_lock_free_disk_index(void) {
             // If it is taken, release the lock and continue scanning...
             LeaveCriticalSection(&disk_metadata_locks[disk_index]);
         }
-
-        disk_index++;
-        if (disk_index > PAGES_IN_PAGE_FILE) disk_index = MIN_DISK_INDEX;
     }
 
-    // This will spin forever if no open disk slots can be found.
-    return 0;
+    return NO_DISK_INDEX;
+}
+
+// Returns the number of allocated disk slots and fills the given array with them.
+ULONG64 allocate_disk_slot_batch(ULONG_PTR* disk_slots) {
+    // This will keep track of the number of slots we have locked.
+    ULONG64 count = 0;
+    // This will keep track of the particular slot we are currently locking.
+    ULONG64 slot = 0;
+
+    // TODO consider using the empty_disk_slots variable here for a speedup
+    while (count < MAX_WRITE_BATCH_SIZE) {
+
+        // Once we have a slot, check to see if it is valid.
+        slot = find_and_lock_free_disk_index();
+        if (slot == NO_DISK_INDEX) break;
+
+        // If it is, update our slots and continue.
+        disk_slots[count] = slot;
+        count++;
+    }
+
+    return count;
+}
+
+void unlock_batched_disk_slots(ULONG_PTR* disk_slots, ULONG64 num_slots) {
+    for (ULONG64 i = 0; i < num_slots; i++) {
+        unlock_disk_slot(disk_slots[i]);
+    }
 }
 
 VOID write_pages(VOID) {
 
     // PFN for the current page being selected for disk write.
     PPFN pfn;
-    int num_pages_batched = 0;
-    int num_pages_in_write_batch = WRITE_BATCH_SIZE;
+    // The number of pages we have added to our batch
+    ULONG64 num_pages_batched = 0;
+    // This will track the number of disk slots I have locked before grabbing pages.
+    ULONG64 num_disk_slots_batched = 0;
+    // The upper bound on the size of THIS particular batch. This will be set to the max, then (possibly)
+    // brought lower by the disk slot allocation, then (possibly) brought lower by the number of pages
+    // that can be removed from the modified list.
+    ULONG64 num_pages_in_write_batch = MAX_WRITE_BATCH_SIZE;
 
     // First, check to see if there are any pages to write
     if (is_page_list_empty(&modified_list)) {
         return;
     }
 
-    // Initialize frame number array
-    PULONG_PTR frame_numbers_to_map = zero_malloc(num_pages_in_write_batch * sizeof(ULONG_PTR));
+    // Initialize disk slot array
+    ULONG64 disk_slots[MAX_WRITE_BATCH_SIZE];
 
-    // TODO grab disk slots while grabbing pages. Do not get too many of either.
+    // First, we will grab as many disk slots as we can. If we have too many, we will release them later.
+    num_disk_slots_batched = allocate_disk_slot_batch(disk_slots);
+
+    // If we couldn't lock any disk slots, we will need to return.
+    if (num_disk_slots_batched == 0) return;
+
+    // Update our upper bound on pages in the batch
+    num_pages_in_write_batch = num_disk_slots_batched;
+
+    // Initialize frame number array
+    PPFN pages_to_write[MAX_WRITE_BATCH_SIZE];
+
+    // Get list lock
+    lock_list_exclusive(&modified_list);
+
     // Get all pages to write
     while (num_pages_batched < num_pages_in_write_batch) {
-
-        // Get list lock
-        lock_list_exclusive(&modified_list);
 
         // If there are no longer pages on the modified list, stop looping. Unlock the modified list.
         // Most importantly, we update the size of the write batch to our count.
@@ -65,13 +106,15 @@ VOID write_pages(VOID) {
             break;
         }
 
+        // TODO write this all out to a function
+
         // Get the PFN for the page we want to try to use
         pfn = peek_from_list_head(&modified_list);
 
         // Try to get the page lock out of order
+        // TODO this will be addressed with our new locking system
         if (!try_lock_pfn(pfn)) {
-            // If we can't get the lock, release the list lock, then try again.
-            unlock_list_exclusive(&modified_list);
+            // If we can't get the lock, we will just try again.
             continue;
         }
 
@@ -81,18 +124,29 @@ VOID write_pages(VOID) {
         // Update PFN status
         SET_PFN_STATUS(pfn, PFN_MID_WRITE);
 
-        // Release the PFN lock, now that we pulled it off the modified list.
-        // unlock_pfn(pfn);
-
-        // Unlock the modified list
-        unlock_list_exclusive(&modified_list);
-
         // Grab the frame number for mapping/unmapping
-        frame_numbers_to_map[num_pages_batched] = get_frame_from_PFN(pfn);
+        pages_to_write[num_pages_batched] = pfn;
         num_pages_batched++;
+
+        // Release the PFN lock, now that we pulled it off the modified list.
+        unlock_pfn(pfn);
     }
 
-    // TODO batch the writes!
+    // Unlock the modified list
+    unlock_list_exclusive(&modified_list);
+
+    // If we couldn't get any pages, we will need to unlock our disk slots and return.
+    if (num_pages_in_write_batch == 0) {
+        unlock_batched_disk_slots(disk_slots, num_disk_slots_batched);
+        return;
+    }
+
+    // Create an array of our frame numbers for the calls to map and unmap
+    ULONG64 frame_numbers_to_map[MAX_WRITE_BATCH_SIZE];
+
+    for (ULONG64 i = 0; i < num_pages_in_write_batch; i++) {
+        frame_numbers_to_map[i] = get_frame_from_PFN(pages_to_write[i]);
+    }
 
     // Grab kernel write lock
     EnterCriticalSection(&kernel_write_lock);
@@ -100,15 +154,52 @@ VOID write_pages(VOID) {
     // Map all pages to the kernel VA space
     map_pages(num_pages_in_write_batch, kernel_write_va, frame_numbers_to_map);
 
-    // Get disk slot for this PTE
-    UINT64 disk_index = find_and_lock_free_disk_index();
+    // Flag to indicate that SOME pages were successfully written
+    BOOL pages_written = FALSE;
 
-    // Get the location to write to in page file
-    char* page_file_location = get_page_file_offset(disk_index);
+    for (ULONG64 i = 0; i < num_pages_in_write_batch; i++) {
 
-    // Perform the write
-    memcpy(page_file_location, kernel_write_va, PAGE_SIZE * num_pages_in_write_batch);
-    set_disk_slot(disk_index);
+        // Get the current page
+        pfn = pages_to_write[i];
+
+        // Get the disk slot for THIS page
+        ULONG64 disk_slot = disk_slots[i];
+
+        // Get the location to write to in page file
+        char* page_file_location = get_page_file_offset(disk_slot);
+
+        // Perform the write at the next page location in the kernal VA space
+        memcpy(page_file_location, kernel_write_va + i * PAGE_SIZE, PAGE_SIZE);
+        set_disk_slot(disk_slot);
+
+        // Lock the PFN again
+        lock_pfn(pfn);
+
+        // If we had a soft fault on the page mid-write, we will need to undo this disk write.
+        // We will do so by clearing the disk slot and not modifying the PFN's status.
+        if (soft_fault_happened_mid_write(pfn)) {
+            clear_disk_slot(disk_slot);
+        }
+
+        // Otherwise, we move along as normal: the page moves to standby, and we update the PFN with its disk slot.
+        else {
+            // Update PFN to be in standby state, add disk index
+            SET_PFN_STATUS(pfn, PFN_STANDBY);
+            pfn->disk_index = disk_slot;
+
+            // Add page to the standby list
+            lock_list_then_insert_to_tail(&standby_list, &pfn->entry);
+
+            // Update our flag
+            pages_written = TRUE;
+        }
+
+        // Release disk slot lock
+        unlock_disk_slot(disk_slots[i]);
+
+        // Unlock the PFN
+        unlock_pfn(pfn);
+    }
 
     // Un-map kernal VA
     unmap_pages(num_pages_in_write_batch, kernel_write_va);
@@ -116,36 +207,8 @@ VOID write_pages(VOID) {
     // Release kernel lock
     LeaveCriticalSection(&kernel_write_lock);
 
-    // Lock the PFN again
-    // lock_pfn(pfn);
-
-    // If we had a soft fault on the page mid-write, we will need to undo this disk write.
-    // We will do so by clearing the disk slot and not modifying the PFN's status.
-    if (soft_fault_happened_mid_write(pfn)) {
-        clear_disk_slot(disk_index);
-    }
-
-    // Otherwise, we move along as normal: the page moves to standby, and we update the PFN with its disk slot.
-    else {
-        // Update PFN to be in standby state, add disk index
-        SET_PFN_STATUS(pfn, PFN_STANDBY);
-        pfn->disk_index = disk_index;
-
-        // Add page to the standby list
-        lock_list_then_insert_to_tail(&standby_list, &pfn->entry);
-
-        // Broadcast to waiting user threads that there are standby pages ready.
-        SetEvent(standby_pages_ready_event);
-    }
-
-    // Release disk slot lock
-    LeaveCriticalSection(&disk_metadata_locks[disk_index]);
-
-    // Unlock the PFN
-    unlock_pfn(pfn);
-
-    // Free frame number array
-    free(frame_numbers_to_map);
+    // Broadcast to waiting user threads that there are standby pages ready.
+    if (pages_written) SetEvent(standby_pages_ready_event);
 }
 
 VOID write_pages_thread(VOID) {

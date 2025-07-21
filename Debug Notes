@@ -1,3 +1,46 @@
+July 19
+
+I removed the scheduler. As a result, the code is orders of magnitude faster.
+However, I seem to have new race conditions to address.
+Right now, I have an issue with the ability to map PTEs when resolving soft faults.
+For some reason, it seems that when one thread is waiting on a PTE and the other thread
+is mapping the PTE, there is an error.
+Why would this even be possible?
+
+Okay, so the error even happens with just ONE user thread. So this is clearly a race condition
+with the writer/trimmer threads.
+
+writer PFN:
+0x0000017b`2dbed5b0
+PFN's PTE:
+0x0000017b`7b119200
+
+soft fault PFN:
+0x0000017b`2dbed5b0
+
+This is strange.
+The PFN is given from the PTE.
+But the PFN's PTE has changed...
+How is this possible?
+
+Possible explanation: we are trying to map a frame that is already mapped in another thread.
+Solution: if a page is being mapped by the writer, don't let it be mapped by another thread....
+
+
+User thread waiting to lock pfn:
+0x00000235`41d49630
+which is resolving a soft fault on PTE 0x00000235`12117c70
+
+User thread waiting to lock PTE:
+0x00000235`12117c70
+
+Writer looking for a disk slot for PFN 0x00000235`41d49630
+
+*** right now, the writer is moving forward without a locked disk slot! We need to GUARANTEE there
+is an available disk slot before it tries to write. OR if there are none, we need to cancel the write.
+
+Solution: check for available disk slots while batching the write.
+
 July 12
 
 
