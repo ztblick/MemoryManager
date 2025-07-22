@@ -24,10 +24,13 @@ ULONG_PTR get_frame_from_PFN(PPFN pfn) {
 }
 
 PPFN get_PFN_from_PTE(PPTE pte) {
-    if (pte->memory_format.status == PTE_ON_DISK) {
-        fatal_error("Frame number requested from disk format PTE.");
-    }
-    return PFN_array + pte->memory_format.frame_number;
+
+    // In our rare case of a transition PTE becoming disk format during concurrent
+    // soft- and hard-faults on the same standby page, we will return NULL.
+    if (pte->memory_format.status == PTE_ON_DISK) return NULL;
+
+    // Otherwise, we return our PFN!
+    return get_PFN_from_frame(pte->memory_format.frame_number);
 }
 
 PPFN get_PFN_from_frame(ULONG_PTR frame_number) {

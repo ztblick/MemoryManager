@@ -8,13 +8,13 @@
 #include "page_list.h"
 
 // This is the number of times the system is tested.
-#define NUM_TESTS                   1
+#define NUM_TESTS                   4
 
 // This is the number of times the simulator will access a VA.
 #define ITERATIONS                  100000
 
 // This is the number of threads that run the simulating thread -- which become fault-handling threads.
-#define NUM_USER_THREADS            1
+#define NUM_USER_THREADS            4
 
 // These are the number of threads running background tasks for the system -- scheduler, trimmer, writer
 #define NUM_SCHEDULING_THREADS      0
@@ -37,8 +37,8 @@
 #define READ_BATCH_SIZE             1
 
 // Pages in memory and page file, which are used to calculate VA span
-#define NUMBER_OF_PHYSICAL_PAGES        64
-#define PAGES_IN_PAGE_FILE              64
+#define NUMBER_OF_PHYSICAL_PAGES        1024
+#define PAGES_IN_PAGE_FILE              1024
 
 // This is intentionally a power of two so we can use masking to stay within bounds.
 #define VA_SPAN                                         (NUMBER_OF_PHYSICAL_PAGES + PAGES_IN_PAGE_FILE - 1)
@@ -83,6 +83,10 @@ ULONG64 empty_disk_slots;
 
 // Handles
 HANDLE physical_page_handle;
+
+// Parameter to provide VirtualAlloc2 with the ability to create a VA space
+// that supports multiple VAs to map to the same shared page.
+extern MEM_EXTENDED_PARAMETER virtual_alloc_shared_parameter;
 
 #define ACTIVE_EVENT_INDEX    0
 #define EXIT_EVENT_INDEX      1
@@ -163,14 +167,10 @@ void unmap_pages(ULONG64 num_pages, PULONG_PTR va);
 void unmap_all_pages(void);
 
 /*
- *  Boilerplate Landy code for multiple threads -- not to be concerned with at this time.
+ *  This includes libraries for the linker which are used to support multple VAs concurrently mapped to the same
+ *  allocated physical page for the process.
  */
-#define SUPPORT_MULTIPLE_VA_TO_SAME_PAGE 0
-
 #pragma comment(lib, "advapi32.lib")
-
-#if SUPPORT_MULTIPLE_VA_TO_SAME_PAGE
 #pragma comment(lib, "onecore.lib")
-#endif
 
 BOOL GetPrivilege (VOID);

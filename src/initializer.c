@@ -11,6 +11,8 @@
 #include "../include/scheduler.h"
 #include "../include/trimmer.h"
 
+MEM_EXTENDED_PARAMETER virtual_alloc_shared_parameter;
+
 BOOL GetPrivilege (VOID) {
     struct {
         DWORD Count;
@@ -127,6 +129,31 @@ void initialize_locks(void) {
     }
 }
 
+HANDLE CreateSharedMemorySection (VOID) {
+    HANDLE section;
+    MEM_EXTENDED_PARAMETER parameter = { 0 };
+
+    //
+    // Create an AWE section.  Later we deposit pages into it and/or
+    // return them.
+    //
+
+    parameter.Type = MemSectionExtendedParameterUserPhysicalFlags;
+    parameter.ULong = 0;
+
+    section = CreateFileMapping2 (INVALID_HANDLE_VALUE,
+                                  NULL,
+                                  SECTION_MAP_READ | SECTION_MAP_WRITE,
+                                  PAGE_READWRITE,
+                                  SEC_RESERVE,
+                                  0,
+                                  NULL,
+                                  &parameter,
+                                  1);
+
+    return section;
+}
+
 void initialize_physical_pages(void) {
 
     BOOL allocated;
@@ -136,7 +163,13 @@ void initialize_physical_pages(void) {
     if (privilege == FALSE) {
         fatal_error ("full_virtual_memory_test : could not get privilege.");
     }
-    physical_page_handle = GetCurrentProcess ();
+
+    physical_page_handle = CreateSharedMemorySection();
+
+    if (physical_page_handle == NULL) {
+        printf ("CreateFileMapping2 failed, error %#x\n", GetLastError ());
+        return;
+    }
 
     // Grab physical pages from the OS
     allocated_frame_count = NUMBER_OF_PHYSICAL_PAGES;
@@ -227,28 +260,39 @@ void initialize_page_file_and_metadata(void) {
 }
 
 void initialize_kernel_VA_spaces(void) {
+
     // Initialize kernel VA space
-    kernel_write_va = VirtualAlloc (NULL,
+    kernel_write_va = VirtualAlloc2 (NULL,
+                    NULL,
                   PAGE_SIZE * MAX_WRITE_BATCH_SIZE,
                   MEM_RESERVE | MEM_PHYSICAL,
-                  PAGE_READWRITE);
+                  PAGE_READWRITE,
+                  &virtual_alloc_shared_parameter,
+                  1);
 
     NULL_CHECK (kernel_write_va, "Could not reserve kernal write VA space.");
 
-    kernel_read_va = VirtualAlloc (NULL,
+    kernel_read_va = VirtualAlloc2 (NULL,
+                        NULL,
                       PAGE_SIZE * MAX_READ_BATCH_SIZE,
                       MEM_RESERVE | MEM_PHYSICAL,
-                      PAGE_READWRITE);
+                      PAGE_READWRITE,
+                      &virtual_alloc_shared_parameter,
+                      1);
 
     NULL_CHECK (kernel_read_va, "Could not reserve kernal read VA space.");
 }
 
 void initialize_user_VA_space(void) {
+
     // Reserve user virtual address space.
-    application_va_base = VirtualAlloc (NULL,
-                      VIRTUAL_ADDRESS_SIZE,
-                      MEM_RESERVE | MEM_PHYSICAL,
-                      PAGE_READWRITE);
+    application_va_base = VirtualAlloc2 (NULL,
+                       NULL,
+                       VIRTUAL_ADDRESS_SIZE,
+                       MEM_RESERVE | MEM_PHYSICAL,
+                       PAGE_READWRITE,
+                       &virtual_alloc_shared_parameter,
+                       1);
 
     NULL_CHECK (application_va_base, "Could not reserve user VA space.");
 }
@@ -349,6 +393,14 @@ void initialize_events(void) {
     NULL_CHECK(system_exit_event, "Could not intialize system exit event.");
 }
 
+void initialize_shared_page_parameter(void) {
+    // Allocate a MEM_PHYSICAL region that is "connected" to the AWE section
+    // created above.
+    memset(&virtual_alloc_shared_parameter, 0, sizeof(virtual_alloc_shared_parameter));
+    virtual_alloc_shared_parameter.Type = MemExtendedParameterUserPhysicalHandle;
+    virtual_alloc_shared_parameter.Handle = physical_page_handle;
+}
+
 // Initialize the above structures
 void initialize_system(void) {
 
@@ -374,17 +426,18 @@ void initialize_system(void) {
     initialize_page_file_and_metadata();
 
     // Initialize VA spaces
+    initialize_shared_page_parameter();
     initialize_kernel_VA_spaces();
     initialize_user_VA_space();
 
-    // Initialize events
-    initialize_threads();
-
-    // Initialize threads
-    initialize_events();
-
     // Initialize all locks on global data structures.
     initialize_locks();
+
+    // Initialize events
+    initialize_events();
+
+    // Initialize threads
+    initialize_threads();
 }
 
 void map_pages(ULONG64 num_pages, PULONG_PTR va, PULONG_PTR frame_numbers) {

@@ -1,3 +1,19 @@
+July 21
+
+
+Debugger is triggered when waiting on kernel_read_lock.
+This happens when all threads are waiting on the same pte (for some reason) at the very beginning
+of the code. I suppose they all grab the same random VA, as they begin simultaneously.
+
+The lock appears to be uninitialized in the debugger. Could it be that it hasn't finished intitializing
+when the other threads are instantiated?
+
+Something to consider: maybe I am not properly re-initializing the system between tests.
+Things seem to be fine when I run one test at a time.
+
+
+ALSO -- I may be hitting the same bug Noah hit with the TLB clear? Check that out, too.
+
 July 19
 
 I removed the scheduler. As a result, the code is orders of magnitude faster.

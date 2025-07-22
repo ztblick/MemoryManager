@@ -92,11 +92,11 @@ VOID write_pages(VOID) {
     // Initialize frame number array
     PPFN pages_to_write[MAX_WRITE_BATCH_SIZE];
 
-    // Get list lock
-    lock_list_exclusive(&modified_list);
-
     // Get all pages to write
     while (num_pages_batched < num_pages_in_write_batch) {
+
+        // Get list lock
+        lock_list_exclusive(&modified_list);
 
         // If there are no longer pages on the modified list, stop looping. Unlock the modified list.
         // Most importantly, we update the size of the write batch to our count.
@@ -114,7 +114,8 @@ VOID write_pages(VOID) {
         // Try to get the page lock out of order
         // TODO this will be addressed with our new locking system
         if (!try_lock_pfn(pfn)) {
-            // If we can't get the lock, we will just try again.
+            // If we can't get the lock, we will unlock the modified list and just try again.
+            unlock_list_exclusive(&modified_list);
             continue;
         }
 
@@ -129,11 +130,10 @@ VOID write_pages(VOID) {
         num_pages_batched++;
 
         // Release the PFN lock, now that we pulled it off the modified list.
+        // Also release the list lock (we will get it again shortly)
         unlock_pfn(pfn);
+        unlock_list_exclusive(&modified_list);
     }
-
-    // Unlock the modified list
-    unlock_list_exclusive(&modified_list);
 
     // If we couldn't get any pages, we will need to unlock our disk slots and return.
     if (num_pages_in_write_batch == 0) {

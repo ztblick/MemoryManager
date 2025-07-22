@@ -6,10 +6,12 @@ Current goal:
 - Implement fine-grained locks with batched writing to create a working, efficient multithreaded machine.
 
 NEXT SUB-GOALS:
-- Batch page writes, taking into account the fact that the number of available disk slots will not
-necessarily match the number of pages available to be written. (do this yourself)
-
-- Reduce PTE locks to single bits (leftmost bit) and/or PTE region locks (discuss with Landy)
+- Debug batch writes
+- Attend to miscellaneous bugs
+- Batch trims
+- PTE region locks
+- Performance analysis
+- Efficient list removal algorithms :)
 
 LAST SESSION:
 - I added InterlockedIncrements and Decrements to global counter variables to prevent race conditions.

@@ -52,7 +52,7 @@ void unlock_disk_slot(UINT64 disk_slot) {
     LeaveCriticalSection(&disk_metadata_locks[disk_slot]);
 }
 
-BOOL try_acquire_page_from_list(PPFN * available_page_address, PPAGE_LIST list) {
+BOOL try_acquire_page_from_list(PPFN* available_page_address, PPAGE_LIST list) {
 
     // First, we will try to get a page. To do so, we will ask the list for its size (without a lock).
     // If this returns a zero value, we can reasonably conclude that the list is empty
@@ -77,7 +77,10 @@ BOOL try_acquire_page_from_list(PPFN * available_page_address, PPAGE_LIST list) 
             continue;
         }
 
-        // If the PFN is not still free or standby (for some reason), then we shall release our locks and try again!
+        // It is possible that the page, since being peeked at, was removed from the free or
+        // standby lists. If that is the case, then we may not be able to acquire it.
+        // It may now be an active page. So, we will double-check to make sure the page
+        // has the anticipated status.
         if ((list == &free_list && !IS_PFN_FREE(pfn)) ||
             (list == &standby_list && !IS_PFN_STANDBY(pfn))) {
             unlock_list_exclusive(list);
@@ -85,7 +88,8 @@ BOOL try_acquire_page_from_list(PPFN * available_page_address, PPAGE_LIST list) 
             continue;
         }
 
-        // Now that we have the PFN lock, let's pop it off the free list.
+        // Now that we have the page lock and we are sure it is in the right state,
+        // we will remove it from its list.
         remove_page_from_list(list, pfn);
         ASSERT(pfn);
 
@@ -139,15 +143,33 @@ BOOL resolve_soft_fault(PULONG_PTR faulting_va, PPTE pte) {
     // Since our PTE is in transition format, we can get its PFN.
     PPFN available_pfn = get_PFN_from_PTE(pte);
 
+    // Check for a disk-format PTE leading to an invalid page!
+    if (!available_pfn) {
+        // In this case, we should release locks and begin fault handling again.
+        unlock_pfn(available_pfn);
+        unlock_pte(pte);
+        return FALSE;
+    }
+
     // Lock the pfn
     lock_pfn(available_pfn);
+
+    // Since we were waiting for the page, it is possible that it was associated
+    // with a hard fault. It may have been given away from the standby list.
+    // We will check its PTE to be sure:
+    if (IS_PTE_ON_DISK(pte)) {
+        // Same as above -- relase locks and begin again.
+        unlock_pfn(available_pfn);
+        unlock_pte(pte);
+        return FALSE;
+    }
 
     // Since we faulted on this transition-format PTE, what could have happened to its frame?
     // It could be mid-write. It also could have been written out to the disk. It could also be hanging out
     // on the modified list. We will need to address all of these situations.
 
     // Ensure that the page is either modified or standby or mid-write.
-    ASSERT(!IS_PFN_ACTIVE(available_pfn) && !IS_PFN_FREE(available_pfn) && !IS_PFN_MID_WRITE(available_pfn));
+    ASSERT(!IS_PFN_ACTIVE(available_pfn) && !IS_PFN_FREE(available_pfn));
 
     // If the PFN is mid-write, then we will need to set its soft fault mid-write bit, which will
     // tell the writer to clear the disk slot when it is finished writing.
@@ -265,7 +287,12 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
         //~~~~~~~~~~~~~~~~~~~~~~~//
         // If the PTE is in transition, we should be able to locate its PFN!
         if (IS_PTE_TRANSITION(pte)) {
-            return resolve_soft_fault(faulting_va, pte);
+            // If we can resolve the soft fault, we are done!
+            if (resolve_soft_fault(faulting_va, pte)) return TRUE;
+            // Otherwise, we have our edge case in which we fault on a pte
+            // that was written out to disk (on a standby page grabbed by a hard fault).
+            // In this case, we simply try again.
+            continue;
         }
 
         // Before resolving hard faults, double-check that the PTE thinks it should be hard faulting...
