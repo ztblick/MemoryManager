@@ -173,7 +173,7 @@ void initialize_physical_pages(void) {
 
     // Grab physical pages from the OS
     allocated_frame_count = NUMBER_OF_PHYSICAL_PAGES;
-    allocated_frame_numbers = malloc (NUMBER_OF_PHYSICAL_PAGES * sizeof (ULONG_PTR));
+    allocated_frame_numbers = zero_malloc (NUMBER_OF_PHYSICAL_PAGES * sizeof (ULONG_PTR));
     NULL_CHECK (allocated_frame_numbers, "full_virtual_memory_test : could not allocate array to hold physical page numbers.");
 
     allocated = AllocateUserPhysicalPages (physical_page_handle,
@@ -450,22 +450,6 @@ void unmap_pages(ULONG64 num_pages, PULONG_PTR va) {
     if (MapUserPhysicalPages (va, num_pages, NULL) == FALSE) {
         fatal_error("Could not un-map old VA.");
     }
-}
-
-void unmap_all_pages(void) {
-    for (PPTE pte = PTE_base; pte < PTE_base + NUM_PTEs; pte++) {
-        if (pte->disk_format.valid) {
-            PULONG_PTR va = get_VA_from_PTE(pte);
-            unmap_pages(1, va);
-        }
-    }
-}
-
-void free_all_data(void) {
-    VirtualFree (PFN_array, 0, MEM_RELEASE);
-    free(PTE_base);
-    free(page_file);
-    free(page_file_metadata);
 }
 
 void set_max_frame_number(void) {

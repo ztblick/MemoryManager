@@ -6,11 +6,12 @@ Current goal:
 - Implement fine-grained locks with batched writing to create a working, efficient multithreaded machine.
 
 NEXT SUB-GOALS:
-- Debug batch writes
-- Attend to miscellaneous bugs
-- Batch trims
-- PTE region locks
+
 - Performance analysis
+- Batch trims
+- Batch reads to array of free lists
+- Batch unmap with MapUserScatter
+- PTE region locks
 - Efficient list removal algorithms :)
 
 LAST SESSION:

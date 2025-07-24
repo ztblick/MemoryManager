@@ -20,6 +20,7 @@ UINT64 find_and_lock_free_disk_index(void) {
 
             // If the lock can be acquired, check the value at the slot. If it's empty, return the locked slot.
             if (page_file_metadata[disk_index] == DISK_SLOT_EMPTY) {
+                set_disk_slot(disk_index);
                 return disk_index;
             }
 
@@ -53,8 +54,9 @@ ULONG64 allocate_disk_slot_batch(ULONG_PTR* disk_slots) {
     return count;
 }
 
-void unlock_batched_disk_slots(ULONG_PTR* disk_slots, ULONG64 num_slots) {
-    for (ULONG64 i = 0; i < num_slots; i++) {
+void unlock_and_clear_disk_slots(ULONG_PTR* disk_slots, ULONG64 num_slots, ULONG64 first_slot_to_unlock) {
+    for (ULONG64 i = first_slot_to_unlock; i < num_slots; i++) {
+        clear_disk_slot(disk_slots[i]);
         unlock_disk_slot(disk_slots[i]);
     }
 }
@@ -137,7 +139,7 @@ VOID write_pages(VOID) {
 
     // If we couldn't get any pages, we will need to unlock our disk slots and return.
     if (num_pages_in_write_batch == 0) {
-        unlock_batched_disk_slots(disk_slots, num_disk_slots_batched);
+        unlock_and_clear_disk_slots(disk_slots, num_disk_slots_batched, 0);
         return;
     }
 
@@ -155,7 +157,11 @@ VOID write_pages(VOID) {
     map_pages(num_pages_in_write_batch, kernel_write_va, frame_numbers_to_map);
 
     // Flag to indicate that SOME pages were successfully written
-    BOOL pages_written = FALSE;
+    ULONG64 pages_written = 0;
+
+    // TODO now there is a bug where a page read back from disk all has stamps
+    // that are off by EXACTLY one page (+ 0x1000)
+    // This would indicate that they are being written out to the next page?
 
     for (ULONG64 i = 0; i < num_pages_in_write_batch; i++) {
 
@@ -169,8 +175,7 @@ VOID write_pages(VOID) {
         char* page_file_location = get_page_file_offset(disk_slot);
 
         // Perform the write at the next page location in the kernal VA space
-        memcpy(page_file_location, kernel_write_va + i * PAGE_SIZE, PAGE_SIZE);
-        set_disk_slot(disk_slot);
+        memcpy(page_file_location, kernel_write_va + i * PAGE_SIZE / 8, PAGE_SIZE);
 
         // Lock the PFN again
         lock_pfn(pfn);
@@ -190,8 +195,8 @@ VOID write_pages(VOID) {
             // Add page to the standby list
             lock_list_then_insert_to_tail(&standby_list, &pfn->entry);
 
-            // Update our flag
-            pages_written = TRUE;
+            // Update our count
+            pages_written++;
         }
 
         // Release disk slot lock
@@ -200,6 +205,8 @@ VOID write_pages(VOID) {
         // Unlock the PFN
         unlock_pfn(pfn);
     }
+    // Release any remaining disk slot locks
+    unlock_and_clear_disk_slots(disk_slots, num_disk_slots_batched, pages_written);
 
     // Un-map kernal VA
     unmap_pages(num_pages_in_write_batch, kernel_write_va);
@@ -208,7 +215,7 @@ VOID write_pages(VOID) {
     LeaveCriticalSection(&kernel_write_lock);
 
     // Broadcast to waiting user threads that there are standby pages ready.
-    if (pages_written) SetEvent(standby_pages_ready_event);
+    if (pages_written > 0) SetEvent(standby_pages_ready_event);
 }
 
 VOID write_pages_thread(VOID) {

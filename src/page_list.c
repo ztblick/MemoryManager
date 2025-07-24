@@ -3,15 +3,13 @@
 //
 
 #include "../include/page_list.h"
-
 #include "../include/initializer.h"
 #include "../include/macros.h"
 
 VOID initialize_page_list(PPAGE_LIST list) {
     InitializeListHead(&list->head);
     list->list_size = 0;
-    list->lock = malloc(sizeof(SRWLOCK));
-    InitializeSRWLock(list->lock);
+    InitializeSRWLock(&list->lock);
 }
 
 BOOL is_page_list_empty(PPAGE_LIST list) {
@@ -80,13 +78,13 @@ PPFN peek_from_list_head(PPAGE_LIST list) {
 }
 
 VOID lock_list_exclusive(PPAGE_LIST list) {
-    AcquireSRWLockExclusive(list->lock);
+    AcquireSRWLockExclusive(&list->lock);
 }
 
 BOOL try_lock_list_exclusive(PPAGE_LIST list) {
-    return TryAcquireSRWLockExclusive(list->lock);
+    return TryAcquireSRWLockExclusive(&list->lock);
 }
 
 VOID unlock_list_exclusive(PPAGE_LIST list) {
-    ReleaseSRWLockExclusive(list->lock);
+    ReleaseSRWLockExclusive(&list->lock);
 }

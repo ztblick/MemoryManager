@@ -13,4 +13,4 @@ PULONG_PTR get_arbitrary_va(PULONG_PTR p);
 
 void run_user_app_simulation(void);
 
-void free_data_and_shut_down(void);
+void free_all_data_and_shut_down(void);

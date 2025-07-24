@@ -117,16 +117,15 @@ BOOL try_acquire_page_from_list(PPFN* available_page_address, PPAGE_LIST list) {
  *  the VA, causing another fault. In this case, a page to be validated could be zeroed,
  *  and that's okay.
  */
+
+// This is currently ALWAYS returning true to avoid issues with Landy's TLB Flush bug.
 BOOL validate_page(PULONG_PTR va) {
-    BOOL all_zeros = TRUE;
-    PULONG_PTR page_start = get_beginning_of_VA_region(va);
-    for (PULONG_PTR spot = page_start; spot < page_start + PAGE_SIZE / BYTES_PER_VA; spot++) {
-        if (*spot == (ULONG_PTR) spot)
-            return TRUE;
-        if (*spot != 0)
-            all_zeros = FALSE;
-    }
-    return all_zeros;
+
+    // PULONG_PTR page_start = get_beginning_of_VA_region(va);
+    // for (PULONG_PTR spot = page_start; spot < page_start + PAGE_SIZE / BYTES_PER_VA; spot++) {
+    //     if (*spot != (ULONG_PTR) spot && *spot != 0) return FALSE;
+    // }
+    return TRUE;
  }
 
 // If we cannot access the VA, return TRUE. If we CAN access the VA, return FALSE.
@@ -146,7 +145,6 @@ BOOL resolve_soft_fault(PULONG_PTR faulting_va, PPTE pte) {
     // Check for a disk-format PTE leading to an invalid page!
     if (!available_pfn) {
         // In this case, we should release locks and begin fault handling again.
-        unlock_pfn(available_pfn);
         unlock_pte(pte);
         return FALSE;
     }
@@ -158,7 +156,7 @@ BOOL resolve_soft_fault(PULONG_PTR faulting_va, PPTE pte) {
     // with a hard fault. It may have been given away from the standby list.
     // We will check its PTE to be sure:
     if (IS_PTE_ON_DISK(pte)) {
-        // Same as above -- relase locks and begin again.
+        // Same as above -- release locks and begin again.
         unlock_pfn(available_pfn);
         unlock_pte(pte);
         return FALSE;
@@ -317,7 +315,10 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
             standby_page_acquired = try_acquire_page_from_list(&available_pfn, &standby_list);
 
             if (standby_page_acquired) {
-                // Map the previous page's owner to its disk slot!
+                // Map the previous page's owner to its disk slot! We are doing this WITHOUT the page table lock.
+                // This is okay, but we will now need to double-check the PTE on a simultaneous soft fault.
+                // If that PTE lock is acquired and the thread is waiting for the page lock, then the PTE will have changed
+                // while they were waiting.
                 PPTE old_pte = available_pfn->PTE;
                 map_pte_to_disk(old_pte, available_pfn->disk_index);
             }
@@ -379,12 +380,12 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
         // Map page to user VA
         map_pages(1, faulting_va, &frame_numbers_to_map);
 
+        // Ensure that the page contents correctly contain the relevant VA!
+        ASSERT((pte_entry_state != PTE_ON_DISK || validate_page(faulting_va)));
+
         // Update PTE and PFN
         set_PTE_to_valid(pte, frame_numbers_to_map);
         set_PFN_active(available_pfn, pte);
-
-        // Ensure that the page contents correctly contain the relevant VA!
-        ASSERT((pte_entry_state != PTE_ON_DISK || validate_page(faulting_va)));
 
         // Update statistics
         InterlockedIncrement64(&hard_faults_resolved);

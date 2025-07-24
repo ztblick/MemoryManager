@@ -10,6 +10,7 @@
 #include "../include/debug.h"
 #include "../include/page_fault_handler.h"
 #include "../include/scheduler.h"
+#include "../include/releaser.h"
 
 PULONG_PTR get_arbitrary_va(PULONG_PTR p) {
     // Randomly access different portions of the virtual address space.
@@ -60,43 +61,6 @@ void run_user_app_simulation(void) {
     }
 }
 
-void free_locks(void) {
-    DeleteCriticalSection(&kernel_read_lock);
-    DeleteCriticalSection(&kernel_write_lock);
-    // TODO free all PTE, PFN, disk slot locks
-}
-
-void free_events(void) {
-    free(user_threads);
-    free(scheduling_threads);
-    free(aging_threads);
-    free(trimming_threads);
-    free(writing_threads);
-
-    free(user_thread_ids);
-    free(scheduling_thread_ids);
-    free(aging_thread_ids);
-    free(trimming_thread_ids);
-    free(writing_thread_ids);
-
-    CloseHandle(system_start_event);
-    CloseHandle(standby_pages_ready_event);
-    CloseHandle(initiate_aging_event);
-    CloseHandle(initiate_trimming_event);
-    CloseHandle(initiate_writing_event);
-}
-
-void free_data_and_shut_down(void) {
-
-    // Now that we're done with our memory we can be a good citizen and free it.
-    unmap_all_pages();
-    VirtualFree (application_va_base, 0, MEM_RELEASE);
-    free_all_data();
-    FreeUserPhysicalPages(physical_page_handle, &allocated_frame_count, allocated_frame_numbers);
-    free_locks();
-    free_events();
-}
-
 void begin_system_test(void) {
     // System is initialized! Broadcast system start event.
     SetEvent(system_start_event);
@@ -117,6 +81,8 @@ VOID main (int argc, char** argv) {
         // Initialize all data structures, events, threads, and handles. Get physical pages from OS.
         initialize_system();
 
+        printf("Beginning test #%lu...\n", i);
+
         // Set up a timer to evaluate speed
         ULONG64 start_time = GetTickCount64();
 
@@ -129,12 +95,13 @@ VOID main (int argc, char** argv) {
         ULONG64 end_time = GetTickCount64();
 
         // Free all memory and end the simulation.
-        free_data_and_shut_down();
+        free_all_data_and_shut_down();
 
         // Print statistics
         cumulative_time += end_time - start_time;
         printf("Program terminated successfully. Time elapsed: %llu milliseconds.\n", end_time - start_time);
         printf ("Finished accessing %u random virtual addresses.\n", ITERATIONS * NUM_USER_THREADS);
+        printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
     }
     printf("Over %u tests, we averaged %llu milliseconds, which is %llu milliseconds per thread.\n",
             NUM_TESTS,

@@ -20,7 +20,7 @@
 typedef struct __page_list {
     LIST_ENTRY head;            // 16 bytes
     ULONG64 list_size;          // 8 bytes
-    PSRWLOCK lock;               // 8 bytes
+    SRWLOCK lock;               // 8 bytes
 } PAGE_LIST, *PPAGE_LIST;
 
 /*

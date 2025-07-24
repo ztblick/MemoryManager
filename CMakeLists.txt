@@ -25,4 +25,6 @@ add_executable(MemoryManager src/initializer.c
         src/pte.c
         src/pfn.c
         include/page_list.h
-        src/page_list.c)
+        src/page_list.c
+        src/releaser.c
+        include/releaser.h)

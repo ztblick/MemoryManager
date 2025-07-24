@@ -1,5 +1,14 @@
-July 21
+July 22
 
+Known bugs:
+1. Validate page can return false. For a disk-format PTE, I occasionally return a page with an
+invalid stamp. Why? In one case, there is only ONE stamp at all. If it is disk-format,
+there should be at least one good stamp. Did I return the wrong page?
+
+In another case, I have two valid stamps and one invalid stamp...
+
+
+July 21
 
 Debugger is triggered when waiting on kernel_read_lock.
 This happens when all threads are waiting on the same pte (for some reason) at the very beginning

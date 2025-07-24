@@ -11,7 +11,7 @@
 #define NUM_TESTS                   4
 
 // This is the number of times the simulator will access a VA.
-#define ITERATIONS                  100000
+#define ITERATIONS                  MB(1) / NUM_USER_THREADS
 
 // This is the number of threads that run the simulating thread -- which become fault-handling threads.
 #define NUM_USER_THREADS            4
@@ -31,7 +31,7 @@
 #define WORKING_SET_THRESHOLD                 NUMBER_OF_PHYSICAL_PAGES / 4
 
 // These will change as we decide how many pages to write out or read from to disk at once.
-#define MAX_WRITE_BATCH_SIZE        1
+#define MAX_WRITE_BATCH_SIZE        NUMBER_OF_PHYSICAL_PAGES / 4
 #define MAX_READ_BATCH_SIZE         1
 #define WRITE_BATCH_SIZE            1
 #define READ_BATCH_SIZE             1
