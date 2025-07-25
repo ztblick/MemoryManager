@@ -1,23 +1,29 @@
 
-Things to be done:
-
-
 Current goal:
-- Implement fine-grained locks with batched writing to create a working, efficient multithreaded machine.
+- Fine-tune the performance of my state machine!
 
 NEXT SUB-GOALS:
 
-- Performance analysis
-- Batch trims
-- Batch reads to array of free lists
-- Batch unmap with MapUserScatter
-- PTE region locks
-- Efficient list removal algorithms :)
+What is expensive?
+- Locking PTEs. How can I remove PTE lock contention? Right now, it accounts for the majority of my time.
+    - Can I ever release PTE locks in the middle of my fault handler? Or are there things I can do
+      after I release the lock that I'm currently doing while I hold it?
 
-LAST SESSION:
-- I added InterlockedIncrements and Decrements to global counter variables to prevent race conditions.
-- I added all list size updates to the heads to prevent race conditions on their counts.
-- I removed the mega page fault lock!
+- Initiate trimming with more efficiency -- only initiate when necessary. Reduce the number of events. Batch trim.
+
+- We are waiting too long for standby pages to be ready. Can we have more of those ready pre-emptively?
+
+- Trimming is inefficient. We spend too long spinning around, looking for an active page to grab.
+    How can we find them faster?
+
+- It takes us too long to find a batch of open disk slots. How can we find them and batch them faster?
+
+Ideas/features:
+- Create PTE region locks.
+- Batch trim from active to modified
+- Batch reads from standby to array of free lists
+- Batch unmap with MapUserScatter
+- Efficient list removal algorithms :)
 
 ~~~~ LOCK ORDERS ~~~~
 

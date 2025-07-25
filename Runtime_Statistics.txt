@@ -1,16 +1,14 @@
 Data is in milliseconds
 
-Benchmarks performed with one critical section shared by user threads for ALL global data.
-
+Benchmarks performed with one critical section shared by user threads for ALL global data. 64/64 pages/pagefile.
 ITERATIONS      1 Thread    2 Threads   4 Threads   8 Threads
-1000            6           34          65          150
-per thread      6           17          16          18
-
-10000           41          250         520         983
-per thread      41          125         130         120
-
-100000          402         2652        5187        7816
-per thread      402         1326        1296        977
-
 MB(1)           6364        35333
 per thread      6364        17666
+
+After fine-grained locking finalized. 1024 pages, 1024 pages in page file.
+MB(1)           27886       14496       21089       14109
+(split)         27886       7248        5272        1763
+
+After some initial performance tuning...
+MB(1)                                               6935
+(split)                                             866

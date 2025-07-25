@@ -8,13 +8,13 @@
 #include "page_list.h"
 
 // This is the number of times the system is tested.
-#define NUM_TESTS                   4
+#define NUM_TESTS                   8
 
 // This is the number of times the simulator will access a VA.
 #define ITERATIONS                  MB(1) / NUM_USER_THREADS
 
 // This is the number of threads that run the simulating thread -- which become fault-handling threads.
-#define NUM_USER_THREADS            4
+#define NUM_USER_THREADS            8
 
 // These are the number of threads running background tasks for the system -- scheduler, trimmer, writer
 #define NUM_SCHEDULING_THREADS      0
@@ -28,7 +28,7 @@
 #define BYTES_PER_VA                8
 
 // We will begin trimming and writing when our standby + free page count falls below this threshold.
-#define WORKING_SET_THRESHOLD                 NUMBER_OF_PHYSICAL_PAGES / 4
+#define WORKING_SET_THRESHOLD                 NUMBER_OF_PHYSICAL_PAGES / 8
 
 // These will change as we decide how many pages to write out or read from to disk at once.
 #define MAX_WRITE_BATCH_SIZE        NUMBER_OF_PHYSICAL_PAGES / 4

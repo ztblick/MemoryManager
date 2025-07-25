@@ -16,6 +16,9 @@ VOID trim_pages(VOID) {
 
     // Walks PTE region until a valid PTE is found to be trimmed, beginning from one
     // beyond previous last trimmed page.
+
+    // TODO Walk until we have a BATCH of valid pages to trim. Also consider keeping a record of
+    // additional valid pages to trim for next time!
     while (TRUE) {
 
         // Move on to the next pte.
@@ -24,13 +27,14 @@ VOID trim_pages(VOID) {
         // Wrap around!
         if (pte == (PTE_base + NUM_PTEs)) pte = PTE_base;
 
-        // Try to acquire the PTE lock
-        if (!try_lock_pte(pte)) {
-            continue;
-        }
+        // If the PTE is not valid, no need for us to try to lock it.
+        if (!IS_PTE_VALID(pte)) continue;
 
-        // If the PTE is not memory valid, continue
-        if (!pte->memory_format.valid) {
+        // Try to acquire the PTE lock
+        if (!try_lock_pte(pte)) continue;
+
+        // Check the PTE is again (now that we have the lock)
+        if (!IS_PTE_VALID(pte)) {
             unlock_pte(pte);
             continue;
         }

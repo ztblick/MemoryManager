@@ -229,7 +229,7 @@ void check_to_initiate_trimming(void) {
 
     // If there is sufficient need, age and trim pages for anticipated page faults.
     if (free_page_count + standby_page_count < WORKING_SET_THRESHOLD) {
-        SetEvent(initiate_aging_event);
+        // SetEvent(initiate_aging_event);
         SetEvent(initiate_trimming_event);
     }
 }

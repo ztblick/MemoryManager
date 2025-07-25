@@ -15,6 +15,9 @@ UINT64 find_and_lock_free_disk_index(void) {
 
     UINT64 disk_index = MIN_DISK_INDEX;
     for (; disk_index <= MAX_DISK_INDEX; disk_index++) {
+
+        if (page_file_metadata[disk_index] != DISK_SLOT_EMPTY) continue;
+
         // Try to acquire the lock on this disk index
         if (TryEnterCriticalSection(&disk_metadata_locks[disk_index])) {
 
