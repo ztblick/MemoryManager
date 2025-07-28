@@ -196,7 +196,7 @@ void initialize_page_table(void) {
 
     // Initialize all PTE locks
     for (PPTE pte = PTE_base; pte < PTE_base + NUM_PTEs; pte++) {
-        initialize_lock(&pte->lock);
+        initialize_byte_lock(&pte->lock);
     }
 }
 
@@ -212,7 +212,7 @@ void initialize_PFN_data(void) {
 
     // Initialize PFN sparse array
     PFN_array = VirtualAlloc    (NULL,
-                                sizeof(PFN) * max_frame_number,
+                                sizeof(PFN) * (max_frame_number + 1),
                                 MEM_RESERVE,
                                 PAGE_READWRITE);
 

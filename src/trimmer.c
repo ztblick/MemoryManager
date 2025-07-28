@@ -5,7 +5,6 @@
 #include "../include/initializer.h"
 #include "../include/trimmer.h"
 
-// TODO batch trim
 VOID trim_pages(VOID) {
 
     // Initialize current pte

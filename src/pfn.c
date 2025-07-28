@@ -48,6 +48,14 @@ VOID set_PFN_active(PPFN pfn, PPTE pte) {
     pfn->disk_index = NO_DISK_INDEX;
 }
 
+VOID set_PFN_free(PPFN pfn) {
+
+    pfn->status = PFN_FREE;
+    pfn->PTE = NULL;
+    pfn->disk_index = NO_DISK_INDEX;
+    pfn->soft_fault_on_write = 0;
+}
+
 /*
  *  Acquires the lock on a PFN, waiting as long as necessary.
  */

@@ -162,9 +162,6 @@ VOID write_pages(VOID) {
     // Flag to indicate that SOME pages were successfully written
     ULONG64 pages_written = 0;
 
-    // TODO now there is a bug where a page read back from disk all has stamps
-    // that are off by EXACTLY one page (+ 0x1000)
-    // This would indicate that they are being written out to the next page?
 
     for (ULONG64 i = 0; i < num_pages_in_write_batch; i++) {
 

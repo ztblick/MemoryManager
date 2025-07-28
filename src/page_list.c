@@ -55,6 +55,7 @@ VOID remove_page_from_list(PPAGE_LIST list, PPFN pfn) {
     decrement_list_size(list);
 }
 
+// TODO modify this to accept PPFN as the parameter, not PLIST_ENTRY
 VOID lock_list_then_insert_to_tail(PPAGE_LIST list, PLIST_ENTRY entry) {
 
     lock_list_exclusive(list);

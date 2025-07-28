@@ -54,6 +54,11 @@ VOID create_zeroed_pfn(PPFN new_pfn);
 ULONG_PTR get_frame_from_PFN(PPFN pfn);
 
 /*
+ *  Sets a PFN into its free state.
+ */
+VOID set_PFN_free(PPFN pfn);
+
+/*
  *  Transition PFN into its active state.
  */
 VOID set_PFN_active(PPFN pfn, PPTE pte);

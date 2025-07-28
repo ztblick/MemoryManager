@@ -130,7 +130,6 @@ BOOL validate_page(PULONG_PTR va) {
 
 // If we cannot access the VA, return TRUE. If we CAN access the VA, return FALSE.
 BOOL va_faults_on_access(PPTE pte) {
-
     return pte->memory_format.valid == PTE_INVALID;
 }
 
@@ -138,6 +137,16 @@ BOOL resolve_soft_fault(PULONG_PTR faulting_va, PPTE pte) {
 
     // This wil hold the physical frame number that we are mapping to the faulting VA.
     ULONG_PTR frame_numbers_to_map;
+
+    // Now we will lock the PTE
+    lock_pte(pte);
+
+    // If someone else updated the PTE since we began, we release the lock.
+    // We will try again from the beginning of the fault handler.
+    if (!IS_PTE_TRANSITION(pte)) {  // TODO how could we get a bug here?
+        unlock_pte(pte);
+        return FALSE;
+    }
 
     // Since our PTE is in transition format, we can get its PFN.
     PPFN available_pfn = get_PFN_from_PTE(pte);
@@ -255,34 +264,23 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
     // The PFN associated with the page that will be mapped to the faulting VA.
     PPFN available_pfn;
 
+    // This is the PTE of our faulting VA. We will need him. But we will lock him as little
+    // as possible, as there is a lot of locking of PTEs.
+    PPTE pte = get_PTE_from_VA(faulting_va);
+
     // This while loop is here to provide the mechanism for the fault-handler to try again.
     // This occurs when there are no pages available, and the fault handler has to wait
     // for the pages_available event to be set by the writer.
     // In that circumstance, this thread will wake up, and then wait grab the lock again.
-    while (TRUE) {
-
-        // Grab the PTE for the VA
-        PPTE pte = get_PTE_from_VA(faulting_va);
-
-        // Acquire the PTE lock
-        lock_pte(pte);
-
-        // Check to see if your page fault has been resolved while you were waiting.
-        if (!va_faults_on_access(pte)) {
-
-            // Since the PTE is actually valid (the fault must have been resolved by another thread)
-            // we can release the PTE lock.
-            unlock_pte(pte);
-
-            return TRUE;
-        }
+    while (!IS_PTE_VALID(pte)) {
 
         // Set entry pte state
-        pte_entry_state = pte->memory_format.status;
+        pte_entry_state = pte->transition_format.status;
 
         //~~~~~~~~~~~~~~~~~~~~~~~//
         // SOFT FAULT RESOLUTION //
         //~~~~~~~~~~~~~~~~~~~~~~~//
+
         // If the PTE is in transition, we should be able to locate its PFN!
         if (IS_PTE_TRANSITION(pte)) {
             // If we can resolve the soft fault, we are done!
@@ -294,7 +292,10 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
         }
 
         // Before resolving hard faults, double-check that the PTE thinks it should be hard faulting...
-        ASSERT ((IS_PTE_ON_DISK(pte) || IS_PTE_ZEROED(pte)));
+        if (!IS_PTE_ON_DISK(pte) && !IS_PTE_ZEROED(pte)) {
+            // The PTE either went to transition or back to active. Either way, we will just try again.
+            continue;
+        }
 
         //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
         // FIRST FAULT / HARD FAULT RESOLUTION //
@@ -329,12 +330,12 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
         // the page fault lock again.
         if (!free_page_acquired && !standby_page_acquired) {
 
-            unlock_pte(pte);
+            // unlock_pte(pte);
             WaitForSingleObject(standby_pages_ready_event, INFINITE);
             continue;
         }
 
-        // At this point, we KNOW we have an available page. It is locked, and its PTE is locked.
+        // At this point, we KNOW we have an available page. It is locked.
         // Let's now resolve the fault.
 
         // Get the frame number
@@ -343,6 +344,31 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
         // Map the kernel VA to the available frame
         EnterCriticalSection(&kernel_read_lock);
         map_pages(1, kernel_read_va, &frame_numbers_to_map);
+
+        // Now we will finally try to acquire the PTE lock
+        // If we cannot get it, we will try again.
+        BOOL pte_lock_acquired = try_lock_pte(pte);
+
+        // If the pte is no longer hard faulting, add the page to the free list and return
+        if (!pte_lock_acquired || IS_PTE_VALID(pte) || IS_PTE_TRANSITION(pte)) {
+
+            // If we were able to get the lock, release it. There is no need for it.
+            if (pte_lock_acquired) unlock_pte(pte);
+
+            // Zero the page
+            memset(kernel_read_va, 0, PAGE_SIZE);
+            unmap_pages(1, kernel_read_va);
+            LeaveCriticalSection(&kernel_read_lock);
+
+            // Add the page to the free list and update its status
+            lock_list_then_insert_to_tail(&free_list, &available_pfn->entry);
+            SET_PFN_STATUS(available_pfn, PFN_FREE);
+            set_PFN_free(available_pfn);
+
+            // Unlock the page
+            unlock_pfn(available_pfn);
+            continue;
+        }
 
         // Now that we have a page, let's check if we need to do a disk read.
         // If PTE is zeroed, do not do the disk read. But if the PTE is on the disk, read its contents back!
@@ -387,12 +413,14 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
         set_PTE_to_valid(pte, frame_numbers_to_map);
         set_PFN_active(available_pfn, pte);
 
-        // Update statistics
-        InterlockedIncrement64(&hard_faults_resolved);
-
         // Release locks
         unlock_pfn(available_pfn);
         unlock_pte(pte);
+
+        // Update statistics
+        InterlockedIncrement64((volatile LONG64 *) &hard_faults_resolved);
+
         return TRUE;
     }
+    return TRUE;
 }

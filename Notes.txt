@@ -5,25 +5,30 @@ Current goal:
 NEXT SUB-GOALS:
 
 What is expensive?
-- Locking PTEs. How can I remove PTE lock contention? Right now, it accounts for the majority of my time.
-    - Can I ever release PTE locks in the middle of my fault handler? Or are there things I can do
-      after I release the lock that I'm currently doing while I hold it?
+- Locking PTEs.
+    - Create slimmer, faster locks (DONE)
+    - Delay lock acquisition, release locks earlier (DONE)
+    - Attend to deadlock issues and bugs (TO DO)
 
-- Initiate trimming with more efficiency -- only initiate when necessary. Reduce the number of events. Batch trim.
+- Trimming.
+    - Initiate event only when needed.
+    - Batch trim.
 
-- We are waiting too long for standby pages to be ready. Can we have more of those ready pre-emptively?
+- Waiting for standby pages.
+    - Can we have more of those ready pre-emptively?
 
-- Trimming is inefficient. We spend too long spinning around, looking for an active page to grab.
-    How can we find them faster?
+- Finding disk slots
+    - It takes us too long to find a batch of open disk slots.
+    - Use bitmaps for 8x speedup.
+    - Consider keeping a list of previously available slots. When batching, might as well get a few
+        extras and add them to the list.
+    - Clearly the disk is too full. Can we keep more pages on the active list and fewer on the modified list?
 
-- It takes us too long to find a batch of open disk slots. How can we find them and batch them faster?
-
-Ideas/features:
-- Create PTE region locks.
-- Batch trim from active to modified
+Other Future Ideas/Features:
 - Batch reads from standby to array of free lists
 - Batch unmap with MapUserScatter
 - Efficient list removal algorithms :)
+- Review data structures to reduce cache contention
 
 ~~~~ LOCK ORDERS ~~~~
 

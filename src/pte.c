@@ -94,13 +94,13 @@ UINT64 get_disk_index_from_pte(PPTE pte) {
 }
 
 VOID lock_pte(PPTE pte) {
-    EnterCriticalSection(&pte->lock);
+    lock(&pte->lock);
 }
 
 BOOL try_lock_pte(PPTE pte) {
-    return TryEnterCriticalSection(&pte->lock);
+    return try_lock(&pte->lock);
 }
 
 VOID unlock_pte(PPTE pte) {
-    LeaveCriticalSection(&pte->lock);
+    unlock(&pte->lock);
 }

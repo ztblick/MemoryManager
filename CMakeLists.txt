@@ -27,4 +27,7 @@ add_executable(MemoryManager src/initializer.c
         include/page_list.h
         src/page_list.c
         src/releaser.c
-        include/releaser.h)
+        include/releaser.h
+        include/locks.h
+        src/locks.c
+)

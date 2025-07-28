@@ -9,7 +9,8 @@
 #define PTE_IN_TRANSITION       0
 #define PTE_ON_DISK             1
 
-#define PTE_STATUS_BIT_FOR_VALID    0       // This is used to prevent the PTE from having a 1 (representing on disk) when read back into valid format
+#define PTE_STATUS_BIT_FOR_VALID    0       // This is used to prevent the PTE from having a 1
+                                            // (representing on disk) when read back into valid format
 
 #define NUM_PTEs                (VIRTUAL_ADDRESS_SIZE / PAGE_SIZE)
 
@@ -23,6 +24,8 @@
 
 // This is the default value given to the frame_number field for a PTE that has no connected frame.
 #define NO_FRAME_ASSIGNED       0
+
+#include "locks.h"
 
 typedef struct {
     UINT64 valid : 1;                       // Valid bit -- 1 indicating PTE is valid
@@ -61,7 +64,7 @@ typedef struct {
         INVALID_PTE disk_format;
         ULONG_PTR entire_pte;
     };
-    CRITICAL_SECTION lock;
+    BYTE_LOCK lock;
 } PTE, *PPTE;
 
 #define IS_PTE_ZEROED(pte)      ((pte)->memory_format.valid == PTE_INVALID && (pte)->memory_format.frame_number == NO_FRAME_ASSIGNED)

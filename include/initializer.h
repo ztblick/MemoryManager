@@ -8,10 +8,10 @@
 #include "page_list.h"
 
 // This is the number of times the system is tested.
-#define NUM_TESTS                   8
+#define NUM_TESTS                   4
 
 // This is the number of times the simulator will access a VA.
-#define ITERATIONS                  MB(1) / NUM_USER_THREADS
+#define ITERATIONS                 KB(1000) / NUM_USER_THREADS
 
 // This is the number of threads that run the simulating thread -- which become fault-handling threads.
 #define NUM_USER_THREADS            8
@@ -23,7 +23,9 @@
 #define NUM_WRITING_THREADS         1
 
 #define PAGE_SIZE                   4096
-#define MB(x)                       ((x) * 1024 * 1024)
+#define KB(x)                       ((x) * 1024)
+#define MB(x)                       (KB((x)) * 1024)
+#define GB(x)                       (MB((x)) * 1024)
 #define BITS_PER_BYTE               8
 #define BYTES_PER_VA                8
 

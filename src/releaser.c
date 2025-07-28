@@ -8,12 +8,8 @@ void free_lock(PCRITICAL_SECTION lock) {
     DeleteCriticalSection(lock);
 }
 
-// TODO Ask Landy why this would cause the error
 void free_list_data(void) {
-    // free(&zero_list.lock);
-    // free(&free_list.lock);
-    // free(&modified_list.lock);
-    // free(&standby_list.lock);
+
 }
 
 void unmap_all_pages(void) {
@@ -98,8 +94,5 @@ void free_page_file_data(void) {
 
 void free_PTE_data(void) {
     // TODO free PTE locks based on REGIONS
-    for (PPTE pte = PTE_base; pte < PTE_base + NUM_PTEs; pte++) {
-        free_lock(&pte->lock);
-    }
     free(PTE_base);
 }

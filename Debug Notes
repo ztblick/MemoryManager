@@ -1,3 +1,15 @@
+July 25
+
+I am trying to implement smaller locks using interlockedCompareExchange.
+Right now, they clearly do not work. I can see that a PTE comes in zeroed,
+but by the time that the faulting thread gets to the point where it wants to
+resolve the fault with a free page, the PTE is in its MEMORY format!
+
+This would indicate that, for some reason, once the PTE is locked,
+another thread can still get it. Or THIS thread grabbed the PTE when it should
+not have been able to...
+
+
 July 22
 
 Known bugs:
