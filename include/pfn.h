@@ -12,7 +12,8 @@
 #define PFN_MID_WRITE   0x3         // This is used to indicate that the page is off the modified list
                                     // but not yet on the standby list, as it is in the process of being
                                     // written out.
-#define PFN_STANDBY     0x4
+#define PFN_MID_TRIM    0x4         // Indicates that the page is part of a trim batch
+#define PFN_STANDBY     0x5
 
 // This is the default value given to a PFN's disk index variable. It is zero so there are never any issues
 // brought up by increasing the size of the page file.
@@ -26,6 +27,7 @@
 #define IS_PFN_ACTIVE(pfn)              ((pfn)->status == PFN_ACTIVE)
 #define IS_PFN_MODIFIED(pfn)            ((pfn)->status == PFN_MODIFIED)
 #define IS_PFN_MID_WRITE(pfn)           ((pfn)->status == PFN_MID_WRITE)
+#define IS_PFN_MID_TRIM(pfn)            ((pfn)->status == PFN_MID_TRIM)
 #define IS_PFN_STANDBY(pfn)             ((pfn)->status == PFN_STANDBY)
 #define SET_PFN_STATUS(pfn, s)          ((pfn)->status = (s))
 
@@ -36,8 +38,9 @@
 typedef struct __pfn {
     LIST_ENTRY entry;       // Size: 16 bytes
     UINT64 status : 4;       // Size: 8 bytes
-    UINT64 disk_index : 59;
-    UINT64 soft_fault_on_write : 1;     // This bit is set when a soft-fault occurs during a disk write.
+    UINT64 disk_index : 58;
+    UINT64 soft_fault_on_write : 1;     // Set when a soft-fault occurs during a disk write.
+    UINT64 soft_fault_mid_trim : 1;     // Set when a soft-fault occurs during a batched trim.
     PPTE PTE;               // Size: 8 bytes
         // FYI -- The 3 least-significant bits here are always zer0, so we can save some bits with cleverness...
     CRITICAL_SECTION lock;  // Size: 40 bytes
@@ -88,7 +91,9 @@ VOID lock_pfn(PPFN pfn);
  *  Precondition: pfn lock has already been acquired.
  */
 VOID set_soft_fault_write_bit(PPFN pfn);
+VOID set_soft_fault_trim_bit(PPFN pfn);
 BOOL soft_fault_happened_mid_write(PPFN pfn);
+BOOL soft_fault_happened_mid_trim(PPFN pfn);
 
 /*
  *  Tries to, but does not always, acquire the lock on a PFN.

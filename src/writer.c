@@ -171,10 +171,10 @@ VOID write_pages(VOID) {
         // Get the disk slot for THIS page
         ULONG64 disk_slot = disk_slots[i];
 
-        // Get the location to write to in page file
+        // Get the destination in the page file
         char* page_file_location = get_page_file_offset(disk_slot);
 
-        // Perform the write at the next page location in the kernal VA space
+        // Write the next page location in the kernal VA space
         memcpy(page_file_location, kernel_write_va + i * PAGE_SIZE / 8, PAGE_SIZE);
 
         // Lock the PFN again
@@ -225,6 +225,9 @@ VOID write_pages_thread(VOID) {
     events[ACTIVE_EVENT_INDEX] = initiate_writing_event;
     events[EXIT_EVENT_INDEX] = system_exit_event;
 
+    // Status set to notify scheduler
+    writer_status = THREAD_WAITING;
+
     // Wait for system start event before entering waiting state!
     WaitForSingleObject(system_start_event, INFINITE);
 
@@ -236,6 +239,8 @@ VOID write_pages_thread(VOID) {
         if (index == EXIT_EVENT_INDEX) {
             return;
         }
+        InterlockedExchange64(&writer_status, THREAD_RUNNING);
         write_pages();
+        InterlockedExchange64(&writer_status, THREAD_WAITING);
     }
 }

@@ -25,6 +25,7 @@ What is expensive?
     - Clearly the disk is too full. Can we keep more pages on the active list and fewer on the modified list?
 
 Other Future Ideas/Features:
+- Only unmap pages when PTE goes from transition to disk
 - Batch reads from standby to array of free lists
 - Batch unmap with MapUserScatter
 - Efficient list removal algorithms :)

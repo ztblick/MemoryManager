@@ -28,6 +28,11 @@ PPFN pop_from_head_list(PPAGE_LIST list) {
     return pfn;
 }
 
+VOID add_to_tail_list(PPAGE_LIST list, PPFN pfn) {
+    InsertTailList(&list->head, &pfn->entry);
+    increment_list_size(list);
+}
+
 VOID increment_list_size(PPAGE_LIST list) {
     InterlockedIncrement64(&list->list_size);
 }

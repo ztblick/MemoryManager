@@ -7,40 +7,47 @@
 #include "pfn.h"
 #include "page_list.h"
 
+// This switch is used to determine if statistics will be logged in the console or not.
+#define LOGGING_MODE                    0
+
 // This is the number of times the system is tested.
-#define NUM_TESTS                   4
+#define NUM_TESTS                       4
 
 // This is the number of times the simulator will access a VA.
-#define ITERATIONS                 KB(1000) / NUM_USER_THREADS
+#define ITERATIONS                      (KB(100) / NUM_USER_THREADS)
 
 // This is the number of threads that run the simulating thread -- which become fault-handling threads.
-#define NUM_USER_THREADS            8
+#define NUM_USER_THREADS                8
 
 // These are the number of threads running background tasks for the system -- scheduler, trimmer, writer
-#define NUM_SCHEDULING_THREADS      0
-#define NUM_AGING_THREADS           0
-#define NUM_TRIMMING_THREADS        1
-#define NUM_WRITING_THREADS         1
+#define NUM_SCHEDULING_THREADS          1
+#define NUM_AGING_THREADS               0
+#define NUM_TRIMMING_THREADS            1
+#define NUM_WRITING_THREADS             1
 
-#define PAGE_SIZE                   4096
-#define KB(x)                       ((x) * 1024)
-#define MB(x)                       (KB((x)) * 1024)
-#define GB(x)                       (MB((x)) * 1024)
-#define BITS_PER_BYTE               8
-#define BYTES_PER_VA                8
+#define PAGE_SIZE                       4096
+#define KB(x)                           ((x) * 1024)
+#define MB(x)                           (KB((x)) * 1024)
+#define GB(x)                           (MB((x)) * 1024)
+#define BITS_PER_BYTE                   8
+#define BYTES_PER_VA                    8
 
 // We will begin trimming and writing when our standby + free page count falls below this threshold.
-#define WORKING_SET_THRESHOLD                 NUMBER_OF_PHYSICAL_PAGES / 8
+#define STANDBY_PAGE_THRESHOLD          (NUMBER_OF_PHYSICAL_PAGES / 8)
+// Trimming will stop when we fall below our active page threshold
+#define ACTIVE_PAGE_THRESHOLD           (NUMBER_OF_PHYSICAL_PAGES * 3 / 4)
+// We will begin writing when the modified list has sufficient pages!
+#define BEGIN_WRITING_THRESHOLD         (NUMBER_OF_PHYSICAL_PAGES / 16)
 
 // These will change as we decide how many pages to write out or read from to disk at once.
-#define MAX_WRITE_BATCH_SIZE        NUMBER_OF_PHYSICAL_PAGES / 4
-#define MAX_READ_BATCH_SIZE         1
-#define WRITE_BATCH_SIZE            1
-#define READ_BATCH_SIZE             1
+#define MAX_WRITE_BATCH_SIZE            (NUMBER_OF_PHYSICAL_PAGES / 4)
+#define MAX_READ_BATCH_SIZE             1
+#define MAX_TRIM_BATCH_SIZE             (NUMBER_OF_PHYSICAL_PAGES / 8)
+#define MAX_FREE_BATCH_SIZE             1
 
 // Pages in memory and page file, which are used to calculate VA span
 #define NUMBER_OF_PHYSICAL_PAGES        1024
-#define PAGES_IN_PAGE_FILE              1024
+#define PAGES_IN_PAGE_FILE              (NUMBER_OF_PHYSICAL_PAGES + 256)
 
 // This is intentionally a power of two so we can use masking to stay within bounds.
 #define VA_SPAN                                         (NUMBER_OF_PHYSICAL_PAGES + PAGES_IN_PAGE_FILE - 1)
@@ -48,11 +55,11 @@
 #define VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS         (VIRTUAL_ADDRESS_SIZE / sizeof (ULONG_PTR))
 
 // Thread information
-#define DEFAULT_SECURITY        ((LPSECURITY_ATTRIBUTES) NULL)
-#define DEFAULT_STACK_SIZE      0
-#define DEFAULT_CREATION_FLAGS  0
-#define AUTO_RESET              FALSE
-#define MANUAL_RESET            TRUE
+#define DEFAULT_SECURITY                ((LPSECURITY_ATTRIBUTES) NULL)
+#define DEFAULT_STACK_SIZE              0
+#define DEFAULT_CREATION_FLAGS          0
+#define AUTO_RESET                      FALSE
+#define MANUAL_RESET                    TRUE
 
 // PFN Data Structures
 PPFN PFN_array;
@@ -113,6 +120,13 @@ PHANDLE aging_threads;
 PHANDLE trimming_threads;
 PHANDLE writing_threads;
 
+// Notification global variables
+volatile LONG64 trimmer_status;
+volatile LONG64 writer_status;
+
+#define THREAD_RUNNING 1
+#define THREAD_WAITING 0
+
 // Thread IDs
 PULONG user_thread_ids;
 PULONG scheduling_thread_ids;
@@ -126,7 +140,7 @@ ULONG64 active_page_count;
 ULONG64 modified_page_count;
 ULONG64 standby_page_count;
 ULONG64 hard_faults_resolved;
-ULONG64 soft_faults_resolved;
+volatile LONG64 soft_faults_resolved;
 
 /*
  *  Malloc the given amount of space, then zero the memory.

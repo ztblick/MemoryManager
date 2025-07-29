@@ -29,7 +29,6 @@ void run_user_app_simulation(void) {
     WaitForSingleObject(system_start_event, INFINITE);
 
     // Adding variables only necessary to kick off fault handler!
-    PULONG_PTR arbitrary_va;
     BOOL page_faulted = FALSE;
     BOOL fault_handler_accessed_correctly = TRUE;
 
@@ -37,17 +36,14 @@ void run_user_app_simulation(void) {
     for (int i = 0; i < ITERATIONS; i += 1) {
 
         // Randomly access different portions of the virtual address space.
-        arbitrary_va = get_arbitrary_va(application_va_base);
+        PULONG_PTR arbitrary_va = get_arbitrary_va(application_va_base);
 
         // Attempt to write the virtual address into memory page.
         do {
             page_faulted = FALSE;
-            __try {
-                *arbitrary_va = (ULONG_PTR) arbitrary_va;
-            } __except (EXCEPTION_EXECUTE_HANDLER) {
 
-                // Set faulted flag (for second try)
-                page_faulted = TRUE;
+            // Check the PTE (this would happen in the OS behind the scenes, but we will do our best).
+            if (!IS_PTE_VALID(get_PTE_from_VA(arbitrary_va))) {
 
                 // Fault handler maps the VA to its new page
                 fault_handler_accessed_correctly = page_fault_handler(arbitrary_va);
@@ -56,6 +52,16 @@ void run_user_app_simulation(void) {
                 if (!fault_handler_accessed_correctly){
                     fatal_error("User app attempted to access invalid VA.");
                 }
+            }
+
+            // Now that we have resolved the fault (as best as we can), try stamping the page.
+            __try {
+                *arbitrary_va = (ULONG_PTR) arbitrary_va;
+                // TODO set accessed bit in PTE
+            }
+            // If we still fault, we set this flag to go around again.
+            __except (EXCEPTION_EXECUTE_HANDLER) {
+                page_faulted = TRUE;
             }
         } while (page_faulted);
     }

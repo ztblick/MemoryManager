@@ -13,7 +13,8 @@
 #pragma once
 #include "initializer.h"
 
-#define SCHEDULER_DELAY_IN_MILLISECONDS       100
+#define SCHEDULER_DELAY_IN_MILLISECONDS         1
+#define PRINT_FREQUENCY_IN_MILLISECONDS         (60 / SCHEDULER_DELAY_IN_MILLISECONDS)
 
 /*
  * Analyzes consumption, then calls ager, trimmer, and writer appropriately.

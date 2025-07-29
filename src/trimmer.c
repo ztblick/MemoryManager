@@ -7,24 +7,30 @@
 
 VOID trim_pages(VOID) {
 
+    // We will keep track of the number of pages we have batched
+    ULONG64 attempts = 0;
+    ULONG64 trim_batch_size = 0;
+    PPFN trimmed_pages[MAX_TRIM_BATCH_SIZE];
+
     // Initialize current pte
     PPTE pte = pte_to_trim;
 
     // The PFN of the current PTE.
     PPFN pfn;
 
-    // Walks PTE region until a valid PTE is found to be trimmed, beginning from one
+    // Walks PTE region until a valid page batch is made, beginning from one
     // beyond previous last trimmed page.
-
-    // TODO Walk until we have a BATCH of valid pages to trim. Also consider keeping a record of
-    // additional valid pages to trim for next time!
-    while (TRUE) {
+    while (trim_batch_size < MAX_TRIM_BATCH_SIZE && attempts < MAX_TRIM_ATTEMPTS) {
 
         // Move on to the next pte.
         pte++;
+        attempts++;
 
         // Wrap around!
         if (pte == (PTE_base + NUM_PTEs)) pte = PTE_base;
+
+        // TODO consider removing this (again). It does not seem like we need to lock this as long as we
+        // can update the PTE with an interlocked operation. Is writeNoFence atomic?
 
         // If the PTE is not valid, no need for us to try to lock it.
         if (!IS_PTE_VALID(pte)) continue;
@@ -41,38 +47,47 @@ VOID trim_pages(VOID) {
         // Read in the the PFN.
         pfn = get_PFN_from_PTE(pte);
 
-        // If the PFN lock can not be acquired, continue.
-        if (!try_lock_pfn(pfn)) {
-            unlock_pte(pte);
-            continue;
-        }
+        // Set the PTE as memory format transition.
+        set_PTE_to_transition(pte);
 
-        // If the page is no longer active, release locks and continue.
-        if (!IS_PFN_ACTIVE(pfn)) {
-            unlock_pte(pte);
+        // Set the page's status to mid-trim
+        SET_PFN_STATUS(pfn, PFN_MID_TRIM);
+
+        // Release the PTE lock
+        unlock_pte(pte);
+
+        // Great! We have a page. Let's add it to our array.
+        trimmed_pages[trim_batch_size] = pfn;
+        trim_batch_size++;
+    }
+
+    // Update our starting point for the next run
+    pte_to_trim = pte;
+
+    // Now, let's add all of our trimmed pages to the modified list
+    for (ULONG i = 0; i < trim_batch_size; i++) {
+
+        // Grab the PFN
+        pfn = trimmed_pages[i];
+        lock_pfn(pfn);
+
+        // TODO Talk to Landy about making this an atomic operation, so it can be done lockless.
+
+        // If the page was faulted on while we were trimming, don't worry about it.
+        if (soft_fault_happened_mid_trim(pfn)) {
             unlock_pfn(pfn);
             continue;
         }
 
-        // Otherwise -- we have a valid page to trim!
-        break;
+        // Add this page to the modified list
+        lock_list_then_insert_to_tail(&modified_list, &pfn->entry);
+
+        // Set PFN status as modified
+        SET_PFN_STATUS(pfn, PFN_MODIFIED);
+
+        // Leave PFN critical section
+        unlock_pfn(pfn);
     }
-
-    // Unmap the VA from this page
-    unmap_pages(1, get_VA_from_PTE(pte));
-
-    // Set the PTE as memory format transition.
-    set_PTE_to_transition(pte);
-
-    // Trim this page to the modified list
-    lock_list_then_insert_to_tail(&modified_list, &pfn->entry);
-
-    // Set PFN status as modified
-    SET_PFN_STATUS(pfn, PFN_MODIFIED);
-
-    // Leave PFN, PTE critical sections
-    unlock_pfn(pfn);
-    unlock_pte(pte);
 }
 
 VOID trim_pages_thread(VOID) {
@@ -81,6 +96,9 @@ VOID trim_pages_thread(VOID) {
     HANDLE events[2];
     events[ACTIVE_EVENT_INDEX] = initiate_trimming_event;
     events[EXIT_EVENT_INDEX] = system_exit_event;
+
+    // Status set to notify scheduler
+    trimmer_status = THREAD_WAITING;
 
     // Wait for system start event before entering waiting state!
     WaitForSingleObject(system_start_event, INFINITE);
@@ -96,7 +114,10 @@ VOID trim_pages_thread(VOID) {
         if (index == EXIT_EVENT_INDEX) {
             return;
         }
+        // Set the trimmer status variable so the scheduler won't unnecessarily set the trimmer event.
+        // Then trim pages, wake the writer, and update the trimmer status
+        InterlockedExchange64(&trimmer_status, THREAD_RUNNING);
         trim_pages();
-        SetEvent(initiate_writing_event);
+        InterlockedExchange64(&trimmer_status, THREAD_WAITING);
     }
 }

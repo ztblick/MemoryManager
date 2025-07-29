@@ -10,6 +10,8 @@ VOID create_zeroed_pfn(PPFN new_pfn) {
     new_pfn->status = PFN_FREE;
     new_pfn->PTE = NULL;
     new_pfn->disk_index = NO_DISK_INDEX;
+    new_pfn->soft_fault_on_write = 0;
+    new_pfn->soft_fault_mid_trim = 0;
     initialize_lock(&new_pfn->lock);
 }
 
@@ -82,10 +84,21 @@ VOID set_soft_fault_write_bit(PPFN pfn) {
     pfn->soft_fault_on_write = 1;
 }
 
+VOID set_soft_fault_trim_bit(PPFN pfn) {
+    pfn->soft_fault_mid_trim = 1;
+}
+
 // Checks bit, clears it, then returns result.
 BOOL soft_fault_happened_mid_write(PPFN pfn) {
     BOOL fault_occured = pfn->soft_fault_on_write;
     pfn->soft_fault_on_write = 0;
+
+    return fault_occured;
+}
+
+BOOL soft_fault_happened_mid_trim(PPFN pfn) {
+    BOOL fault_occured = pfn->soft_fault_mid_trim;
+    pfn->soft_fault_mid_trim = 0;
 
     return fault_occured;
 }

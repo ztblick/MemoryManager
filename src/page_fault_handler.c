@@ -135,9 +135,6 @@ BOOL va_faults_on_access(PPTE pte) {
 
 BOOL resolve_soft_fault(PULONG_PTR faulting_va, PPTE pte) {
 
-    // This wil hold the physical frame number that we are mapping to the faulting VA.
-    ULONG_PTR frame_numbers_to_map;
-
     // Now we will lock the PTE
     lock_pte(pte);
 
@@ -172,8 +169,10 @@ BOOL resolve_soft_fault(PULONG_PTR faulting_va, PPTE pte) {
     }
 
     // Since we faulted on this transition-format PTE, what could have happened to its frame?
-    // It could be mid-write. It also could have been written out to the disk. It could also be hanging out
-    // on the modified list. We will need to address all of these situations.
+    // It could be mid-write or mid-trim.
+    // It also could have been written out to the disk and is on the standby list.
+    // Or it could be hanging out on the modified list.
+    // We will need to address all of these situations.
 
     // Ensure that the page is either modified or standby or mid-write.
     ASSERT(!IS_PFN_ACTIVE(available_pfn) && !IS_PFN_FREE(available_pfn));
@@ -182,6 +181,9 @@ BOOL resolve_soft_fault(PULONG_PTR faulting_va, PPTE pte) {
     // tell the writer to clear the disk slot when it is finished writing.
     if (IS_PFN_MID_WRITE(available_pfn)) {
         set_soft_fault_write_bit(available_pfn);
+    }
+    else if (IS_PFN_MID_TRIM(available_pfn)) {
+        set_soft_fault_trim_bit(available_pfn);
     }
 
     // Otherwise, we know this page mut be in its standby or modified states.
@@ -211,36 +213,19 @@ BOOL resolve_soft_fault(PULONG_PTR faulting_va, PPTE pte) {
         lock_list_and_remove_page(list_to_decrement, available_pfn);
     }
 
-    // Regardless of standby or modified or mid-write, these steps should happen to perform a soft fault!
-    frame_numbers_to_map = pte->memory_format.frame_number;
-    map_pages(1, faulting_va, &frame_numbers_to_map);
-
+    // Regardless, these steps should happen to perform a soft fault!
     // Update the PTE and PFN to the active state.
     set_PFN_active(available_pfn, pte);
     set_PTE_to_valid(pte, pte->memory_format.frame_number);
-
-    // Update statistics
-    InterlockedIncrement64(&soft_faults_resolved);
-
-    // Ensure that memory read back into the page is valid.
-    ASSERT(validate_page(faulting_va));
 
     // Release locks and return!
     unlock_pfn(available_pfn);
     unlock_pte(pte);
 
+    // Update statistics
+    InterlockedIncrement64(&soft_faults_resolved);
+
     return TRUE;
-}
-
-void check_to_initiate_trimming(void) {
-    free_page_count = get_size(&free_list);
-    standby_page_count = get_size(&standby_list);
-
-    // If there is sufficient need, age and trim pages for anticipated page faults.
-    if (free_page_count + standby_page_count < WORKING_SET_THRESHOLD) {
-        // SetEvent(initiate_aging_event);
-        SetEvent(initiate_trimming_event);
-    }
 }
 
 BOOL page_fault_handler(PULONG_PTR faulting_va) {
@@ -304,9 +289,6 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
         BOOL free_page_acquired = FALSE;
         BOOL standby_page_acquired = FALSE;
 
-        // If there is no soft fault, let's take this chance to initiate trimming (if necessary)
-        check_to_initiate_trimming();
-
         // First, attempt to grab a free page.
         free_page_acquired = try_acquire_page_from_list(&available_pfn, &free_list);
 
@@ -331,7 +313,8 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
         if (!free_page_acquired && !standby_page_acquired) {
 
             // unlock_pte(pte);
-            WaitForSingleObject(standby_pages_ready_event, INFINITE);
+            // TODO see if this delay can be set back to infinite again without any bugs at the end of the test...
+            WaitForSingleObject(standby_pages_ready_event, 100);
             continue;
         }
 
@@ -373,6 +356,10 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
         // Now that we have a page, let's check if we need to do a disk read.
         // If PTE is zeroed, do not do the disk read. But if the PTE is on the disk, read its contents back!
         if (IS_PTE_ON_DISK(pte)) {
+
+            // Unmap the VA from this page
+            unmap_pages(1, get_VA_from_PTE(pte));
+
             // Get location of new pte on disk
             UINT64 disk_slot = pte->disk_format.disk_index;
 

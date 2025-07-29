@@ -6,6 +6,8 @@
 
 #include "macros.h"
 
+#define MAX_TRIM_ATTEMPTS       MAX_TRIM_BATCH_SIZE * 8
+
 // The initial trimmer_offset in the PTE region for the trimmer -- this will change over time.
 PPTE pte_to_trim;
 
