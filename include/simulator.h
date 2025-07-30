@@ -5,8 +5,8 @@
 #pragma once
 
 // This switch is used to determine if statistics will be logged in the console or not.
-#define LOGGING_MODE                    1
-#define RUN_FOREVER                     1
+#define LOGGING_MODE                    0
+#define RUN_FOREVER                     0
 
 // This is the number of times the simulator will access a VA.
 #define ITERATIONS                      (MB(1))

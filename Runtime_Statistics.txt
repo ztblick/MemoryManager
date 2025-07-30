@@ -12,3 +12,13 @@ MB(1)           27886       14496       21089       14109
 After some initial performance tuning...
 MB(1)                                               6935
 (split)                                             866
+
+
+After bumping up to 1 GB memory and 512 MB page file with batched tests.
+Each thread handles MB(1) faults.
+
+1 threads   23922 milliseconds.
+2 threads   24094 milliseconds.
+4 threads   24437 milliseconds.
+8 threads   26078 milliseconds.
+16 threads  28657 milliseconds.

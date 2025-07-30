@@ -82,6 +82,11 @@ void begin_system_test(void) {
     InterlockedExchange64(&trimmer_exit_flag, SYSTEM_SHUTDOWN);
     InterlockedExchange64(&writer_exit_flag, SYSTEM_SHUTDOWN);
     SetEvent(system_exit_event);
+
+    // TODO -- wait until trimmer and writer are done shutting down BEFORE freeing!
+    WaitForMultipleObjects(NUM_TRIMMING_THREADS, trimming_threads, TRUE, INFINITE);
+    WaitForMultipleObjects(NUM_WRITING_THREADS, writing_threads, TRUE, INFINITE);
+    WaitForMultipleObjects(NUM_SCHEDULING_THREADS, scheduling_threads, TRUE, INFINITE);
 }
 
 VOID main (int argc, char** argv) {
