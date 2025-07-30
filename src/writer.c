@@ -11,12 +11,16 @@
 // Returns a disk index from 1 to PAGES_IN_PAGE_FILE, inclusive
 // It is important to note that the indices are off by one, as the value of 0 is reserved
 // for a PFN that is not mapped to a disk slot
+// TODO pick up from last empty slot...duh...
 UINT64 find_and_lock_free_disk_index(void) {
 
     UINT64 disk_index = MIN_DISK_INDEX;
     for (; disk_index <= MAX_DISK_INDEX; disk_index++) {
 
         if (page_file_metadata[disk_index] != DISK_SLOT_EMPTY) continue;
+
+        // TODO debug this...?
+        ASSERT(disk_index >= MIN_DISK_INDEX && disk_index <= MAX_DISK_INDEX);
 
         // Try to acquire the lock on this disk index
         if (TryEnterCriticalSection(&disk_metadata_locks[disk_index])) {
@@ -36,16 +40,19 @@ UINT64 find_and_lock_free_disk_index(void) {
 }
 
 // Returns the number of allocated disk slots and fills the given array with them.
-ULONG64 allocate_disk_slot_batch(ULONG_PTR* disk_slots) {
+ULONG64 allocate_disk_slot_batch(ULONG_PTR* disk_slots, ULONG64 target_page_count) {
     // This will keep track of the number of slots we have locked.
     ULONG64 count = 0;
     // This will keep track of the particular slot we are currently locking.
     ULONG64 slot = 0;
+    // Update our target count -- no need to get too greedy
+    target_page_count = min(MAX_WRITE_BATCH_SIZE, target_page_count);
 
     // TODO consider using the empty_disk_slots variable here for a speedup
-    while (count < MAX_WRITE_BATCH_SIZE) {
+    while (count < target_page_count) {
 
-        // Once we have a slot, check to see if it is valid.
+        // Once we have a slot, check to see if it is valid. If we couldn't get one,
+        // we know there are none to get!
         slot = find_and_lock_free_disk_index();
         if (slot == NO_DISK_INDEX) break;
 
@@ -77,16 +84,18 @@ VOID write_pages(VOID) {
     // that can be removed from the modified list.
     ULONG64 num_pages_in_write_batch = MAX_WRITE_BATCH_SIZE;
 
-    // First, check to see if there are any pages to write
-    if (is_page_list_empty(&modified_list)) {
-        return;
-    }
+    // Let's get a sense of how many modified pages we can reasonably expect. There may be more (from trimming)
+    // or fewer (from soft faults), but this gives us an estimate.
+    ULONG64 approx_num_mod_pages = get_size(&modified_list);
+
+    // First, check to see if there are sufficient pages to write
+    if (approx_num_mod_pages < MIN_WRITE_BATCH_SIZE) return;
 
     // Initialize disk slot array
     ULONG64 disk_slots[MAX_WRITE_BATCH_SIZE];
 
     // First, we will grab as many disk slots as we can. If we have too many, we will release them later.
-    num_disk_slots_batched = allocate_disk_slot_batch(disk_slots);
+    num_disk_slots_batched = allocate_disk_slot_batch(disk_slots, approx_num_mod_pages);
 
     // If we couldn't lock any disk slots, we will need to return.
     if (num_disk_slots_batched == 0) return;
@@ -220,27 +229,22 @@ VOID write_pages(VOID) {
 
 VOID write_pages_thread(VOID) {
 
-    ULONG index;
-    HANDLE events[2];
-    events[ACTIVE_EVENT_INDEX] = initiate_writing_event;
-    events[EXIT_EVENT_INDEX] = system_exit_event;
-
-    // Status set to notify scheduler
-    writer_status = THREAD_WAITING;
-
     // Wait for system start event before entering waiting state!
     WaitForSingleObject(system_start_event, INFINITE);
 
-    while (TRUE) {
+    // If the exit flag has been set, then it's time to go!
+    // No need for an atomic operation -- if we do one extra trim, we will live.
+    while (writer_exit_flag == SYSTEM_RUN) {
 
-        // Wait for one of two events: initiate writing (which calls write_pages), or exit, which...exits!
-        index = WaitForMultipleObjects(ARRAYSIZE(events), events, FALSE, INFINITE);
+        update_statistics();
 
-        if (index == EXIT_EVENT_INDEX) {
-            return;
-        }
-        InterlockedExchange64(&writer_status, THREAD_RUNNING);
-        write_pages();
-        InterlockedExchange64(&writer_status, THREAD_WAITING);
+        // TODO learn how to use this!
+        // QueryPerformanceCounter(&modified_list);
+
+        // Otherwise: if there is sufficient need, wake the writer
+        if (modified_page_count > BEGIN_WRITING_THRESHOLD) write_pages();
+
+        // If there isn't need, let's sleep for a moment to avoid spinning and burning up this core.
+        else YieldProcessor();
     }
 }

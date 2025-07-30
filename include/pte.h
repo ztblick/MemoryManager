@@ -17,7 +17,6 @@
 #define STATE_BITS              5
 
 #define DISK_INDEX_BITS         22
-#define MAX_DISK_INDEX          PAGES_IN_PAGE_FILE
 
 #define FRAME_NUMBER_BITS       40
 #define MAX_FRAME_NUMBER        ((1U << FRAME_NUMBER_BITS) - 1)

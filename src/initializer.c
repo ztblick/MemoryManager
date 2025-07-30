@@ -300,20 +300,20 @@ void initialize_user_VA_space(void) {
 void initialize_threads(void) {
 
     // Initialize handles to for each thread.
-    user_threads = (PHANDLE) zero_malloc(NUM_USER_THREADS * sizeof(HANDLE));
+    user_threads = (PHANDLE) zero_malloc(num_user_threads * sizeof(HANDLE));
     aging_threads = (PHANDLE) zero_malloc(NUM_AGING_THREADS * sizeof(HANDLE));
     scheduling_threads = (PHANDLE) zero_malloc(NUM_SCHEDULING_THREADS * sizeof(HANDLE));
     trimming_threads = (PHANDLE) zero_malloc(NUM_TRIMMING_THREADS * sizeof(HANDLE));
     writing_threads = (PHANDLE) zero_malloc(NUM_WRITING_THREADS * sizeof(HANDLE));
 
-    user_thread_ids = (PULONG) zero_malloc(NUM_USER_THREADS * sizeof(ULONG));
+    user_thread_ids = (PULONG) zero_malloc(num_user_threads * sizeof(ULONG));
     aging_thread_ids = (PULONG) zero_malloc(NUM_AGING_THREADS * sizeof(ULONG));
     scheduling_thread_ids = (PULONG) zero_malloc(NUM_SCHEDULING_THREADS * sizeof(ULONG));
     trimming_thread_ids = (PULONG) zero_malloc(NUM_TRIMMING_THREADS * sizeof(ULONG));
     writing_thread_ids = (PULONG) zero_malloc(NUM_WRITING_THREADS * sizeof(ULONG));
 
     // Create user threads, each of which are running the user app simulation.
-    for (ULONG64 i = 0; i < NUM_USER_THREADS; i++) {
+    for (ULONG64 i = 0; i < num_user_threads; i++) {
         user_threads[i] = CreateThread (DEFAULT_SECURITY,
                                DEFAULT_STACK_SIZE,
                                (LPTHREAD_START_ROUTINE) run_user_app_simulation,
@@ -390,7 +390,10 @@ void initialize_events(void) {
     NULL_CHECK(standby_pages_ready_event, "Could not intialize standby pages ready event.");
 
     system_exit_event = CreateEvent(NULL, MANUAL_RESET, FALSE, NULL);
-    NULL_CHECK(system_exit_event, "Could not intialize system exit event.");
+    NULL_CHECK(system_exit_event, "Could not intialize standby pages ready event.");
+
+    trimmer_exit_flag = SYSTEM_RUN;
+    writer_exit_flag = SYSTEM_RUN;
 }
 
 void initialize_shared_page_parameter(void) {

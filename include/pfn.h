@@ -19,9 +19,6 @@
 // brought up by increasing the size of the page file.
 #define NO_DISK_INDEX                   0
 
-// This is the first acceptable disk index, since 0 is reserved to encode the empty slot.
-#define MIN_DISK_INDEX                  1
-
 // Macros for easy analysis later.
 #define IS_PFN_FREE(pfn)                ((pfn)->status == PFN_FREE)
 #define IS_PFN_ACTIVE(pfn)              ((pfn)->status == PFN_ACTIVE)

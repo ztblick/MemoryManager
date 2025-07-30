@@ -22,6 +22,11 @@
 VOID schedule_tasks(VOID);
 
 /*
+ *  Updates the global stats counters
+ */
+VOID update_statistics(VOID);
+
+/*
  *  Print page consumption statistics.
  */
 VOID print_statistics(VOID);

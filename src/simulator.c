@@ -33,8 +33,11 @@ void run_user_app_simulation(void) {
     BOOL fault_handler_accessed_correctly = TRUE;
 
     // Now perform random accesses
+#if RUN_FOREVER
+    while (TRUE) {
+#else
     for (int i = 0; i < ITERATIONS; i += 1) {
-
+#endif
         // Randomly access different portions of the virtual address space.
         PULONG_PTR arbitrary_va = get_arbitrary_va(application_va_base);
 
@@ -73,44 +76,46 @@ void begin_system_test(void) {
 
     // This waits for the tests to finish running before exiting the function
     // Our controlling thread will wait for this function to finish before exiting the test and reporting stats
-    WaitForMultipleObjects(NUM_USER_THREADS, user_threads, TRUE, INFINITE);
+    WaitForMultipleObjects(num_user_threads, user_threads, TRUE, INFINITE);
 
     // Test is finished! Tell all threads to stop.
+    InterlockedExchange64(&trimmer_exit_flag, SYSTEM_SHUTDOWN);
+    InterlockedExchange64(&writer_exit_flag, SYSTEM_SHUTDOWN);
     SetEvent(system_exit_event);
 }
 
 VOID main (int argc, char** argv) {
 
-    ULONG64 cumulative_time = 0;
-    for (ULONG i = 0; i < NUM_TESTS; i++) {
-
-        // Initialize all data structures, events, threads, and handles. Get physical pages from OS.
-        initialize_system();
-
-        printf("Beginning test #%lu...\n", i);
-
-        // Set up a timer to evaluate speed
-        ULONG64 start_time = GetTickCount64();
-
-        // Run system test. This will broadcast the system start event to all listening threads,
-        // including the user threads. This begins the user app simulation, which begins faulting.
-        // This function will wait for all user app threads to finish before returning.
-        begin_system_test();
-
-        // Grab the time to evaluate speed
-        ULONG64 end_time = GetTickCount64();
-
-        // Free all memory and end the simulation.
-        free_all_data_and_shut_down();
-
-        // Print statistics
-        cumulative_time += end_time - start_time;
-        printf("Program terminated successfully. Time elapsed: %llu milliseconds.\n", end_time - start_time);
-        printf ("Finished accessing %u random virtual addresses.\n", ITERATIONS * NUM_USER_THREADS);
-        printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+#if RUN_FOREVER
+    num_user_threads = DEFAULT_USER_THREAD_COUNT;
+#else
+    if (argc > 1) {
+        printf("About to initiate test with %s threads...\n", argv[1]);
+    } else {
+        printf("No arguments passed.\n");
+        return;
     }
-    printf("Over %u tests, we averaged %llu milliseconds, which is %llu milliseconds per thread.\n",
-            NUM_TESTS,
-            cumulative_time / NUM_TESTS,
-            cumulative_time / NUM_TESTS / NUM_USER_THREADS);
+    num_user_threads = strtol(argv[1], NULL, 10);  // Base 10
+#endif
+    // Initialize all data structures, events, threads, and handles. Get physical pages from OS.
+    initialize_system();
+
+    // Set up a timer to evaluate speed
+    ULONG64 start_time = GetTickCount64();
+
+    // Run system test. This will broadcast the system start event to all listening threads,
+    // including the user threads. This begins the user app simulation, which begins faulting.
+    // This function will wait for all user app threads to finish before returning.
+    begin_system_test();
+
+    // Grab the time to evaluate speed
+    ULONG64 end_time = GetTickCount64();
+
+    // Free all memory and end the simulation.
+    free_all_data_and_shut_down();
+
+    // Print statistics
+    printf("Test successful. Time elapsed: %llu milliseconds.\n", end_time - start_time);
+    printf ("Each of %llu threads accessed %u VAs.\n", num_user_threads, ITERATIONS);
+    printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n");
 }

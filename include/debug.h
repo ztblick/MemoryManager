@@ -14,9 +14,9 @@
  *  Assert provides a quick check for a given true or false value, terminating if the condition is not met.
  */
 #if DEBUG
-#define ASSERT(x)                   if (!x) {DebugBreak();}
+#define ASSERT(x)                   if (!(x)) {DebugBreak();}
 #else
-#define  ASSERT(x)                  if (!x) {DebugBreak();}
+#define  ASSERT(x)                  if (!(x)) {DebugBreak();}
 #endif
 
 /*

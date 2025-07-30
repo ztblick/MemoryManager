@@ -92,32 +92,22 @@ VOID trim_pages(VOID) {
 
 VOID trim_pages_thread(VOID) {
 
-    ULONG index;
-    HANDLE events[2];
-    events[ACTIVE_EVENT_INDEX] = initiate_trimming_event;
-    events[EXIT_EVENT_INDEX] = system_exit_event;
-
-    // Status set to notify scheduler
-    trimmer_status = THREAD_WAITING;
-
     // Wait for system start event before entering waiting state!
     WaitForSingleObject(system_start_event, INFINITE);
 
     // Initialize target pte to begin at the start of the PTE region.
     pte_to_trim = PTE_base;
 
-    while (TRUE) {
+    // If the exit flag has been set, then it's time to go!
+    while (trimmer_exit_flag == SYSTEM_RUN) {
 
-        // Wait for one of two events: initiate writing (which calls write_pages), or exit, which...exits!
-        index = WaitForMultipleObjects(ARRAYSIZE(events), events, FALSE, INFINITE);
+        update_statistics();
 
-        if (index == EXIT_EVENT_INDEX) {
-            return;
-        }
-        // Set the trimmer status variable so the scheduler won't unnecessarily set the trimmer event.
-        // Then trim pages, wake the writer, and update the trimmer status
-        InterlockedExchange64(&trimmer_status, THREAD_RUNNING);
-        trim_pages();
-        InterlockedExchange64(&trimmer_status, THREAD_WAITING);
+        // Otherwise: if there is sufficient need, wake the trimmer
+        if (standby_page_count + free_page_count < STANDBY_PAGE_THRESHOLD &&
+            active_page_count > ACTIVE_PAGE_THRESHOLD) trim_pages();
+
+        // If there isn't need, let's sleep for a moment to avoid spinning and burning up this core.
+        else YieldProcessor();
     }
 }

@@ -133,29 +133,30 @@ BOOL va_faults_on_access(PPTE pte) {
     return pte->memory_format.valid == PTE_INVALID;
 }
 
-BOOL resolve_soft_fault(PULONG_PTR faulting_va, PPTE pte) {
+BOOL resolve_soft_fault(PPTE pte) {
 
-    // Now we will lock the PTE
+    // Now we will catch a snapshot of the PTE, because it CAN be changed without the lock
+    // when we are sending it to the disk.
     lock_pte(pte);
+    PTE pte_snapshot = *pte;
 
     // If someone else updated the PTE since we began, we release the lock.
     // We will try again from the beginning of the fault handler.
-    if (!IS_PTE_TRANSITION(pte)) {  // TODO how could we get a bug here?
+    if (!IS_PTE_TRANSITION(&pte_snapshot)) {
         unlock_pte(pte);
         return FALSE;
     }
-
     // Since our PTE is in transition format, we can get its PFN.
-    PPFN available_pfn = get_PFN_from_PTE(pte);
+    PPFN available_pfn = get_PFN_from_PTE(&pte_snapshot);
 
     // Check for a disk-format PTE leading to an invalid page!
+    // In this case, we should release locks and begin fault handling again.
     if (!available_pfn) {
-        // In this case, we should release locks and begin fault handling again.
         unlock_pte(pte);
         return FALSE;
     }
 
-    // Lock the pfn
+    // Now we will lock the pte and the pfn
     lock_pfn(available_pfn);
 
     // Since we were waiting for the page, it is possible that it was associated
@@ -269,7 +270,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
         // If the PTE is in transition, we should be able to locate its PFN!
         if (IS_PTE_TRANSITION(pte)) {
             // If we can resolve the soft fault, we are done!
-            if (resolve_soft_fault(faulting_va, pte)) return TRUE;
+            if (resolve_soft_fault(pte)) return TRUE;
             // Otherwise, we have our edge case in which we fault on a pte
             // that was written out to disk (on a standby page grabbed by a hard fault).
             // In this case, we simply try again.
@@ -314,7 +315,8 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
 
             // unlock_pte(pte);
             // TODO see if this delay can be set back to infinite again without any bugs at the end of the test...
-            WaitForSingleObject(standby_pages_ready_event, 100);
+            // TODO add a count here (interlocked) to see how many calls to the faulter end up here
+            WaitForSingleObject(standby_pages_ready_event, INFINITE);
             continue;
         }
 

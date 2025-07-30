@@ -4,7 +4,15 @@
 
 #pragma once
 
+// This switch is used to determine if statistics will be logged in the console or not.
+#define LOGGING_MODE                    1
+#define RUN_FOREVER                     1
 
+// This is the number of times the simulator will access a VA.
+#define ITERATIONS                      (MB(1))
+
+// In run forever mode, this is the initial number of threads.
+#define DEFAULT_USER_THREAD_COUNT       8
 
 /*
  *  Provides an arbitrary VA from the application's VA space.

@@ -4,9 +4,10 @@
 
 #pragma once
 
-#include "macros.h"
+#include "../include/scheduler.h"
 
 #define MAX_TRIM_ATTEMPTS       MAX_TRIM_BATCH_SIZE * 8
+#define TRIMMER_DELAY           10
 
 // The initial trimmer_offset in the PTE region for the trimmer -- this will change over time.
 PPTE pte_to_trim;

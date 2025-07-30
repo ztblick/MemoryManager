@@ -7,17 +7,8 @@
 #include "pfn.h"
 #include "page_list.h"
 
-// This switch is used to determine if statistics will be logged in the console or not.
-#define LOGGING_MODE                    0
-
-// This is the number of times the system is tested.
-#define NUM_TESTS                       4
-
-// This is the number of times the simulator will access a VA.
-#define ITERATIONS                      (KB(100) / NUM_USER_THREADS)
-
 // This is the number of threads that run the simulating thread -- which become fault-handling threads.
-#define NUM_USER_THREADS                8
+ULONG64 num_user_threads;
 
 // These are the number of threads running background tasks for the system -- scheduler, trimmer, writer
 #define NUM_SCHEDULING_THREADS          1
@@ -37,17 +28,20 @@
 // Trimming will stop when we fall below our active page threshold
 #define ACTIVE_PAGE_THRESHOLD           (NUMBER_OF_PHYSICAL_PAGES * 3 / 4)
 // We will begin writing when the modified list has sufficient pages!
-#define BEGIN_WRITING_THRESHOLD         (NUMBER_OF_PHYSICAL_PAGES / 16)
+#define BEGIN_WRITING_THRESHOLD         (NUMBER_OF_PHYSICAL_PAGES / 32)
 
-// These will change as we decide how many pages to write out or read from to disk at once.
-#define MAX_WRITE_BATCH_SIZE            (NUMBER_OF_PHYSICAL_PAGES / 4)
+// These will change as we decide how many pages to write, read, or trim at once.
+#define MAX_WRITE_BATCH_SIZE            (512)
+#define MIN_WRITE_BATCH_SIZE            1
+
 #define MAX_READ_BATCH_SIZE             1
-#define MAX_TRIM_BATCH_SIZE             (NUMBER_OF_PHYSICAL_PAGES / 8)
+
+#define MAX_TRIM_BATCH_SIZE             (512)
 #define MAX_FREE_BATCH_SIZE             1
 
 // Pages in memory and page file, which are used to calculate VA span
-#define NUMBER_OF_PHYSICAL_PAGES        1024
-#define PAGES_IN_PAGE_FILE              (NUMBER_OF_PHYSICAL_PAGES + 256)
+#define NUMBER_OF_PHYSICAL_PAGES        (KB(256))
+#define PAGES_IN_PAGE_FILE              (KB(128))
 
 // This is intentionally a power of two so we can use masking to stay within bounds.
 #define VA_SPAN                                         (NUMBER_OF_PHYSICAL_PAGES + PAGES_IN_PAGE_FILE - 1)
@@ -83,6 +77,10 @@ PULONG_PTR kernel_read_va;
 PPTE PTE_base;
 
 // Page File and Page File Metadata
+// This is the first acceptable disk index, since 0 is reserved to encode the empty slot.
+#define MIN_DISK_INDEX                  1
+#define MAX_DISK_INDEX                  PAGES_IN_PAGE_FILE
+
 char* page_file;
 char* page_file_metadata;
 ULONG64 empty_disk_slots;
@@ -121,11 +119,10 @@ PHANDLE trimming_threads;
 PHANDLE writing_threads;
 
 // Notification global variables
-volatile LONG64 trimmer_status;
-volatile LONG64 writer_status;
-
-#define THREAD_RUNNING 1
-#define THREAD_WAITING 0
+volatile LONG64 trimmer_exit_flag;
+volatile LONG64 writer_exit_flag;
+#define SYSTEM_RUN          0
+#define SYSTEM_SHUTDOWN     1
 
 // Thread IDs
 PULONG user_thread_ids;
@@ -135,11 +132,11 @@ PULONG trimming_thread_ids;
 PULONG writing_thread_ids;
 
 // Statistics
-ULONG64 free_page_count;
-ULONG64 active_page_count;
-ULONG64 modified_page_count;
-ULONG64 standby_page_count;
-ULONG64 hard_faults_resolved;
+volatile LONG64 free_page_count;
+volatile LONG64 active_page_count;
+volatile LONG64 modified_page_count;
+volatile LONG64 standby_page_count;
+volatile LONG64 hard_faults_resolved;
 volatile LONG64 soft_faults_resolved;
 
 /*
