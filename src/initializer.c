@@ -121,12 +121,6 @@ void initialize_locks(void) {
     // Initialize locks for kernel read/write VA space
     initialize_lock(&kernel_read_lock);
     initialize_lock(&kernel_write_lock);
-
-    // Initialize one lock for each disk slot -- the +1 is because we do not use 0 as a valid disk slot.
-    disk_metadata_locks = (PCRITICAL_SECTION) zero_malloc((PAGES_IN_PAGE_FILE + 1) * sizeof(CRITICAL_SECTION));
-    for (int i = MIN_DISK_INDEX; i <= PAGES_IN_PAGE_FILE; i++) {
-        initialize_lock(&disk_metadata_locks[i]);
-    }
 }
 
 HANDLE CreateSharedMemorySection (VOID) {
@@ -227,6 +221,7 @@ void initialize_PFN_data(void) {
     // That corresponds with the value of the frame number.
     for (ULONG64 i = 0; i < allocated_frame_count; i++) {
 
+        // TODO -- get rid of this. It's not necessary anymore.
         if (allocated_frame_numbers[i] == NO_FRAME_ASSIGNED) {
             continue; // skip frame number 0, as it is an invalid page of memory per our PTE encoding.
         }
@@ -251,12 +246,19 @@ void initialize_page_file_and_metadata(void) {
     // Initialize page file.
     page_file = (char*) zero_malloc(PAGES_IN_PAGE_FILE * PAGE_SIZE);
 
-    // Initialize page file metadata -- initially, this will be a bytemap to represent free or used pages in the page file.
-    // The +1 is here because 0 is not a valid disk slot (reserved to represent a disk slot that is not connected)
-    page_file_metadata = (char*) zero_malloc(PAGES_IN_PAGE_FILE + 1);
+    // Initialize page file bitmaps.
+    // Note that we ALWAYS set the first slot to full, as there cannot be a disk slot of ZERO.
+    page_file_bitmaps = zero_malloc(PAGES_IN_PAGE_FILE / BITS_PER_BYTE);
+    page_file_bitmaps[0] |= DISK_SLOT_IN_USE;
 
-    // Initialize disk slot tracker
-    empty_disk_slots = PAGES_IN_PAGE_FILE;
+    // Initialize the writer's array of disk slots
+    // This supports extra slots to be stashed for later.
+    slot_stack = zero_malloc((MAX_WRITE_BATCH_SIZE + BITS_PER_BITMAP_ROW * 2) * BYTES_PER_VA);
+    last_checked_bitmap_row = 0;
+    num_stashed_slots = 0;
+
+    // Initialize disk slot tracker -- minus one because we have an initially full slot at index zero.
+    empty_disk_slots = PAGES_IN_PAGE_FILE - 1;
 }
 
 void initialize_kernel_VA_spaces(void) {
@@ -441,6 +443,10 @@ void initialize_system(void) {
 
     // Initialize threads
     initialize_threads();
+
+#if DEBUG
+    g_traceIndex = -1;
+#endif
 }
 
 void map_pages(ULONG64 num_pages, PULONG_PTR va, PULONG_PTR frame_numbers) {

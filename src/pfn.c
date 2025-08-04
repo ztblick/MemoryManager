@@ -4,13 +4,14 @@
 
 #include "../include/debug.h"
 #include "../include/initializer.h"
+#include "../include/pfn.h"
 
 
 VOID create_zeroed_pfn(PPFN new_pfn) {
     new_pfn->status = PFN_FREE;
     new_pfn->PTE = NULL;
     new_pfn->disk_index = NO_DISK_INDEX;
-    new_pfn->soft_fault_on_write = 0;
+    new_pfn->soft_fault_mid_write = 0;
     new_pfn->soft_fault_mid_trim = 0;
     initialize_lock(&new_pfn->lock);
 }
@@ -45,7 +46,7 @@ PPFN get_PFN_from_frame(ULONG_PTR frame_number) {
 VOID set_PFN_active(PPFN pfn, PPTE pte) {
     // TODO Update this to read in all at once into the PFN to prevent word tearing
 
-    SET_PFN_STATUS(pfn, PFN_ACTIVE);
+    pfn->status = PFN_ACTIVE;
     pfn->PTE = pte;
     pfn->disk_index = NO_DISK_INDEX;
 }
@@ -55,7 +56,13 @@ VOID set_PFN_free(PPFN pfn) {
     pfn->status = PFN_FREE;
     pfn->PTE = NULL;
     pfn->disk_index = NO_DISK_INDEX;
-    pfn->soft_fault_on_write = 0;
+    pfn->soft_fault_mid_write = 0;
+    pfn->soft_fault_mid_trim = 0;
+}
+
+VOID set_pfn_standby(PPFN pfn, ULONG64 disk_index) {
+    pfn->status = PFN_STANDBY;
+    pfn->disk_index = disk_index;
 }
 
 /*
@@ -80,25 +87,37 @@ VOID unlock_pfn(PPFN pfn) {
     LeaveCriticalSection(&pfn->lock);
 }
 
+VOID set_pfn_mid_trim(PPFN pfn) {
+    pfn->status = PFN_MID_TRIM;
+    pfn->soft_fault_mid_trim = NO_SOFT_FAULT_YET;
+}
+
+VOID set_pfn_mid_write(PPFN pfn) {
+    pfn->status = PFN_MID_WRITE;
+    pfn->soft_fault_mid_write = NO_SOFT_FAULT_YET;
+}
+
 VOID set_soft_fault_write_bit(PPFN pfn) {
-    pfn->soft_fault_on_write = 1;
+    ASSERT(pfn->soft_fault_mid_write == NO_SOFT_FAULT_YET);
+    pfn->soft_fault_mid_write = SOFT_FAULT_OCCURRED;
 }
 
 VOID set_soft_fault_trim_bit(PPFN pfn) {
-    pfn->soft_fault_mid_trim = 1;
+    ASSERT(pfn->soft_fault_mid_trim == NO_SOFT_FAULT_YET);
+    pfn->soft_fault_mid_trim = SOFT_FAULT_OCCURRED;
 }
 
 // Checks bit, clears it, then returns result.
 BOOL soft_fault_happened_mid_write(PPFN pfn) {
-    BOOL fault_occured = pfn->soft_fault_on_write;
-    pfn->soft_fault_on_write = 0;
+    BOOL fault_occurred = pfn->soft_fault_mid_write;
+    pfn->soft_fault_mid_write = NO_SOFT_FAULT_YET;
 
-    return fault_occured;
+    return fault_occurred;
 }
 
 BOOL soft_fault_happened_mid_trim(PPFN pfn) {
-    BOOL fault_occured = pfn->soft_fault_mid_trim;
-    pfn->soft_fault_mid_trim = 0;
+    BOOL fault_occurred = pfn->soft_fault_mid_trim;
+    pfn->soft_fault_mid_trim = NO_SOFT_FAULT_YET;
 
-    return fault_occured;
+    return fault_occurred;
 }

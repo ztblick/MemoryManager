@@ -4,6 +4,14 @@ Current goal:
 
 NEXT SUB-GOALS:
 
+// TODO -- add all global variables to structs -- this allows you to pad them to cache align, categorize, etc.
+// HOW? Actually declare (and initialize) the structs only once, in initializer.c. Do not use "extern."
+// In the header file, declare the struct with "extern".
+// Anywhere that the struct is used, include the header file. This will tell the compiler that the struct is
+// external of the file, and it will find it where it is actually declared.
+
+// "decl__spec" used to cache align things within a struct to avoid cache contention!
+
 What is expensive?
 - Locking PTEs.
     - Create slimmer, faster locks (DONE)

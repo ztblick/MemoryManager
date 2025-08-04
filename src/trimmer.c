@@ -47,13 +47,19 @@ VOID trim_pages(VOID) {
         // Read in the the PFN.
         pfn = get_PFN_from_PTE(pte);
 
-        // Set the PTE as memory format transition.
+        // Check to see if you can lock the PFN -- if you can't, move along
+        if (!try_lock_pfn(pfn)) {
+            unlock_pte(pte);
+            continue;
+        }
+
+        // Now that you have both locks, transition both data structures into the
+        // proper transition, mid-trim states.
         set_PTE_to_transition(pte);
+        set_pfn_mid_trim(pfn);
 
-        // Set the page's status to mid-trim
-        SET_PFN_STATUS(pfn, PFN_MID_TRIM);
-
-        // Release the PTE lock
+        // Release the locks
+        unlock_pfn(pfn);
         unlock_pte(pte);
 
         // Great! We have a page. Let's add it to our array.
@@ -71,10 +77,9 @@ VOID trim_pages(VOID) {
         pfn = trimmed_pages[i];
         lock_pfn(pfn);
 
-        // TODO Talk to Landy about making this an atomic operation, so it can be done lockless.
-
-        // If the page was faulted on while we were trimming, don't worry about it.
-        if (soft_fault_happened_mid_trim(pfn)) {
+        // Check the state of the page. It is possible to have duplicates on the list, so anyone who came before
+        // is now standby. Or possibly being written to disk. Either way, if it's not mid-trim, we don't want it!
+        if (!IS_PFN_MID_TRIM(pfn)) {
             unlock_pfn(pfn);
             continue;
         }

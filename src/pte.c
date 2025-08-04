@@ -5,6 +5,7 @@
 #include "../include/initializer.h"
 #include "../include/pte.h"
 #include "../include/debug.h"
+#include "../include/disk.h"
 
 // Returns the pte associated with the faulting VA. Divides the offset of the VA within the VA space
 // by the page_size, resulting in the index of the VA within the PTE array.
@@ -68,9 +69,7 @@ void set_PTE_to_valid(PPTE pte, ULONG_PTR frame_number) {
 
 void map_pte_to_disk(PPTE pte, UINT64 disk_index) {
 
-    if (disk_index > MAX_DISK_INDEX) {
-        fatal_error("Disk index exceeds 22 bit limit!");
-    }
+    validate_disk_slot(disk_index);
 
     // Start by copying the whole PTE
     PTE temp = {0};

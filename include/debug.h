@@ -37,3 +37,26 @@
  *  Fatal error outputs crucial information to the console. It also terminates all processes.
  */
 VOID fatal_error(char *msg);
+
+
+// Here is some code to help me track stack traces
+
+#define MAX_STACK_FRAMES   16
+#define TRACE_BUFFER_SIZE 1024
+
+typedef struct {
+    DWORD    threadId;
+    ULONG64  timestamp;      // e.g. GetTickCount64()
+    USHORT   frameCount;
+    ULONG64  disk_slot;
+    PULONG_PTR pte;
+    PULONG_PTR pfn;
+    PVOID    frames[MAX_STACK_FRAMES];
+} TraceEntry;
+
+
+TraceEntry g_traceBuffer[TRACE_BUFFER_SIZE];
+volatile LONG g_traceIndex;
+// starts at -1 so first InterlockedIncrement yields 0
+
+void log_stack_trace(ULONG64 disk_slot, PULONG_PTR pfn, PULONG_PTR pte);

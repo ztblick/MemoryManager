@@ -16,13 +16,6 @@ ULONG64 num_user_threads;
 #define NUM_TRIMMING_THREADS            1
 #define NUM_WRITING_THREADS             1
 
-#define PAGE_SIZE                       4096
-#define KB(x)                           ((x) * 1024)
-#define MB(x)                           (KB((x)) * 1024)
-#define GB(x)                           (MB((x)) * 1024)
-#define BITS_PER_BYTE                   8
-#define BYTES_PER_VA                    8
-
 // We will begin trimming and writing when our standby + free page count falls below this threshold.
 #define STANDBY_PAGE_THRESHOLD          (NUMBER_OF_PHYSICAL_PAGES / 8)
 // Trimming will stop when we fall below our active page threshold
@@ -31,22 +24,37 @@ ULONG64 num_user_threads;
 #define BEGIN_WRITING_THRESHOLD         (NUMBER_OF_PHYSICAL_PAGES / 32)
 
 // These will change as we decide how many pages to write, read, or trim at once.
-#define MAX_WRITE_BATCH_SIZE            (512)
+#define MAX_WRITE_BATCH_SIZE            512
 #define MIN_WRITE_BATCH_SIZE            1
-
 #define MAX_READ_BATCH_SIZE             1
-
-#define MAX_TRIM_BATCH_SIZE             (512)
+#define MAX_TRIM_BATCH_SIZE             512
 #define MAX_FREE_BATCH_SIZE             1
 
 // Pages in memory and page file, which are used to calculate VA span
 #define NUMBER_OF_PHYSICAL_PAGES        (KB(256))
 #define PAGES_IN_PAGE_FILE              (KB(128))
 
-// This is intentionally a power of two so we can use masking to stay within bounds.
-#define VA_SPAN                                         (NUMBER_OF_PHYSICAL_PAGES + PAGES_IN_PAGE_FILE - 1)
+// Details for the page file and the bitmaps that describe it:
+#define BITS_PER_BITMAP_ROW             64
+#define PAGE_FILE_BITMAP_ROWS           (PAGES_IN_PAGE_FILE / BITS_PER_BITMAP_ROW)
+#define BITMAP_ROW_FULL                 MAXULONG64
+
+// We create a VA space that is never too large -- otherwise, we would run out of memory!
+// The -2 takes into account (1) that we need our VA space to be one smaller than our physical
+// space, as we will always need one page in memory to support movement between memory and disk, and
+// (2) that our page file does not permit ZERO as an index (as it is indistinguishable from a zeroed PTE).
+// So, we will always set the first bit in our page file bitmap, invalidating that location and wasting one
+// page of disk space (oh no, 4KB lost, so sad).
+#define VA_SPAN                                         (NUMBER_OF_PHYSICAL_PAGES + PAGES_IN_PAGE_FILE - 2)
 #define VIRTUAL_ADDRESS_SIZE                            (VA_SPAN * PAGE_SIZE)
 #define VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS         (VIRTUAL_ADDRESS_SIZE / sizeof (ULONG_PTR))
+
+#define PAGE_SIZE                       4096
+#define KB(x)                           ((x) * 1024)
+#define MB(x)                           (KB((x)) * 1024)
+#define GB(x)                           (MB((x)) * 1024)
+#define BITS_PER_BYTE                   8
+#define BYTES_PER_VA                    8
 
 // Thread information
 #define DEFAULT_SECURITY                ((LPSECURITY_ATTRIBUTES) NULL)
@@ -76,14 +84,17 @@ PULONG_PTR kernel_read_va;
 // PTEs
 PPTE PTE_base;
 
-// Page File and Page File Metadata
-// This is the first acceptable disk index, since 0 is reserved to encode the empty slot.
-#define MIN_DISK_INDEX                  1
-#define MAX_DISK_INDEX                  PAGES_IN_PAGE_FILE
+// Page File and Page File Metadata     --  Neither of these values correspond with valid disk indices,
+// as 0 is always set to be filled, and the number of pages in the page file is one greater than the largest index.
+#define MIN_DISK_INDEX                  0
+#define MAX_DISK_INDEX                  (PAGES_IN_PAGE_FILE - 1)
 
 char* page_file;
-char* page_file_metadata;
-ULONG64 empty_disk_slots;
+PULONG64 page_file_bitmaps;
+volatile LONG64 empty_disk_slots;
+PULONG64 slot_stack;                    // TODO turn this into a page file struct
+ULONG64 last_checked_bitmap_row;
+ULONG64 num_stashed_slots;
 
 #define DISK_SLOT_IN_USE    1
 #define DISK_SLOT_EMPTY     0
@@ -109,7 +120,6 @@ HANDLE system_exit_event;
 // Locks
 CRITICAL_SECTION kernel_read_lock;
 CRITICAL_SECTION kernel_write_lock;
-PCRITICAL_SECTION disk_metadata_locks;
 
 // Thread handles
 PHANDLE user_threads;

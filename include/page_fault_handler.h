@@ -16,7 +16,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va);
 /*
  *  Get a pointer to an offset in the page file!
  */
-char* get_page_file_offset(UINT64 disk_slot);
+char* get_page_file_offset(ULONG64 disk_slot);
 
 
 /*
@@ -29,15 +29,9 @@ BOOL try_acquire_page_from_list(PPFN * available_page_address, PPAGE_LIST list);
 /*
  *  Clears the given slot in the page file metadata
  */
-void clear_disk_slot(UINT64 disk_slot);
+void clear_disk_slot(ULONG64 disk_slot);
 
 /*
  *  Sets the given slot to occupied in the page file metadata.
  */
 void set_disk_slot(UINT64 disk_slot);
-
-/*
- *  These functions acquire and release locks on the given disk slot.
- */
-void lock_disk_slot(UINT64 disk_slot);
-void unlock_disk_slot(UINT64 disk_slot);

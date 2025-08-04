@@ -84,12 +84,8 @@ void free_PFN_data(void) {
 }
 
 void free_page_file_data(void) {
-    for (int i = MIN_DISK_INDEX; i <= PAGES_IN_PAGE_FILE; i++) {
-        free_lock(&disk_metadata_locks[i]);
-    }
-    free(disk_metadata_locks);
     free(page_file);
-    free(page_file_metadata);
+    free(page_file_bitmaps);
 }
 
 void free_PTE_data(void) {

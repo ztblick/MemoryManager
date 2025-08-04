@@ -45,6 +45,11 @@ BOOL is_page_list_empty(PPAGE_LIST list);
 VOID lock_list_then_insert_to_head(PPAGE_LIST list, PLIST_ENTRY entry);
 
 /*
+ *  Returns true if the given PFN is at the head of the given list. Does not lock anything.
+ */
+BOOL is_at_head_of_list(PPAGE_LIST list, PPFN pfn);
+
+/*
  *  Adds a page to the tail of the list. This assumes the page being added is already locked by the caller!
  */
 VOID lock_list_then_insert_to_tail(PPAGE_LIST list, PLIST_ENTRY entry);
@@ -105,3 +110,7 @@ BOOL try_lock_list_exclusive(PPAGE_LIST list);
  *  Unlocks a previously locked page list.
  */
 VOID unlock_list_exclusive(PPAGE_LIST list);
+
+#if DEBUG
+VOID validate_list(PPAGE_LIST list);
+#endif

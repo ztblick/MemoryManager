@@ -25,11 +25,10 @@ VOID print_statistics(VOID) {
 
 VOID update_statistics(VOID) {
     // Get current counts.
-    InterlockedExchange64(&free_page_count, (LONG64) get_size(&free_list));
-    InterlockedExchange64(&modified_page_count, (LONG64) get_size(&modified_list));
-    InterlockedExchange64(&standby_page_count, (LONG64) get_size(&standby_list));
-    InterlockedExchange64(&active_page_count, (LONG64) (NUMBER_OF_PHYSICAL_PAGES -
-                                        (free_page_count + modified_page_count + standby_page_count)));
+    free_page_count = get_size(&free_list);
+    modified_page_count = get_size(&modified_list);
+    standby_page_count = get_size(&standby_list);
+    active_page_count = NUMBER_OF_PHYSICAL_PAGES - (free_page_count + modified_page_count + standby_page_count);
 }
 
 VOID schedule_tasks(VOID) {

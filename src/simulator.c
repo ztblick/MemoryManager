@@ -79,8 +79,8 @@ void begin_system_test(void) {
     WaitForMultipleObjects(num_user_threads, user_threads, TRUE, INFINITE);
 
     // Test is finished! Tell all threads to stop.
-    InterlockedExchange64(&trimmer_exit_flag, SYSTEM_SHUTDOWN);
-    InterlockedExchange64(&writer_exit_flag, SYSTEM_SHUTDOWN);
+    trimmer_exit_flag = SYSTEM_SHUTDOWN;
+    writer_exit_flag = SYSTEM_SHUTDOWN;
     SetEvent(system_exit_event);
 
     // TODO -- wait until trimmer and writer are done shutting down BEFORE freeing!

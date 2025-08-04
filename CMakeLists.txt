@@ -30,4 +30,6 @@ add_executable(MemoryManager src/initializer.c
         include/releaser.h
         include/locks.h
         src/locks.c
+        src/disk.c
+        include/disk.h
 )
