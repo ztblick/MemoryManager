@@ -46,7 +46,6 @@ BOOL try_acquire_page_from_list(PPFN* available_page_address, PPAGE_LIST list) {
         // It may now be an active page. So, we will double-check to make sure the page
         // has the anticipated status.
 
-        // TODO BUG HERE! HOW DID WE END UP WITH A MODIFIED PAGE ON THE STANDBY LIST?
         if ((list == &free_list && !IS_PFN_FREE(pfn)) ||
             (list == &standby_list && !IS_PFN_STANDBY(pfn))) {
             unlock_list_exclusive(list);
@@ -185,9 +184,9 @@ BOOL resolve_soft_fault(PPTE pte) {
 
     // Regardless, these steps should happen to perform a soft fault!
     // Update the PTE and PFN to the active state. Map the page!
+    map_single_page_from_pte(pte);
     set_PFN_active(available_pfn, pte);
     set_PTE_to_valid(pte, pte->memory_format.frame_number);
-    map_single_page_from_pte(pte);
 
     // Release locks and return!
     unlock_pfn(available_pfn);
@@ -199,7 +198,7 @@ BOOL resolve_soft_fault(PPTE pte) {
     return TRUE;
 }
 
-BOOL page_fault_handler(PULONG_PTR faulting_va) {
+BOOL page_fault_handler(PULONG_PTR faulting_va, PTHREAD_INFO user_thread_info) {
 
     // When should the fault handler be allowed to fail? There are only two situations:
         // A - a hardware failure. This is beyond the scope of this program.
@@ -209,7 +208,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
         return FALSE;
 
     // This wil hold the physical frame number that we are mapping to the faulting VA.
-    ULONG_PTR frame_numbers_to_map;
+    ULONG_PTR frame_number_to_map;
 
     // This variable exists to capture the state of the pte associated with the VA's PTE.
     // This is necessary to perform page validation (which only happens on disk-format PTEs) after the
@@ -232,6 +231,20 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
 
         // Set entry pte state
         pte_entry_state = pte->transition_format.status;
+
+        // Here are the kernel VA spaces for our reads and our index keeping track of which
+        // ones have been mapped so far.
+
+        // First: if we need to unmap ALL the kernel read VAs, we will do so in one big batch
+        if (user_thread_info->kernel_va_index == NUM_KERNEL_READ_ADDRESSES) {
+            if (!MapUserPhysicalPagesScatter(user_thread_info->kernel_va_spaces,
+                NUM_KERNEL_READ_ADDRESSES,
+                NULL)) DebugBreak();
+            user_thread_info->kernel_va_index = 0;
+        }
+
+        // Then, we will set OUR kernel read VA space.
+        PULONG_PTR kernel_read_va = user_thread_info->kernel_va_spaces[user_thread_info->kernel_va_index];
 
         //~~~~~~~~~~~~~~~~~~~~~~~//
         // SOFT FAULT RESOLUTION //
@@ -284,7 +297,6 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
         // the page fault lock again.
         if (!free_page_acquired && !standby_page_acquired) {
 
-            // TODO add a count here (interlocked) to see how many calls to the faulter end up here
             WaitForSingleObject(standby_pages_ready_event, INFINITE);
             continue;
         }
@@ -293,11 +305,13 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
         // Let's now resolve the fault.
 
         // Get the frame number
-        frame_numbers_to_map = get_frame_from_PFN(available_pfn);
+        frame_number_to_map = get_frame_from_PFN(available_pfn);
 
         // Map the kernel VA to the available frame
-        EnterCriticalSection(&kernel_read_lock);
-        map_pages(1, kernel_read_va, &frame_numbers_to_map);
+        map_pages(1, kernel_read_va, &frame_number_to_map);
+
+        // Since we are committing to using this read va, we will need to increase the count.
+        user_thread_info->kernel_va_index++;
 
         // Now we will finally try to acquire the PTE lock
         // If we cannot get it, we will try again.
@@ -311,8 +325,6 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
 
             // Zero the page
             memset(kernel_read_va, 0, PAGE_SIZE);
-            unmap_pages(1, kernel_read_va);
-            LeaveCriticalSection(&kernel_read_lock);
 
             // Add the page to the free list and update its status
             lock_list_then_insert_to_tail(&free_list, &available_pfn->entry);
@@ -346,20 +358,14 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
             memset(kernel_read_va, 0, PAGE_SIZE);
         }
 
-        // Unmap page from kernel VA
-        unmap_pages(1, kernel_read_va);
-
-        // Unlock kernel read space
-        LeaveCriticalSection(&kernel_read_lock);
-
         // Map page to user VA
-        map_pages(1, faulting_va, &frame_numbers_to_map);
+        map_pages(1, faulting_va, &frame_number_to_map);
 
         // Ensure that the page contents correctly contain the relevant VA!
         ASSERT((pte_entry_state != PTE_ON_DISK || validate_page(faulting_va)));
 
         // Update PTE and PFN
-        set_PTE_to_valid(pte, frame_numbers_to_map);
+        set_PTE_to_valid(pte, frame_number_to_map);
         set_PFN_active(available_pfn, pte);
 
         // Release locks

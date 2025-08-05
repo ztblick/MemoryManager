@@ -23,7 +23,7 @@ PULONG_PTR get_arbitrary_va(PULONG_PTR p) {
     return p + random_number;
 }
 
-void run_user_app_simulation(void) {
+void run_user_app_simulation(PVOID user_thread_info) {
 
     // Wait for system start event before beginning!
     WaitForSingleObject(system_start_event, INFINITE);
@@ -56,7 +56,7 @@ void run_user_app_simulation(void) {
                 page_faulted = TRUE;
 
                 // Fault handler maps the VA to its new page
-                fault_handler_accessed_correctly = page_fault_handler(arbitrary_va);
+                fault_handler_accessed_correctly = page_fault_handler(arbitrary_va, user_thread_info);
 
                 // If we were successful, we will do allow our usermode program to continue with its goal.
                 if (!fault_handler_accessed_correctly){
@@ -91,7 +91,7 @@ VOID main (int argc, char** argv) {
     num_user_threads = DEFAULT_USER_THREAD_COUNT;
 #else
     if (argc > 2) {
-        printf("About to initiate test with %s threads running %s iterations each...\n", argv[1], argv[2]);
+        printf("About to initiate test with %s threads running\n%s iterations each...\n", argv[1], argv[2]);
     } else {
         printf("No arguments passed.\n");
         return;

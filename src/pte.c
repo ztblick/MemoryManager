@@ -31,6 +31,9 @@ PVOID get_VA_from_PTE(PPTE pte) {
 // Using a strategy of not modifying the PTE one piece at a time, but all at once.
 void set_PTE_to_transition(PPTE pte) {
 
+    // TODO read with no fence to prevent tearing on the read
+    // TODO grab a snapshot of the pte, use that to populate the new pte, then read the new pte into the pte (no fence)
+
     // Start by copying the whole PTE
     PTE temp;
     temp.transition_format = pte->transition_format;
@@ -38,6 +41,7 @@ void set_PTE_to_transition(PPTE pte) {
     // Clear the valid and status bits
     temp.transition_format.valid = PTE_INVALID;
     temp.transition_format.status = PTE_IN_TRANSITION;
+    temp.transition_format.frame_number = pte->transition_format.frame_number;
 
     // Write back all bits at once to avoid partial modification
     WriteULong64NoFence((DWORD64*) pte, temp.entire_pte);

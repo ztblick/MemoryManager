@@ -180,13 +180,11 @@ VOID write_pages_thread(VOID) {
     // No need for an atomic operation -- if we do one extra trim, we will live.
     while (writer_exit_flag == SYSTEM_RUN) {
 
-        update_statistics();
-
         // TODO learn how to use this!
         // QueryPerformanceCounter(&modified_list);
 
         // Otherwise: if there is sufficient need, wake the writer
-        if (modified_page_count > BEGIN_WRITING_THRESHOLD) write_pages();
+        if (*modified_page_count > BEGIN_WRITING_THRESHOLD) write_pages();
 
         // If there isn't need, let's sleep for a moment to avoid spinning and burning up this core.
         else YieldProcessor();

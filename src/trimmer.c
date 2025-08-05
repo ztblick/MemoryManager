@@ -11,6 +11,7 @@ VOID trim_pages(VOID) {
     ULONG64 attempts = 0;
     ULONG64 trim_batch_size = 0;
     PPFN trimmed_pages[MAX_TRIM_BATCH_SIZE];
+    PULONG_PTR trimmed_VAs[MAX_TRIM_BATCH_SIZE];
 
     // Initialize current pte
     PPTE pte = pte_to_trim;
@@ -47,26 +48,21 @@ VOID trim_pages(VOID) {
         // Read in the the PFN.
         pfn = get_PFN_from_PTE(pte);
 
-        // Check to see if you can lock the PFN -- if you can't, move along
-        if (!try_lock_pfn(pfn)) {
-            unlock_pte(pte);
-            continue;
-        }
-
         // Now that you have both locks, transition both data structures into the
         // proper transition, mid-trim states.
-        unmap_pages(1, get_VA_from_PTE(pte));
         set_PTE_to_transition(pte);
-        set_pfn_mid_trim(pfn);
-
-        // Release the locks
-        unlock_pfn(pfn);
-        unlock_pte(pte);
 
         // Great! We have a page. Let's add it to our array.
         trimmed_pages[trim_batch_size] = pfn;
+        trimmed_VAs[trim_batch_size] = get_VA_from_PTE(pte);
         trim_batch_size++;
     }
+
+    // If we couldn't trim anyone, return
+    if (trim_batch_size == 0) return;
+
+    // Unmap ALL pages in one batch!
+    if (!MapUserPhysicalPagesScatter(trimmed_VAs, trim_batch_size, NULL)) DebugBreak();
 
     // Update our starting point for the next run
     pte_to_trim = pte;
@@ -78,25 +74,23 @@ VOID trim_pages(VOID) {
         pfn = trimmed_pages[i];
         lock_pfn(pfn);
 
-        // Check the state of the page. It is possible to have duplicates on the list, so anyone who came before
-        // is now standby. Or possibly being written to disk. Either way, if it's not mid-trim, we don't want it!
-        if (!IS_PFN_MID_TRIM(pfn)) {
-            unlock_pfn(pfn);
-            continue;
-        }
-
         // Add this page to the modified list
         lock_list_then_insert_to_tail(&modified_list, &pfn->entry);
 
         // Set PFN status as modified
         SET_PFN_STATUS(pfn, PFN_MODIFIED);
 
-        // Leave PFN critical section
+        // Release locks -- pte lock was acquired earlier when the trim batch was initially assembled.
+        pte = pfn->PTE;
         unlock_pfn(pfn);
+        unlock_pte(pte);
     }
 }
 
 VOID trim_pages_thread(VOID) {
+
+    // Active page count will keep track of our active pages.
+    ULONG64 active_page_count;
 
     // Wait for system start event before entering waiting state!
     WaitForSingleObject(system_start_event, INFINITE);
@@ -107,10 +101,12 @@ VOID trim_pages_thread(VOID) {
     // If the exit flag has been set, then it's time to go!
     while (trimmer_exit_flag == SYSTEM_RUN) {
 
-        update_statistics();
+        // Deduce the number of active pages from the other counts
+        active_page_count = NUMBER_OF_PHYSICAL_PAGES -
+            (*free_page_count + *modified_page_count + *standby_page_count);;
 
         // Otherwise: if there is sufficient need, wake the trimmer
-        if (standby_page_count + free_page_count < STANDBY_PAGE_THRESHOLD &&
+        if (*standby_page_count + *free_page_count < STANDBY_PAGE_THRESHOLD &&
             active_page_count > ACTIVE_PAGE_THRESHOLD) trim_pages();
 
         // If there isn't need, let's sleep for a moment to avoid spinning and burning up this core.

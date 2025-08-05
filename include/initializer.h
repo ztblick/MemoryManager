@@ -14,7 +14,7 @@ ULONG64 num_user_threads;
 ULONG64 iterations;
 
 // These are the number of threads running background tasks for the system -- scheduler, trimmer, writer
-#define NUM_SCHEDULING_THREADS          1
+#define NUM_SCHEDULING_THREADS          0
 #define NUM_AGING_THREADS               0
 #define NUM_TRIMMING_THREADS            1
 #define NUM_WRITING_THREADS             1
@@ -83,7 +83,6 @@ PAGE_LIST standby_list;
 // VA spaces
 PULONG_PTR application_va_base;
 PULONG_PTR kernel_write_va;
-PULONG_PTR kernel_read_va;
 
 // PTEs
 PPTE PTE_base;
@@ -122,7 +121,6 @@ HANDLE standby_pages_ready_event;
 HANDLE system_exit_event;
 
 // Locks
-CRITICAL_SECTION kernel_read_lock;
 CRITICAL_SECTION kernel_write_lock;
 
 // Thread handles
@@ -145,11 +143,22 @@ PULONG aging_thread_ids;
 PULONG trimming_thread_ids;
 PULONG writing_thread_ids;
 
+#define NUM_KERNEL_READ_ADDRESSES   (16)
+
+// User thread struct. This will contain a set of kernel VA spaces. Each thread
+// will manage many, which will allow us to removes locks and contention on them.
+// Additionally, it will allow us to delay unmap calls, giving us the opportunity
+// to batch them.
+typedef struct _USER_THREAD_INFO {
+
+    ULONG kernel_va_index;
+    PULONG_PTR kernel_va_spaces[NUM_KERNEL_READ_ADDRESSES];
+} THREAD_INFO, *PTHREAD_INFO;
+
 // Statistics
-volatile LONG64 free_page_count;
-volatile LONG64 active_page_count;
-volatile LONG64 modified_page_count;
-volatile LONG64 standby_page_count;
+volatile PULONG64 free_page_count;
+volatile PULONG64 modified_page_count;
+volatile PULONG64 standby_page_count;
 volatile LONG64 hard_faults_resolved;
 volatile LONG64 soft_faults_resolved;
 

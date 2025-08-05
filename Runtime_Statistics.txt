@@ -30,3 +30,13 @@ After adding bitmap for disk slots...
 4 threads   3609 milliseconds.
 8 threads   5656 milliseconds.
 16 threads  10203 milliseconds.
+
+
+After adding multiple kernel read VAs and batch unmaps in the fault handler:
+
+1 threads   2547 milliseconds.
+2 threads   3125 milliseconds.
+3 threads   2969 milliseconds.
+4 threads   3203 milliseconds.
+5 threads   3468 milliseconds.
+6 threads   4344 milliseconds.

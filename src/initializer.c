@@ -102,10 +102,9 @@ PULONG_PTR zero_malloc(size_t bytes_to_allocate) {
 }
 
 void initialize_statistics(void) {
-    free_page_count = 0;
-    active_page_count = 0;
-    modified_page_count = 0;
-    standby_page_count = 0;
+    free_page_count = &free_list.list_size;
+    modified_page_count = &modified_list.list_size;
+    standby_page_count = &standby_list.list_size;
     hard_faults_resolved = 0;
     soft_faults_resolved = 0;
 }
@@ -119,7 +118,6 @@ void initialize_lock(PCRITICAL_SECTION lock) {
 void initialize_locks(void) {
 
     // Initialize locks for kernel read/write VA space
-    initialize_lock(&kernel_read_lock);
     initialize_lock(&kernel_write_lock);
 }
 
@@ -273,16 +271,6 @@ void initialize_kernel_VA_spaces(void) {
                   1);
 
     NULL_CHECK (kernel_write_va, "Could not reserve kernal write VA space.");
-
-    kernel_read_va = VirtualAlloc2 (NULL,
-                        NULL,
-                      PAGE_SIZE * MAX_READ_BATCH_SIZE,
-                      MEM_RESERVE | MEM_PHYSICAL,
-                      PAGE_READWRITE,
-                      &virtual_alloc_shared_parameter,
-                      1);
-
-    NULL_CHECK (kernel_read_va, "Could not reserve kernal read VA space.");
 }
 
 void initialize_user_VA_space(void) {
@@ -314,12 +302,29 @@ void initialize_threads(void) {
     trimming_thread_ids = (PULONG) zero_malloc(NUM_TRIMMING_THREADS * sizeof(ULONG));
     writing_thread_ids = (PULONG) zero_malloc(NUM_WRITING_THREADS * sizeof(ULONG));
 
+
+    // Create structs to pass to user threads, including each thread's kernel
+    // read spaces, which are divided into 16 individual read spaces.
+    PTHREAD_INFO user_thread_info = (PTHREAD_INFO) zero_malloc(num_user_threads * sizeof(THREAD_INFO));
+
+    for (ULONG i = 0; i < num_user_threads; i++) {
+        for (int j = 0; j < NUM_KERNEL_READ_ADDRESSES; j++) {
+            user_thread_info[i].kernel_va_spaces[j] = VirtualAlloc2 (NULL,
+                            NULL,
+                          PAGE_SIZE,
+                          MEM_RESERVE | MEM_PHYSICAL,
+                          PAGE_READWRITE,
+                          &virtual_alloc_shared_parameter,
+                          1);
+        }
+    }
+
     // Create user threads, each of which are running the user app simulation.
     for (ULONG64 i = 0; i < num_user_threads; i++) {
         user_threads[i] = CreateThread (DEFAULT_SECURITY,
                                DEFAULT_STACK_SIZE,
                                (LPTHREAD_START_ROUTINE) run_user_app_simulation,
-                               (LPVOID) i,
+                               (LPVOID) &user_thread_info[i],
                                DEFAULT_CREATION_FLAGS,
                                &user_thread_ids[i]);
 
@@ -409,9 +414,6 @@ void initialize_shared_page_parameter(void) {
 // Initialize the above structures
 void initialize_system(void) {
 
-    // Initialize statistics to track page consumption (for scheduler).
-    initialize_statistics();
-
     // Get the privilege and physical pages from the OS.
     initialize_physical_pages();
 
@@ -443,6 +445,9 @@ void initialize_system(void) {
 
     // Initialize threads
     initialize_threads();
+
+    // Initialize statistics to track page consumption (for scheduler).
+    initialize_statistics();
 
 #if DEBUG
     g_traceIndex = -1;

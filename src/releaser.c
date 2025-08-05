@@ -66,11 +66,10 @@ void free_events(void) {
 void free_VA_space_data(void) {
 
     VirtualFree (application_va_base, 0, MEM_RELEASE);
-    VirtualFree(kernel_read_va, 0, MEM_RELEASE);
     VirtualFree(kernel_write_va, 0, MEM_RELEASE);
 
-    free_lock(&kernel_read_lock);
-    free_lock(&kernel_write_lock);
+
+    // TODO free all user thread kernel read VA spaces
 }
 
 void free_PFN_data(void) {

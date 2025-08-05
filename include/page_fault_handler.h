@@ -10,8 +10,7 @@
 /*
  *  Resolve a page fault by mapping a page to the faulting VA, if possible. Not guaranteed, though.
  */
-BOOL page_fault_handler(PULONG_PTR faulting_va);
-
+BOOL page_fault_handler(PULONG_PTR faulting_va, PTHREAD_INFO user_thread_info);
 
 /*
  *  Get a pointer to an offset in the page file!
