@@ -15,20 +15,42 @@ VOID validate_disk_slot(ULONG64 disk_slot) {
 VOID push_slots_from_bitmap_row(ULONG64 bitmap_row) {
 
     ULONG64 current_bit_mask = 0;
-    ULONG64 current_disk_slot = 0;
+    ULONG64 starting_disk_slot = bitmap_row * BITS_PER_BITMAP_ROW;
+    ULONG64 current_disk_slot = starting_disk_slot;
 
     // Get a snapshot of the current row (slots MAY be cleared, but they will not be set).
     ULONG64 row_snapshot = page_file_bitmaps[bitmap_row];
 
+    // If the ENTIRE row is empty, let's grab ALL the slots!
+    if (row_snapshot == BITMAP_ROW_EMPTY) {
+
+        // Set the entire row full, if we can!
+        PULONG64 bitmap = &page_file_bitmaps[bitmap_row];
+        ULONG64 original_value = InterlockedCompareExchange64((volatile LONG64 *) bitmap,
+                        BITMAP_ROW_FULL,
+                        BITMAP_ROW_EMPTY);
+
+        // If we were able to grab ALL the slots, then we will push them all to the stack
+        if(original_value == BITMAP_ROW_EMPTY) {
+            // Grab ALL the slots!
+            for (int i = 0; i < BITS_PER_BITMAP_ROW; i++) {
+                push_slot(current_disk_slot);
+                current_disk_slot++;
+            }
+            return;
+        }
+    }
+
+    // Otherwise, we will scan through the row, setting slots one at a time
     for (int i = 0; i < BITS_PER_BITMAP_ROW; i++) {
-        // Advance our mask
+        // Advance our mask and row
+        current_disk_slot = starting_disk_slot + i;
         current_bit_mask = 1ULL << i;
 
         // If the bit is set in the snapshot, skip it!
         if ((row_snapshot & current_bit_mask) == current_bit_mask) continue;
 
         // Otherwise, set it and add it to our disk slots.
-        current_disk_slot = bitmap_row * BITS_PER_BITMAP_ROW + i;
         set_disk_slot(current_disk_slot);
 
         // Add this slot to the stack!
@@ -103,10 +125,10 @@ VOID clear_disk_slot(ULONG64 disk_slot) {
     PULONG64 bitmap = &page_file_bitmaps[row];
 
     // Now we will clear the slot, saving the ORIGINAL value for debugging.
-    ULONG64 result = InterlockedAnd64((volatile LONG64 *) bitmap, mask);
+    ULONG64 original_value = InterlockedAnd64((volatile LONG64 *) bitmap, mask);
 
     // Double-check -- the original bit SHOULD have been set!
-    ASSERT((result & ~mask) == ~mask);
+    ASSERT((original_value & ~mask) == ~mask);
 
     // Increment our count of clear slots!
     InterlockedIncrement64(&empty_disk_slots);
@@ -120,10 +142,10 @@ VOID set_disk_slot(UINT64 disk_slot) {
     PULONG64 bitmap = &page_file_bitmaps[row];
 
     // Now we will set the slot, saving the ORIGINAL value for debugging.
-    ULONG64 result = InterlockedOr64((volatile LONG64 *) bitmap, mask);
+    ULONG64 original_value = InterlockedOr64((volatile LONG64 *) bitmap, mask);
 
     // Double-check -- the original bit SHOULD have been clear!
-    ASSERT((result & mask) == 0ULL);
+    ASSERT((original_value & mask) == 0ULL);
 
     // Decrement the empty disk slot count without risking race conditions.
     InterlockedDecrement64(&empty_disk_slots);

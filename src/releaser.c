@@ -75,11 +75,6 @@ void free_VA_space_data(void) {
 
 void free_PFN_data(void) {
     // Free all PFN locks
-    for (ULONG64 i = 0; i < allocated_frame_count; i++) {
-        PPFN pfn = get_PFN_from_frame(allocated_frame_numbers[i]);
-        free_lock(&pfn->lock);
-    }
-
     VirtualFree (PFN_array, 0, MEM_RELEASE);
 }
 

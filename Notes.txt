@@ -1,9 +1,9 @@
 
 Current goal:
 - Fine-tune the performance of my state machine!
-
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 NEXT SUB-GOALS:
-
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // TODO -- add all global variables to structs -- this allows you to pad them to cache align, categorize, etc.
 // HOW? Actually declare (and initialize) the structs only once, in initializer.c. Do not use "extern."
 // In the header file, declare the struct with "extern".
@@ -12,39 +12,30 @@ NEXT SUB-GOALS:
 
 // "decl__spec" used to cache align things within a struct to avoid cache contention!
 
+FIRST ORDER OF BUSINESS: clean up. Resolve TODOs. Add functions. Tidy up code. Create README.
+
+THEN: attend to the analysis below!
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 What is expensive?
-- Locking PTEs.
-    - Create slimmer, faster locks (DONE)
-    - Delay lock acquisition, release locks earlier (DONE)
-    - Attend to deadlock issues and bugs (TO DO)
 
-- Trimming.
-    - Initiate event only when needed.
-    - Batch trim.
+- Map/unmap pages. Use scatter to speed things up in trimmer. Batch kernel unmaps (multiple VAs per thread).
 
-- Waiting for standby pages.
-    - Can we have more of those ready pre-emptively?
+- Kernel read VA lock contention. Add an array of kernel VA space -- increase/decrease it with threads.
+    - Remove locks entirely.
 
-- Finding disk slots
-    - It takes us too long to find a batch of open disk slots.
-    - Use bitmaps for 8x speedup.
-    - Consider keeping a list of previously available slots. When batching, might as well get a few
-        extras and add them to the list.
-    - Clearly the disk is too full. Can we keep more pages on the active list and fewer on the modified list?
+- Grabbing disk slots. Grab whole rows at once. De-fragment the bitmaps from time to time.
 
-Other Future Ideas/Features:
-- Only unmap pages when PTE goes from transition to disk
-- Batch reads from standby to array of free lists
-- Batch unmap with MapUserScatter
-- Efficient list removal algorithms :)
-- Review data structures to reduce cache contention
+- List operations. Use read/write locks to speed things up. Batch prune to multiple free lists.
+
+- Cache-optimize structs to reduce contention.
+
+- If possible, remove all locks entirely.
 
 ~~~~ LOCK ORDERS ~~~~
 
-A - PTE lock
-B - PFN lock
-C - list head lock
-D - disk slot lock
+A - PTE locks
+B - PFN locks
+C - list locks
 
 ~~~ OLD THOUGHTS THAT ARE SEEMINGLY IRRELEVANT ~~~
 

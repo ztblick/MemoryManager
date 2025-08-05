@@ -9,7 +9,7 @@
 #define RUN_FOREVER                     0
 
 // This is the number of times the simulator will access a VA.
-#define ITERATIONS                      (MB(1))
+#define DEFAULT_ITERATIONS              (MB(1))
 
 // In run forever mode, this is the initial number of threads.
 #define DEFAULT_USER_THREAD_COUNT       8

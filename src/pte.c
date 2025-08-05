@@ -10,11 +10,8 @@
 // Returns the pte associated with the faulting VA. Divides the offset of the VA within the VA space
 // by the page_size, resulting in the index of the VA within the PTE array.
 PPTE get_PTE_from_VA(PULONG_PTR va) {
-    NULL_CHECK(va, "VA is null when getting PTE from VA!");
-    if (va > application_va_base + VIRTUAL_ADDRESS_SIZE ||
-        va < application_va_base) {
-        fatal_error("VA is invalid when getting PTE from VA.");
-    }
+
+    ASSERT(va >= application_va_base && va <= application_va_base + VIRTUAL_ADDRESS_SIZE);
 
     ULONG_PTR va_offset = (ULONG_PTR)va - (ULONG_PTR)application_va_base;
     ULONG_PTR pte_index = va_offset / PAGE_SIZE;
@@ -25,11 +22,7 @@ PPTE get_PTE_from_VA(PULONG_PTR va) {
 // Returns the VA associated with the beginning of the region of VAs for this PTE.
 PVOID get_VA_from_PTE(PPTE pte) {
 
-    NULL_CHECK(pte, "pte is null when getting VA from pte!");
-    if (pte > PTE_base + NUM_PTEs || pte < PTE_base) {
-        fatal_error("PTE is invalid when getting VA from PTE.");
-        }
-
+    ASSERT(pte >= PTE_base && pte <= PTE_base + NUM_PTEs);
 
     ULONG_PTR index = (ULONG_PTR) (pte - PTE_base);  // Already scaled correctly
     return (PVOID) ((ULONG_PTR) application_va_base + index * PAGE_SIZE);

@@ -10,6 +10,9 @@
 // This is the number of threads that run the simulating thread -- which become fault-handling threads.
 ULONG64 num_user_threads;
 
+// This is the number of iterations each thread will run, as set by a command-line argument.
+ULONG64 iterations;
+
 // These are the number of threads running background tasks for the system -- scheduler, trimmer, writer
 #define NUM_SCHEDULING_THREADS          1
 #define NUM_AGING_THREADS               0
@@ -38,6 +41,7 @@ ULONG64 num_user_threads;
 #define BITS_PER_BITMAP_ROW             64
 #define PAGE_FILE_BITMAP_ROWS           (PAGES_IN_PAGE_FILE / BITS_PER_BITMAP_ROW)
 #define BITMAP_ROW_FULL                 MAXULONG64
+#define BITMAP_ROW_EMPTY                0ULL
 
 // We create a VA space that is never too large -- otherwise, we would run out of memory!
 // The -2 takes into account (1) that we need our VA space to be one smaller than our physical
@@ -50,7 +54,7 @@ ULONG64 num_user_threads;
 #define VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS         (VIRTUAL_ADDRESS_SIZE / sizeof (ULONG_PTR))
 
 #define PAGE_SIZE                       4096
-#define KB(x)                           ((x) * 1024)
+#define KB(x)                           ((x) * 1024ULL)         // ULL in case our operation exceeds 2^32 - 1
 #define MB(x)                           (KB((x)) * 1024)
 #define GB(x)                           (MB((x)) * 1024)
 #define BITS_PER_BYTE                   8
@@ -173,6 +177,11 @@ void set_max_frame_number(void);
  *  Frees all data allocated by initializer.
  */
 void free_all_data(void);
+
+/*
+ *  Given a PTE, maps it (and only it) to its page.
+ */
+VOID map_single_page_from_pte(PPTE pte);
 
 /*
  *  Maps the given page (or pages) to the given VA.

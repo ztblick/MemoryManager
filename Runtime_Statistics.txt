@@ -25,8 +25,8 @@ Each thread handles MB(1) faults.
 
 After adding bitmap for disk slots...
 
-1 threads   2516 milliseconds.
-2 threads   2781 milliseconds.
+1 threads   2766 milliseconds.
+2 threads   3094 milliseconds.
 4 threads   3609 milliseconds.
-8 threads   5750 milliseconds.
-16 threads  12016 milliseconds.
+8 threads   5656 milliseconds.
+16 threads  10203 milliseconds.

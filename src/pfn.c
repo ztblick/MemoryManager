@@ -13,7 +13,7 @@ VOID create_zeroed_pfn(PPFN new_pfn) {
     new_pfn->disk_index = NO_DISK_INDEX;
     new_pfn->soft_fault_mid_write = 0;
     new_pfn->soft_fault_mid_trim = 0;
-    initialize_lock(&new_pfn->lock);
+    initialize_byte_lock(&new_pfn->lock);
 }
 
 ULONG_PTR get_frame_from_PFN(PPFN pfn) {
@@ -69,7 +69,7 @@ VOID set_pfn_standby(PPFN pfn, ULONG64 disk_index) {
  *  Acquires the lock on a PFN, waiting as long as necessary.
  */
 VOID lock_pfn(PPFN pfn) {
-    EnterCriticalSection(&pfn->lock);
+    lock(&pfn->lock);
 }
 
 
@@ -77,14 +77,14 @@ VOID lock_pfn(PPFN pfn) {
  *  Tries to, but does not always, acquire the lock on a PFN.
  */
 BOOL try_lock_pfn(PPFN pfn) {
-    return TryEnterCriticalSection(&pfn->lock);
+    return try_lock(&pfn->lock);
 }
 
 /*
  *  Releases the lock on a PFN.
  */
 VOID unlock_pfn(PPFN pfn) {
-    LeaveCriticalSection(&pfn->lock);
+    unlock(&pfn->lock);
 }
 
 VOID set_pfn_mid_trim(PPFN pfn) {

@@ -55,6 +55,7 @@ VOID trim_pages(VOID) {
 
         // Now that you have both locks, transition both data structures into the
         // proper transition, mid-trim states.
+        unmap_pages(1, get_VA_from_PTE(pte));
         set_PTE_to_transition(pte);
         set_pfn_mid_trim(pfn);
 

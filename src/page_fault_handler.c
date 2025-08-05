@@ -88,11 +88,12 @@ BOOL try_acquire_page_from_list(PPFN* available_page_address, PPAGE_LIST list) {
 
 // This is currently ALWAYS returning true to avoid issues with Landy's TLB Flush bug.
 BOOL validate_page(PULONG_PTR va) {
-
-    // PULONG_PTR page_start = get_beginning_of_VA_region(va);
-    // for (PULONG_PTR spot = page_start; spot < page_start + PAGE_SIZE / BYTES_PER_VA; spot++) {
-    //     if (*spot != (ULONG_PTR) spot && *spot != 0) return FALSE;
-    // }
+#if DEBUG
+    PULONG_PTR page_start = get_beginning_of_VA_region(va);
+    for (PULONG_PTR spot = page_start; spot < page_start + PAGE_SIZE / BYTES_PER_VA; spot++) {
+        if (*spot != (ULONG_PTR) spot && *spot != 0) return FALSE;
+    }
+#endif
     return TRUE;
  }
 
@@ -183,9 +184,10 @@ BOOL resolve_soft_fault(PPTE pte) {
     }
 
     // Regardless, these steps should happen to perform a soft fault!
-    // Update the PTE and PFN to the active state.
+    // Update the PTE and PFN to the active state. Map the page!
     set_PFN_active(available_pfn, pte);
     set_PTE_to_valid(pte, pte->memory_format.frame_number);
+    map_single_page_from_pte(pte);
 
     // Release locks and return!
     unlock_pfn(available_pfn);
@@ -324,9 +326,6 @@ BOOL page_fault_handler(PULONG_PTR faulting_va) {
         // Now that we have a page, let's check if we need to do a disk read.
         // If PTE is zeroed, do not do the disk read. But if the PTE is on the disk, read its contents back!
         if (IS_PTE_ON_DISK(pte)) {
-
-            // Unmap the VA from this page
-            unmap_pages(1, get_VA_from_PTE(pte));
 
             // Get location of new pte on disk
             UINT64 disk_slot = pte->disk_format.disk_index;

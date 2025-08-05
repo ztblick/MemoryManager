@@ -47,7 +47,7 @@ typedef struct __pfn {
     SHORT soft_fault_mid_trim;          // Set when a soft-fault occurs during a batched trim.
     PPTE PTE;                       // Size: 8 bytes
         // FYI -- The 3 least-significant bits here are always zer0, so we can save some bits with cleverness...
-    CRITICAL_SECTION lock;          // Size: 40 bytes
+    BYTE_LOCK lock;          // Size: 40 bytes
 } PFN, *PPFN;
 
 /*

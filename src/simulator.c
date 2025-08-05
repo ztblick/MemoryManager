@@ -36,7 +36,7 @@ void run_user_app_simulation(void) {
 #if RUN_FOREVER
     while (TRUE) {
 #else
-    for (int i = 0; i < ITERATIONS; i += 1) {
+    for (int i = 0; i < iterations; i += 1) {
 #endif
         // Randomly access different portions of the virtual address space.
         PULONG_PTR arbitrary_va = get_arbitrary_va(application_va_base);
@@ -45,8 +45,15 @@ void run_user_app_simulation(void) {
         do {
             page_faulted = FALSE;
 
-            // Check the PTE (this would happen in the OS behind the scenes, but we will do our best).
-            if (!IS_PTE_VALID(get_PTE_from_VA(arbitrary_va))) {
+            // Try stamping the page.
+            __try {
+                *arbitrary_va = (ULONG_PTR) arbitrary_va;
+                // TODO set accessed bit in PTE
+            }
+
+            // If we fault, we set this flag to go around again.
+            __except (EXCEPTION_EXECUTE_HANDLER) {
+                page_faulted = TRUE;
 
                 // Fault handler maps the VA to its new page
                 fault_handler_accessed_correctly = page_fault_handler(arbitrary_va);
@@ -55,16 +62,6 @@ void run_user_app_simulation(void) {
                 if (!fault_handler_accessed_correctly){
                     fatal_error("User app attempted to access invalid VA.");
                 }
-            }
-
-            // Now that we have resolved the fault (as best as we can), try stamping the page.
-            __try {
-                *arbitrary_va = (ULONG_PTR) arbitrary_va;
-                // TODO set accessed bit in PTE
-            }
-            // If we still fault, we set this flag to go around again.
-            __except (EXCEPTION_EXECUTE_HANDLER) {
-                page_faulted = TRUE;
             }
         } while (page_faulted);
     }
@@ -83,7 +80,6 @@ void begin_system_test(void) {
     writer_exit_flag = SYSTEM_SHUTDOWN;
     SetEvent(system_exit_event);
 
-    // TODO -- wait until trimmer and writer are done shutting down BEFORE freeing!
     WaitForMultipleObjects(NUM_TRIMMING_THREADS, trimming_threads, TRUE, INFINITE);
     WaitForMultipleObjects(NUM_WRITING_THREADS, writing_threads, TRUE, INFINITE);
     WaitForMultipleObjects(NUM_SCHEDULING_THREADS, scheduling_threads, TRUE, INFINITE);
@@ -94,13 +90,14 @@ VOID main (int argc, char** argv) {
 #if RUN_FOREVER
     num_user_threads = DEFAULT_USER_THREAD_COUNT;
 #else
-    if (argc > 1) {
-        printf("About to initiate test with %s threads...\n", argv[1]);
+    if (argc > 2) {
+        printf("About to initiate test with %s threads running %s iterations each...\n", argv[1], argv[2]);
     } else {
         printf("No arguments passed.\n");
         return;
     }
     num_user_threads = strtol(argv[1], NULL, 10);  // Base 10
+    iterations = strtol(argv[2], NULL, 10);
 #endif
     // Initialize all data structures, events, threads, and handles. Get physical pages from OS.
     initialize_system();
@@ -121,6 +118,6 @@ VOID main (int argc, char** argv) {
 
     // Print statistics
     printf("Test successful. Time elapsed: %llu milliseconds.\n", end_time - start_time);
-    printf ("Each of %llu threads accessed %u VAs.\n", num_user_threads, ITERATIONS);
+    printf ("Each of %llu threads accessed %llu VAs.\n", num_user_threads, iterations);
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n");
 }

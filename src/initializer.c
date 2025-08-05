@@ -178,7 +178,7 @@ void initialize_physical_pages(void) {
     }
     if (allocated_frame_count != NUMBER_OF_PHYSICAL_PAGES) {
 
-        printf ("full_virtual_memory_test : allocated only %llu pages out of %u pages requested\n",
+        printf ("full_virtual_memory_test : allocated only %llu pages out of %llu pages requested\n",
                 allocated_frame_count,
                 NUMBER_OF_PHYSICAL_PAGES);
     }
@@ -447,6 +447,13 @@ void initialize_system(void) {
 #if DEBUG
     g_traceIndex = -1;
 #endif
+}
+
+VOID map_single_page_from_pte(PPTE pte) {
+    ULONG64 frame_pointer = pte->memory_format.frame_number;
+    PULONG_PTR va = get_VA_from_PTE(pte);
+
+    map_pages(1, va, &frame_pointer);
 }
 
 void map_pages(ULONG64 num_pages, PULONG_PTR va, PULONG_PTR frame_numbers) {
