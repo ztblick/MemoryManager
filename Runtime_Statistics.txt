@@ -40,3 +40,13 @@ After adding multiple kernel read VAs and batch unmaps in the fault handler:
 4 threads   3203 milliseconds.
 5 threads   3468 milliseconds.
 6 threads   4344 milliseconds.
+
+
+After batch unmapping in trimmer and going without page locks in trimmer:
+
+1 threads   2266 milliseconds.
+2 threads   2688 milliseconds.
+3 threads   2859 milliseconds.
+4 threads   2781 milliseconds.
+5 threads   2875 milliseconds.
+6 threads   2859 milliseconds.

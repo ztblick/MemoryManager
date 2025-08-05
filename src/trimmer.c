@@ -70,19 +70,17 @@ VOID trim_pages(VOID) {
     // Now, let's add all of our trimmed pages to the modified list
     for (ULONG i = 0; i < trim_batch_size; i++) {
 
-        // Grab the PFN
+        // Grab the PFN and take a snapshot of its PTE
         pfn = trimmed_pages[i];
-        lock_pfn(pfn);
-
-        // Add this page to the modified list
-        lock_list_then_insert_to_tail(&modified_list, &pfn->entry);
+        pte = pfn->PTE;
 
         // Set PFN status as modified
         SET_PFN_STATUS(pfn, PFN_MODIFIED);
 
-        // Release locks -- pte lock was acquired earlier when the trim batch was initially assembled.
-        pte = pfn->PTE;
-        unlock_pfn(pfn);
+        // Add this page to the modified list -- now the page is hot!
+        lock_list_then_insert_to_tail(&modified_list, &pfn->entry);
+
+        // Release the pte lock, which was acquired earlier when the trim batch was initially assembled.
         unlock_pte(pte);
     }
 }
