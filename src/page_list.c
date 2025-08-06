@@ -65,9 +65,13 @@ VOID lock_list_and_remove_page(PPAGE_LIST list, PPFN pfn) {
 #endif
     RemoveEntryList(&pfn->entry);
 
-    // Check for cleared standby list!
-    if (list == &standby_list && is_page_list_empty(&standby_list)) {
-        ResetEvent(standby_pages_ready_event);
+    // If we have pulled off the standby list, we will want to decrement our available count
+    if (list == &standby_list) {
+        decrement_available_count();
+
+        // And if it happens to be the last standby page, we will want to hold all other faulters
+        // until there are available standby pages.
+        if (is_page_list_empty(&standby_list)) ResetEvent(standby_pages_ready_event);
     }
     decrement_list_size(list);
 

@@ -102,11 +102,25 @@ PULONG_PTR zero_malloc(size_t bytes_to_allocate) {
 }
 
 void initialize_statistics(void) {
-    free_page_count = &free_list.list_size;
-    modified_page_count = &modified_list.list_size;
-    standby_page_count = &standby_list.list_size;
-    hard_faults_resolved = 0;
-    soft_faults_resolved = 0;
+    n_free = &free_list.list_size;
+    n_modified = &modified_list.list_size;
+    n_standby = &standby_list.list_size;
+    n_hard = 0;
+    n_soft = 0;
+
+    n_available = *n_free;
+}
+
+VOID increment_available_count(VOID) {
+    InterlockedIncrement64(&n_available);
+}
+
+
+VOID decrement_available_count(VOID) {
+    ASSERT(n_available > 0);
+    InterlockedDecrement64(&n_available);
+
+    if (n_available == START_TRIMMING_THRESHOLD) SetEvent(initiate_trimming_event);
 }
 
 void initialize_lock(PCRITICAL_SECTION lock) {
@@ -398,9 +412,6 @@ void initialize_events(void) {
 
     system_exit_event = CreateEvent(NULL, MANUAL_RESET, FALSE, NULL);
     NULL_CHECK(system_exit_event, "Could not intialize standby pages ready event.");
-
-    trimmer_exit_flag = SYSTEM_RUN;
-    writer_exit_flag = SYSTEM_RUN;
 }
 
 void initialize_shared_page_parameter(void) {

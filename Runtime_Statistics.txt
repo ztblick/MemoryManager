@@ -50,3 +50,12 @@ After batch unmapping in trimmer and going without page locks in trimmer:
 4 threads   2781 milliseconds.
 5 threads   2875 milliseconds.
 6 threads   2859 milliseconds.
+
+Adding events back to signal wakeups for the trimmer
+
+1 threads   2141 milliseconds.
+2 threads   2500 milliseconds.
+3 threads   2656 milliseconds.
+4 threads   2640 milliseconds.
+5 threads   2734 milliseconds.
+6 threads   2734 milliseconds.

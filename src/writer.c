@@ -153,6 +153,7 @@ VOID write_pages(VOID) {
 
             // Add page to the standby list
             lock_list_then_insert_to_tail(&standby_list, &pfn->entry);
+            increment_available_count();
 
             // Update our count
             pages_written++;
@@ -176,17 +177,20 @@ VOID write_pages_thread(VOID) {
     // Wait for system start event before entering waiting state!
     WaitForSingleObject(system_start_event, INFINITE);
 
-    // If the exit flag has been set, then it's time to go!
-    // No need for an atomic operation -- if we do one extra trim, we will live.
-    while (writer_exit_flag == SYSTEM_RUN) {
+    // Create our handles for the wait for multiple objects call in the loop.
+    // We wait to trim or to exit.
+    HANDLE events[2];
+    events[ACTIVE_EVENT_INDEX] = initiate_writing_event;
+    events[EXIT_EVENT_INDEX] = system_exit_event;
 
+    while (TRUE) {
         // TODO learn how to use this!
         // QueryPerformanceCounter(&modified_list);
 
-        // Otherwise: if there is sufficient need, wake the writer
-        if (*modified_page_count > BEGIN_WRITING_THRESHOLD) write_pages();
+        if (WaitForMultipleObjects(ARRAYSIZE(events), events, FALSE, INFINITE)
+            == EXIT_EVENT_INDEX) return;
 
-        // If there isn't need, let's sleep for a moment to avoid spinning and burning up this core.
-        else YieldProcessor();
+        // Once woken, begin writing a batch of pages. Then go back to sleep.
+        write_pages();
     }
 }

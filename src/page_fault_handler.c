@@ -63,6 +63,7 @@ BOOL try_acquire_page_from_list(PPFN* available_page_address, PPAGE_LIST list) {
         // Now that we have the page lock and we are sure it is in the right state,
         // we will remove it from its list.
         remove_page_from_list(list, pfn);
+        decrement_available_count();
         ASSERT(pfn);
 
         // Finally, release the list lock!
@@ -193,7 +194,7 @@ BOOL resolve_soft_fault(PPTE pte) {
     unlock_pte(pte);
 
     // Update statistics
-    InterlockedIncrement64(&soft_faults_resolved);
+    InterlockedIncrement64(&n_soft);
 
     return TRUE;
 }
@@ -293,10 +294,11 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, PTHREAD_INFO user_thread_info) {
         }
 
         // If no pages are available, release locks and wait for pages available event.
+        // We will MANUALLY initiate trimming here, although we were hoping to avoid it.
         // Once the event is triggered, return to the beginning of the loop, then wait for
         // the page fault lock again.
         if (!free_page_acquired && !standby_page_acquired) {
-
+            SetEvent(initiate_trimming_event);
             WaitForSingleObject(standby_pages_ready_event, INFINITE);
             continue;
         }
@@ -328,6 +330,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, PTHREAD_INFO user_thread_info) {
 
             // Add the page to the free list and update its status
             lock_list_then_insert_to_tail(&free_list, &available_pfn->entry);
+            increment_available_count();
             set_PFN_free(available_pfn);
 
             // Unlock the page
@@ -373,7 +376,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, PTHREAD_INFO user_thread_info) {
         unlock_pte(pte);
 
         // Update statistics
-        InterlockedIncrement64((volatile LONG64 *) &hard_faults_resolved);
+        InterlockedIncrement64((volatile LONG64 *) &n_hard);
 
         return TRUE;
     }

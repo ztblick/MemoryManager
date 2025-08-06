@@ -83,12 +83,26 @@ VOID trim_pages(VOID) {
         // Release the pte lock, which was acquired earlier when the trim batch was initially assembled.
         unlock_pte(pte);
     }
+
+    // TODO consider waking the writer in the middle of the previous loop.
+    // Once we are adding pages to the tail, the writer should be able
+    // to begin pulling them from the head. Of course, we will want to avoid
+    // contention on the page lock...
+
+    // Wake the writer!
+    SetEvent(initiate_writing_event);
 }
 
 VOID trim_pages_thread(VOID) {
 
     // Active page count will keep track of our active pages.
     ULONG64 active_page_count;
+
+    // Create our handles for the wait for multiple objects call in the loop.
+    // We wait to trim or to exit.
+    HANDLE events[2];
+    events[ACTIVE_EVENT_INDEX] = initiate_trimming_event;
+    events[EXIT_EVENT_INDEX] = system_exit_event;
 
     // Wait for system start event before entering waiting state!
     WaitForSingleObject(system_start_event, INFINITE);
@@ -97,17 +111,12 @@ VOID trim_pages_thread(VOID) {
     pte_to_trim = PTE_base;
 
     // If the exit flag has been set, then it's time to go!
-    while (trimmer_exit_flag == SYSTEM_RUN) {
+    while (TRUE) {
 
-        // Deduce the number of active pages from the other counts
-        active_page_count = NUMBER_OF_PHYSICAL_PAGES -
-            (*free_page_count + *modified_page_count + *standby_page_count);;
+        if (WaitForMultipleObjects(ARRAYSIZE(events), events, FALSE, INFINITE)
+            == EXIT_EVENT_INDEX) return;
 
-        // Otherwise: if there is sufficient need, wake the trimmer
-        if (*standby_page_count + *free_page_count < STANDBY_PAGE_THRESHOLD &&
-            active_page_count > ACTIVE_PAGE_THRESHOLD) trim_pages();
-
-        // If there isn't need, let's sleep for a moment to avoid spinning and burning up this core.
-        else YieldProcessor();
+        // Once woken, begin trimming a batch of pages. Then go back to sleep.
+        trim_pages();
     }
 }

@@ -20,7 +20,7 @@ ULONG64 iterations;
 #define NUM_WRITING_THREADS             1
 
 // We will begin trimming and writing when our standby + free page count falls below this threshold.
-#define STANDBY_PAGE_THRESHOLD          (NUMBER_OF_PHYSICAL_PAGES / 8)
+#define START_TRIMMING_THRESHOLD        (NUMBER_OF_PHYSICAL_PAGES / 8)
 // Trimming will stop when we fall below our active page threshold
 #define ACTIVE_PAGE_THRESHOLD           (NUMBER_OF_PHYSICAL_PAGES * 3 / 4)
 // We will begin writing when the modified list has sufficient pages!
@@ -131,8 +131,6 @@ PHANDLE trimming_threads;
 PHANDLE writing_threads;
 
 // Notification global variables
-volatile LONG64 trimmer_exit_flag;
-volatile LONG64 writer_exit_flag;
 #define SYSTEM_RUN          0
 #define SYSTEM_SHUTDOWN     1
 
@@ -156,11 +154,13 @@ typedef struct _USER_THREAD_INFO {
 } THREAD_INFO, *PTHREAD_INFO;
 
 // Statistics
-volatile PULONG64 free_page_count;
-volatile PULONG64 modified_page_count;
-volatile PULONG64 standby_page_count;
-volatile LONG64 hard_faults_resolved;
-volatile LONG64 soft_faults_resolved;
+volatile LONG64 n_available;
+
+volatile PULONG64 n_free;
+volatile PULONG64 n_modified;
+volatile PULONG64 n_standby;
+volatile LONG64 n_hard;
+volatile LONG64 n_soft;
 
 /*
  *  Malloc the given amount of space, then zero the memory.
@@ -206,6 +206,17 @@ void unmap_pages(ULONG64 num_pages, PULONG_PTR va);
  *  Unmaps all physical pages when user app is terminated.
  */
 void unmap_all_pages(void);
+
+/*
+ *  Bumps the count of available pages (free + standby)
+ */
+VOID increment_available_count(VOID);
+
+/*
+ *  Drops the count of available pages. Initiates the trimmer, if necessary.
+ *  Asserts that the count must be positive.
+ */
+VOID decrement_available_count(VOID);
 
 /*
  *  This includes libraries for the linker which are used to support multple VAs concurrently mapped to the same

@@ -76,8 +76,6 @@ void begin_system_test(void) {
     WaitForMultipleObjects(num_user_threads, user_threads, TRUE, INFINITE);
 
     // Test is finished! Tell all threads to stop.
-    trimmer_exit_flag = SYSTEM_SHUTDOWN;
-    writer_exit_flag = SYSTEM_SHUTDOWN;
     SetEvent(system_exit_event);
 
     WaitForMultipleObjects(NUM_TRIMMING_THREADS, trimming_threads, TRUE, INFINITE);

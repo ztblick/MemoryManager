@@ -8,20 +8,20 @@
 
 VOID print_statistics(VOID) {
 
-    ULONG64 active_page_count = NUMBER_OF_PHYSICAL_PAGES - (*free_page_count + *modified_page_count + *standby_page_count);
+    ULONG64 active_page_count = NUMBER_OF_PHYSICAL_PAGES - (*n_free + *n_modified + *n_standby);
 
     printf("\n");
     printf("FREE PAGE COUNT:\t%llu\tFREE PAGE PERCENTAGE:\t%.2f%%\n",
-        *free_page_count, 100.0 * *free_page_count / allocated_frame_count);
+        *n_free, 100.0 * *n_free / allocated_frame_count);
     printf("ACTIVE PAGE COUNT:\t%llu\tACTIVE PAGE PERCENTAGE:\t%.2f%%\n",
         active_page_count, 100.0 * active_page_count / allocated_frame_count);
     printf("MODIFIED PAGE COUNT:\t%llu\tMODIFIED PAGE PERCENTAGE:%.2f%%\n",
-        *modified_page_count, 100.0 * *modified_page_count / allocated_frame_count);
+        *n_modified, 100.0 * *n_modified / allocated_frame_count);
     printf("STANDBY PAGE COUNT:\t%llu\tSTANDBY PAGE PERCENTAGE:%.2f%%\n",
-        *standby_page_count, 100.0 * *standby_page_count / allocated_frame_count);
+        *n_standby, 100.0 * *n_standby / allocated_frame_count);
     printf("EMPTY DISK SLOTS:\t%llu\n", empty_disk_slots);
     printf("\nHARD FAULTS RESOLVED:\t%llu\tSOFT FAULTS RESOLVED:\t%llu\n\n",
-        hard_faults_resolved, soft_faults_resolved);
+        n_hard, n_soft);
 }
 
 VOID schedule_tasks(VOID) {
