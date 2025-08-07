@@ -7,9 +7,6 @@
  */
 
 #include "../include/page_fault_handler.h"
-#include "../include/initializer.h"
-#include "../include/debug.h"
-#include "../include/macros.h"
 
 // Masks off the last bits to round the VA up to the previous page boundary.
 PULONG_PTR get_beginning_of_VA_region(PULONG_PTR va) {

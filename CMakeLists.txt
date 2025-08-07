@@ -32,4 +32,9 @@ add_executable(MemoryManager src/initializer.c
         src/locks.c
         src/disk.c
         include/disk.h
+        include/config.h
+        include/threads.h
+        src/utils.c
+        include/utils.h
+        src/threads.c
 )

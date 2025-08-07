@@ -3,10 +3,6 @@
 //
 
 #include "../include/writer.h"
-#include "../include/disk.h"
-#include "../include/initializer.h"
-#include "../include/macros.h"
-#include "../include/page_fault_handler.h"
 
 VOID write_pages(VOID) {
 
@@ -21,7 +17,7 @@ VOID write_pages(VOID) {
     ULONG64 num_pages_in_write_batch = MAX_WRITE_BATCH_SIZE;
 
     // If there are insufficient empty disk slots, let's hold off on writing
-    if (empty_disk_slots < MIN_WRITE_BATCH_SIZE) return;
+    if (pf.empty_disk_slots < MIN_WRITE_BATCH_SIZE) return;
 
     // Let's get a sense of how many modified pages we can reasonably expect. There may be more (from trimming)
     // or fewer (from soft faults), but this gives us an estimate.
@@ -35,17 +31,16 @@ VOID write_pages(VOID) {
 
     // Let's see if we need any slots at all:
     // If our stash is too small, we will get more.
-    if (num_stashed_slots < target_page_count) {
+    if (pf.num_stashed_slots < target_page_count) {
         set_and_add_slots_to_stack(target_page_count);
     }
 
     // If we couldn't batch enough slots, we will need to return.
     // Note that we did not release our stashed slots!
-    // TODO add a worst-case scenario where the stashed slots are released
-    if (num_stashed_slots < MIN_WRITE_BATCH_SIZE) return;
+    if (pf.num_stashed_slots < MIN_WRITE_BATCH_SIZE) return;
 
     // Update our upper bound on pages in the batch
-    num_pages_in_write_batch = min(num_stashed_slots, target_page_count);
+    num_pages_in_write_batch = min(pf.num_stashed_slots, target_page_count);
 
     // Initialize frame number array
     PPFN pages_to_write[MAX_WRITE_BATCH_SIZE];
@@ -108,9 +103,6 @@ VOID write_pages(VOID) {
         frame_numbers_to_map[i] = get_frame_from_PFN(pages_to_write[i]);
     }
 
-    // Grab kernel write lock
-    EnterCriticalSection(&kernel_write_lock);
-
     // Map all pages to the kernel VA space
     map_pages(num_pages_in_write_batch, kernel_write_va, frame_numbers_to_map);
 
@@ -165,9 +157,6 @@ VOID write_pages(VOID) {
     // Un-map kernal VA
     unmap_pages(num_pages_in_write_batch, kernel_write_va);
 
-    // Release kernel lock
-    LeaveCriticalSection(&kernel_write_lock);
-
     // Broadcast to waiting user threads that there are standby pages ready.
     if (pages_written > 0) SetEvent(standby_pages_ready_event);
 }
@@ -184,8 +173,6 @@ VOID write_pages_thread(VOID) {
     events[EXIT_EVENT_INDEX] = system_exit_event;
 
     while (TRUE) {
-        // TODO learn how to use this!
-        // QueryPerformanceCounter(&modified_list);
 
         if (WaitForMultipleObjects(ARRAYSIZE(events), events, FALSE, INFINITE)
             == EXIT_EVENT_INDEX) return;

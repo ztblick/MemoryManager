@@ -3,14 +3,32 @@
 //
 
 #include "../include/disk.h"
-#include "../include/initializer.h"
 
-VOID validate_disk_slot(ULONG64 disk_slot) {
-    if (disk_slot > MAX_DISK_INDEX || disk_slot < MIN_DISK_INDEX) {
-        fatal_error("Attempted to clear disk slot disk slot exceeding 22 bit limit!");
-    }
+PAGE_FILE_STRUCT pf = {0};
+
+VOID initialize_page_file_and_metadata(VOID) {
+
+    // Initialize page file.
+    pf.page_file = (char*) zero_malloc(PAGES_IN_PAGE_FILE * PAGE_SIZE);
+
+    // Initialize page file bitmaps.
+    // Note that we ALWAYS set the first slot to full, as there cannot be a disk slot of ZERO.
+    pf.page_file_bitmaps = zero_malloc(PAGES_IN_PAGE_FILE / BITS_PER_BYTE);
+    pf.page_file_bitmaps[0] |= DISK_SLOT_IN_USE;
+
+    // Initialize the writer's array of disk slots
+    // This supports extra slots to be stashed for later.
+    pf.slot_stack = zero_malloc((MAX_WRITE_BATCH_SIZE + BITS_PER_BITMAP_ROW * 2) * BYTES_PER_VA);
+    pf.last_checked_bitmap_row = 0;
+    pf.num_stashed_slots = 0;
+
+    // Initialize disk slot tracker -- minus one because we have an initially full slot at index zero.
+    pf.empty_disk_slots = PAGES_IN_PAGE_FILE - 1;
 }
 
+VOID validate_disk_slot(ULONG64 disk_slot) {
+    ASSERT (disk_slot <= MAX_DISK_INDEX);
+}
 
 VOID push_slots_from_bitmap_row(ULONG64 bitmap_row) {
 
@@ -19,13 +37,13 @@ VOID push_slots_from_bitmap_row(ULONG64 bitmap_row) {
     ULONG64 current_disk_slot = starting_disk_slot;
 
     // Get a snapshot of the current row (slots MAY be cleared, but they will not be set).
-    ULONG64 row_snapshot = page_file_bitmaps[bitmap_row];
+    ULONG64 row_snapshot = pf.page_file_bitmaps[bitmap_row];
 
     // If the ENTIRE row is empty, let's grab ALL the slots!
     if (row_snapshot == BITMAP_ROW_EMPTY) {
 
         // Set the entire row full, if we can!
-        PULONG64 bitmap = &page_file_bitmaps[bitmap_row];
+        PULONG64 bitmap = &pf.page_file_bitmaps[bitmap_row];
         ULONG64 original_value = InterlockedCompareExchange64((volatile LONG64 *) bitmap,
                         BITMAP_ROW_FULL,
                         BITMAP_ROW_EMPTY);
@@ -59,22 +77,21 @@ VOID push_slots_from_bitmap_row(ULONG64 bitmap_row) {
 }
 
 VOID push_slot(ULONG64 slot) {
-    slot_stack[num_stashed_slots] = slot;
-    InterlockedIncrement64(&num_stashed_slots);
+    pf.slot_stack[pf.num_stashed_slots] = slot;
+    InterlockedIncrement64(&pf.num_stashed_slots);
 }
 
 ULONG64 pop_slot(VOID) {
-    ASSERT(num_stashed_slots > 0);
-    InterlockedDecrement64(&num_stashed_slots);
-    return slot_stack[num_stashed_slots];
+    ASSERT(pf.num_stashed_slots > 0);
+    InterlockedDecrement64(&pf.num_stashed_slots);
+    return pf.slot_stack[pf.num_stashed_slots];
 }
 
-// TODO if we see an empty row, grab ALL the slots. Remember, we are the ONLY thread that sets them!
 // Returns the number of allocated disk slots and fills the given array with them.
 VOID set_and_add_slots_to_stack(ULONG64 target_slot_count) {
 
     // Pick up where we left off searching last time
-    ULONG64 current_bitmap_row = last_checked_bitmap_row;
+    ULONG64 current_bitmap_row = pf.last_checked_bitmap_row;
 
     // We will check until we are done batching, or we can no longer get any slots
     for (ULONG64 i = 0; i < PAGE_FILE_BITMAP_ROWS; i++) {
@@ -83,7 +100,7 @@ VOID set_and_add_slots_to_stack(ULONG64 target_slot_count) {
         current_bitmap_row = (current_bitmap_row + 1) % PAGE_FILE_BITMAP_ROWS;
 
         // Get a snapshot of the bitmap -- if it is full, move along
-        ULONG64 bitmap_snapshot = page_file_bitmaps[current_bitmap_row];
+        ULONG64 bitmap_snapshot = pf.page_file_bitmaps[current_bitmap_row];
 
         if (bitmap_snapshot == BITMAP_ROW_FULL) continue;
 
@@ -91,16 +108,16 @@ VOID set_and_add_slots_to_stack(ULONG64 target_slot_count) {
         push_slots_from_bitmap_row(current_bitmap_row);
 
         // If we have reached our target, let's get out of here!
-        if (num_stashed_slots >= target_slot_count) break;
+        if (pf.num_stashed_slots >= target_slot_count) break;
     }
 
     // If we get here without breaking, then we have fewer than our target count. Oh well!
     // Let's save our spot for next time. Then return our count of allocated slots!
-    last_checked_bitmap_row = current_bitmap_row;
+    pf.last_checked_bitmap_row = current_bitmap_row;
 }
 
 VOID pop_and_clear_all_slots(VOID) {
-    while (num_stashed_slots > 0) {
+    while (pf.num_stashed_slots > 0) {
         clear_disk_slot(pop_slot());
     }
 }
@@ -109,7 +126,7 @@ VOID pop_and_clear_all_slots(VOID) {
 char* get_page_file_offset(ULONG64 disk_slot) {
     validate_disk_slot(disk_slot);
 
-    return page_file + disk_slot * PAGE_SIZE;
+    return pf.page_file + disk_slot * PAGE_SIZE;
 }
 
 VOID clear_disk_slot(ULONG64 disk_slot) {
@@ -122,7 +139,7 @@ VOID clear_disk_slot(ULONG64 disk_slot) {
 
     ULONG64 row = BITMAP_ROW(disk_slot);
     ULONG64 mask = ~(1ULL << BITMAP_OFFSET(disk_slot));
-    PULONG64 bitmap = &page_file_bitmaps[row];
+    PULONG64 bitmap = &pf.page_file_bitmaps[row];
 
     // Now we will clear the slot, saving the ORIGINAL value for debugging.
     ULONG64 original_value = InterlockedAnd64((volatile LONG64 *) bitmap, mask);
@@ -131,7 +148,7 @@ VOID clear_disk_slot(ULONG64 disk_slot) {
     ASSERT((original_value & ~mask) == ~mask);
 
     // Increment our count of clear slots!
-    InterlockedIncrement64(&empty_disk_slots);
+    InterlockedIncrement64(&pf.empty_disk_slots);
 }
 
 VOID set_disk_slot(UINT64 disk_slot) {
@@ -139,7 +156,7 @@ VOID set_disk_slot(UINT64 disk_slot) {
 
     ULONG64 row = BITMAP_ROW(disk_slot);
     ULONG64 mask = 1ULL << BITMAP_OFFSET(disk_slot);
-    PULONG64 bitmap = &page_file_bitmaps[row];
+    PULONG64 bitmap = &pf.page_file_bitmaps[row];
 
     // Now we will set the slot, saving the ORIGINAL value for debugging.
     ULONG64 original_value = InterlockedOr64((volatile LONG64 *) bitmap, mask);
@@ -148,5 +165,5 @@ VOID set_disk_slot(UINT64 disk_slot) {
     ASSERT((original_value & mask) == 0ULL);
 
     // Decrement the empty disk slot count without risking race conditions.
-    InterlockedDecrement64(&empty_disk_slots);
+    InterlockedDecrement64(&pf.empty_disk_slots);
 }

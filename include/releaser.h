@@ -1,8 +1,11 @@
 //
 // Created by zachb on 7/24/2025.
 //
+#pragma once
 
-#include "../include/initializer.h"
+#include "disk.h"
+#include "pfn.h"
+#include "threads.h"
 
 #pragma once
 
@@ -17,12 +20,6 @@ void free_all_data_and_shut_down(void);
  * Frees handles or memory associated with event signaling used for thread coordination or page management.
  */
 void free_events(void);
-
-/**
- * @brief Frees linked list-based management structures.
- * Used for cleanup of queues, page lists, or tracking lists implemented via dynamic nodes.
- */
-void free_list_data(void);
 
 /**
  * @brief Deletes a critical section and releases its system resources.

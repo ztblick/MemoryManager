@@ -4,11 +4,15 @@
 
 #pragma once
 #include <Windows.h>
+#include <stdio.h>
+#include <winternl.h>  // for RtlCaptureStackBackTrace
+#pragma comment(lib, "ntdll.lib")
 
-// This is my central controller for editing with a debug mode. All debug settings are enabled
-// and disabled by DEBUG.
+/*
+ * This is my central controller for editing with a debug mode. All debug settings are enabled
+ * and disabled by DEBUG.
+ */
 #define DEBUG                      0
-
 
 /*
  *  Assert provides a quick check for a given true or false value, terminating if the condition is not met.
@@ -33,14 +37,7 @@
 #define COLOR_RED "\x1b[31m"
 #define COLOR_RESET "\x1b[0m"
 
-/*
- *  Fatal error outputs crucial information to the console. It also terminates all processes.
- */
-VOID fatal_error(char *msg);
-
-
 // Here is some code to help me track stack traces
-
 #define MAX_STACK_FRAMES   16
 #define TRACE_BUFFER_SIZE 1024
 
@@ -54,9 +51,12 @@ typedef struct {
     PVOID    frames[MAX_STACK_FRAMES];
 } TraceEntry;
 
+extern TraceEntry g_traceBuffer[TRACE_BUFFER_SIZE];
+extern volatile LONG g_traceIndex;
 
-TraceEntry g_traceBuffer[TRACE_BUFFER_SIZE];
-volatile LONG g_traceIndex;
-// starts at -1 so first InterlockedIncrement yields 0
+/*
+ *  Fatal error outputs crucial information to the console. It also terminates all processes.
+ */
+VOID fatal_error(char *msg);
 
 void log_stack_trace(ULONG64 disk_slot, PULONG_PTR pfn, PULONG_PTR pte);

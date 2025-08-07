@@ -2,15 +2,7 @@
 // Created by zblickensderfer on 5/5/2025.
 //
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <windows.h>
-#include "../include/initializer.h"
 #include "../include/simulator.h"
-#include "../include/debug.h"
-#include "../include/page_fault_handler.h"
-#include "../include/scheduler.h"
-#include "../include/releaser.h"
 
 PULONG_PTR get_arbitrary_va(PULONG_PTR p) {
     // Randomly access different portions of the virtual address space.
@@ -117,5 +109,5 @@ VOID main (int argc, char** argv) {
     // Print statistics
     printf("Test successful. Time elapsed: %llu milliseconds.\n", end_time - start_time);
     printf ("Each of %llu threads accessed %llu VAs.\n", num_user_threads, iterations);
-    printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n");
+    printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
 }

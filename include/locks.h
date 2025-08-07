@@ -3,7 +3,7 @@
 //
 
 #include <Windows.h>
-#include "../include/debug.h"
+#include "debug.h"
 
 #pragma once
 

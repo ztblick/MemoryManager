@@ -23,8 +23,6 @@ VOID lock(PBYTE_LOCK lock) {
         // Here we will try to acquire the lock. If we cannot, we will wrap around
         // and try again, with a doubled delay to prevent constant attempts.
 
-        // TODO Bump the version to prevent the ABA problem.
-
     } while (InterlockedCompareExchange64((volatile LONG64 *) &lock->semaphore,
                                             LOCKED,
                                             UNLOCKED) != UNLOCKED);

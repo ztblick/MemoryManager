@@ -2,10 +2,19 @@
 // Created by zblickensderfer on 5/6/2025.
 //
 
-#include "../include/initializer.h"
 #include "../include/pte.h"
-#include "../include/debug.h"
-#include "../include/disk.h"
+
+PPTE PTE_base = {0};
+
+VOID initialize_page_table(VOID) {
+    // Allocate and zero all PTE data.
+    PTE_base = (PPTE) zero_malloc(sizeof(PTE) * NUM_PTEs);
+
+    // Initialize all PTE locks
+    for (PPTE pte = PTE_base; pte < PTE_base + NUM_PTEs; pte++) {
+        initialize_byte_lock(&pte->lock);
+    }
+}
 
 // Returns the pte associated with the faulting VA. Divides the offset of the VA within the VA space
 // by the page_size, resulting in the index of the VA within the PTE array.
@@ -82,13 +91,6 @@ void map_pte_to_disk(PPTE pte, UINT64 disk_index) {
     WriteULong64NoFence((DWORD64*) pte, temp.entire_pte);
 }
 
-UINT64 get_disk_index_from_pte(PPTE pte) {
-    if (pte->disk_format.status != PTE_ON_DISK) {
-        fatal_error("Requested disk index from PTE not in disk format.");
-    }
-    return pte->disk_format.disk_index;
-}
-
 VOID lock_pte(PPTE pte) {
     lock(&pte->lock);
 }
@@ -99,4 +101,11 @@ BOOL try_lock_pte(PPTE pte) {
 
 VOID unlock_pte(PPTE pte) {
     unlock(&pte->lock);
+}
+
+VOID map_single_page_from_pte(PPTE pte) {
+    ULONG64 frame_pointer = pte->memory_format.frame_number;
+    PULONG_PTR va = get_VA_from_PTE(pte);
+
+    map_pages(1, va, &frame_pointer);
 }

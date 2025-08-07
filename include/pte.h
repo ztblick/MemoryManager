@@ -4,6 +4,9 @@
 
 #pragma once
 
+#include "locks.h"
+#include "utils.h"
+
 #define PTE_INVALID             0
 #define PTE_VALID               1
 #define PTE_IN_TRANSITION       0
@@ -23,8 +26,6 @@
 
 // This is the default value given to the frame_number field for a PTE that has no connected frame.
 #define NO_FRAME_ASSIGNED       0
-
-#include "locks.h"
 
 typedef struct {
     UINT64 valid : 1;                       // Valid bit -- 1 indicating PTE is valid
@@ -73,9 +74,26 @@ typedef struct {
 
 
 /*
- *  Provides translations between VAs and their associated PTEs and vice-versa.
+ *  This represents the base of our page table. For now, it is simply
+ *  an array of PTEs, each of which contains information about its
+ *  corresponding virtual page.
+ */
+extern PPTE PTE_base;
+
+/*
+ *  Initializes the above array of PTEs to be large enough to provide a PTE for each
+ *  virtual page in the VA space.
+ */
+VOID initialize_page_table(VOID);
+
+/*
+ *  Provides a translation from the given VA to its associated PTE.
  */
 PPTE get_PTE_from_VA(PULONG_PTR va);
+
+/*
+ *  Provides a translation from the given VA to its corresponding PTE.
+ */
 PVOID get_VA_from_PTE(PPTE pte);
 
 /*
@@ -92,8 +110,6 @@ void set_PTE_to_valid(PPTE pte, ULONG_PTR frame_number);
  *  These will likely be replaced with a call to the page file metadata
  */
 void map_pte_to_disk(PPTE pte, UINT64 disk_index);
-UINT64 get_disk_index_from_pte(PPTE pte);
-
 
 /*
  *  Waits until it can acquire the lock on the given PTE.
@@ -105,8 +121,12 @@ VOID lock_pte(PPTE pte);
  */
 BOOL try_lock_pte(PPTE pte);
 
-
 /*
  *  Releases the lock held on the given PTE.
  */
 VOID unlock_pte(PPTE pte);
+
+/*
+ *  Given a PTE, maps it (and only it) to its page.
+ */
+VOID map_single_page_from_pte(PPTE pte);

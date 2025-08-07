@@ -4,7 +4,7 @@
 
 #pragma once
 #include "initializer.h"
-#include "scheduler.h"
+#include "disk.h"
 
 #define MAX_DISK_SLOT_ATTEMPTS      (MAX_WRITE_BATCH_SIZE * 2)
 
@@ -17,12 +17,6 @@
 VOID write_pages_thread(VOID);
 
 /*
- *  Write the given number of pages to the disk.
+ *  Writes a batch of pages to the disk.
  */
 VOID write_pages(VOID);
-
-
-void write_pages_to_disk(PPTE pte, ULONG_PTR num_pages);
-
-
-void load_page_from_disk(PPTE pte, PVOID destination_va);

@@ -2,10 +2,9 @@
 // Created by zblickensderfer on 5/6/2025.
 //
 
-#include "../include/debug.h"
-#include "../include/initializer.h"
 #include "../include/pfn.h"
 
+PPFN PFN_array;
 
 VOID create_zeroed_pfn(PPFN new_pfn) {
     new_pfn->status = PFN_FREE;
@@ -95,29 +94,4 @@ VOID set_pfn_mid_trim(PPFN pfn) {
 VOID set_pfn_mid_write(PPFN pfn) {
     pfn->status = PFN_MID_WRITE;
     pfn->soft_fault_mid_write = NO_SOFT_FAULT_YET;
-}
-
-VOID set_soft_fault_write_bit(PPFN pfn) {
-    ASSERT(pfn->soft_fault_mid_write == NO_SOFT_FAULT_YET);
-    pfn->soft_fault_mid_write = SOFT_FAULT_OCCURRED;
-}
-
-VOID set_soft_fault_trim_bit(PPFN pfn) {
-    ASSERT(pfn->soft_fault_mid_trim == NO_SOFT_FAULT_YET);
-    pfn->soft_fault_mid_trim = SOFT_FAULT_OCCURRED;
-}
-
-// Checks bit, clears it, then returns result.
-BOOL soft_fault_happened_mid_write(PPFN pfn) {
-    BOOL fault_occurred = pfn->soft_fault_mid_write;
-    pfn->soft_fault_mid_write = NO_SOFT_FAULT_YET;
-
-    return fault_occurred;
-}
-
-BOOL soft_fault_happened_mid_trim(PPFN pfn) {
-    BOOL fault_occurred = pfn->soft_fault_mid_trim;
-    pfn->soft_fault_mid_trim = NO_SOFT_FAULT_YET;
-
-    return fault_occurred;
 }

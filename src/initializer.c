@@ -1,17 +1,26 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <windows.h>
-#include "../include/initializer.h"
-#include "../include/debug.h"
-#include "../include/ager.h"
-#include "../include/pfn.h"
-#include "../include/pte.h"
-#include "../include/simulator.h"
-#include "../include/writer.h"
-#include "../include/scheduler.h"
-#include "../include/trimmer.h"
 
+#include "../include/initializer.h"
+
+// Declare and initialize various global variables
+ULONG64 num_user_threads = DEFAULT_NUM_USER_THREADS;
+ULONG64 iterations = DEFAULT_ITERATIONS;
 MEM_EXTENDED_PARAMETER virtual_alloc_shared_parameter;
+PULONG_PTR application_va_base;
+PULONG_PTR kernel_write_va;
+HANDLE physical_page_handle;
+// PFN Data Structures
+ULONG_PTR max_frame_number;
+ULONG_PTR min_frame_number;
+PULONG_PTR allocated_frame_numbers;
+ULONG_PTR allocated_frame_count;
+
+// Statistics
+volatile LONG64 n_available;
+volatile PULONG64 n_free;
+volatile PULONG64 n_modified;
+volatile PULONG64 n_standby;
+volatile LONG64 n_hard;
+volatile LONG64 n_soft;
 
 BOOL GetPrivilege (VOID) {
     struct {
@@ -94,11 +103,13 @@ BOOL GetPrivilege (VOID) {
     return TRUE;
 }
 
-PULONG_PTR zero_malloc(size_t bytes_to_allocate) {
-    PULONG_PTR destination = malloc(bytes_to_allocate);
-    NULL_CHECK(destination, "Zero malloc failed!");
-    memset(destination, 0, bytes_to_allocate);
-    return destination;
+VOID set_max_frame_number(VOID) {
+    max_frame_number = 0;
+    min_frame_number = ULONG_MAX;
+    for (int i = 0; i < allocated_frame_count; i++) {
+        max_frame_number = max(max_frame_number, allocated_frame_numbers[i]);
+        min_frame_number = min(min_frame_number, allocated_frame_numbers[i]);
+    }
 }
 
 void initialize_statistics(void) {
@@ -109,30 +120,6 @@ void initialize_statistics(void) {
     n_soft = 0;
 
     n_available = *n_free;
-}
-
-VOID increment_available_count(VOID) {
-    InterlockedIncrement64(&n_available);
-}
-
-
-VOID decrement_available_count(VOID) {
-    ASSERT(n_available > 0);
-    InterlockedDecrement64(&n_available);
-
-    if (n_available == START_TRIMMING_THRESHOLD) SetEvent(initiate_trimming_event);
-}
-
-void initialize_lock(PCRITICAL_SECTION lock) {
-    InitializeCriticalSection(lock);
-    SetCriticalSectionSpinCount(lock, ULONG_MAX);
-}
-
-// Initialize all global critical sections
-void initialize_locks(void) {
-
-    // Initialize locks for kernel read/write VA space
-    initialize_lock(&kernel_write_lock);
 }
 
 HANDLE CreateSharedMemorySection (VOID) {
@@ -196,16 +183,6 @@ void initialize_physical_pages(void) {
     }
 }
 
-void initialize_page_table(void) {
-    // Allocate and zero all PTE data.
-    PTE_base = (PPTE) zero_malloc(sizeof(PTE) * NUM_PTEs);
-
-    // Initialize all PTE locks
-    for (PPTE pte = PTE_base; pte < PTE_base + NUM_PTEs; pte++) {
-        initialize_byte_lock(&pte->lock);
-    }
-}
-
 void initialize_page_lists(void) {
     // Initialize lists for PFN state machine
     initialize_page_list(&zero_list);
@@ -233,11 +210,6 @@ void initialize_PFN_data(void) {
     // That corresponds with the value of the frame number.
     for (ULONG64 i = 0; i < allocated_frame_count; i++) {
 
-        // TODO -- get rid of this. It's not necessary anymore.
-        if (allocated_frame_numbers[i] == NO_FRAME_ASSIGNED) {
-            continue; // skip frame number 0, as it is an invalid page of memory per our PTE encoding.
-        }
-
         LPVOID result = VirtualAlloc((LPVOID)(PFN_array + allocated_frame_numbers[i]),
                                      sizeof(PFN),
                                      MEM_COMMIT,
@@ -251,26 +223,6 @@ void initialize_PFN_data(void) {
         create_zeroed_pfn(new_pfn);
         lock_list_then_insert_to_tail(&free_list, &new_pfn->entry);
     }
-}
-
-void initialize_page_file_and_metadata(void) {
-
-    // Initialize page file.
-    page_file = (char*) zero_malloc(PAGES_IN_PAGE_FILE * PAGE_SIZE);
-
-    // Initialize page file bitmaps.
-    // Note that we ALWAYS set the first slot to full, as there cannot be a disk slot of ZERO.
-    page_file_bitmaps = zero_malloc(PAGES_IN_PAGE_FILE / BITS_PER_BYTE);
-    page_file_bitmaps[0] |= DISK_SLOT_IN_USE;
-
-    // Initialize the writer's array of disk slots
-    // This supports extra slots to be stashed for later.
-    slot_stack = zero_malloc((MAX_WRITE_BATCH_SIZE + BITS_PER_BITMAP_ROW * 2) * BYTES_PER_VA);
-    last_checked_bitmap_row = 0;
-    num_stashed_slots = 0;
-
-    // Initialize disk slot tracker -- minus one because we have an initially full slot at index zero.
-    empty_disk_slots = PAGES_IN_PAGE_FILE - 1;
 }
 
 void initialize_kernel_VA_spaces(void) {
@@ -415,8 +367,6 @@ void initialize_events(void) {
 }
 
 void initialize_shared_page_parameter(void) {
-    // Allocate a MEM_PHYSICAL region that is "connected" to the AWE section
-    // created above.
     memset(&virtual_alloc_shared_parameter, 0, sizeof(virtual_alloc_shared_parameter));
     virtual_alloc_shared_parameter.Type = MemExtendedParameterUserPhysicalHandle;
     virtual_alloc_shared_parameter.Handle = physical_page_handle;
@@ -448,9 +398,6 @@ void initialize_system(void) {
     initialize_kernel_VA_spaces();
     initialize_user_VA_space();
 
-    // Initialize all locks on global data structures.
-    initialize_locks();
-
     // Initialize events
     initialize_events();
 
@@ -463,32 +410,4 @@ void initialize_system(void) {
 #if DEBUG
     g_traceIndex = -1;
 #endif
-}
-
-VOID map_single_page_from_pte(PPTE pte) {
-    ULONG64 frame_pointer = pte->memory_format.frame_number;
-    PULONG_PTR va = get_VA_from_PTE(pte);
-
-    map_pages(1, va, &frame_pointer);
-}
-
-void map_pages(ULONG64 num_pages, PULONG_PTR va, PULONG_PTR frame_numbers) {
-    if (MapUserPhysicalPages (va, num_pages, frame_numbers) == FALSE) {
-        fatal_error("Could not map VA to page in MapUserPhysicalPages.");
-    }
-}
-
-void unmap_pages(ULONG64 num_pages, PULONG_PTR va) {
-    if (MapUserPhysicalPages (va, num_pages, NULL) == FALSE) {
-        fatal_error("Could not un-map old VA.");
-    }
-}
-
-void set_max_frame_number(void) {
-    max_frame_number = 0;
-    min_frame_number = ULONG_MAX;
-    for (int i = 0; i < allocated_frame_count; i++) {
-        max_frame_number = max(max_frame_number, allocated_frame_numbers[i]);
-        min_frame_number = min(min_frame_number, allocated_frame_numbers[i]);
-    }
 }

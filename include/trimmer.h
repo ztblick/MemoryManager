@@ -4,7 +4,9 @@
 
 #pragma once
 
-#include "../include/scheduler.h"
+#include "pfn.h"
+#include "page_list.h"
+#include "threads.h"
 
 #define MAX_TRIM_ATTEMPTS       MAX_TRIM_BATCH_SIZE * 8
 #define TRIMMER_DELAY           10

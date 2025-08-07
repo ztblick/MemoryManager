@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../include/macros.h"
-#include "../include/PFN.h"
-#include "../include/debug.h"
+#include "macros.h"
+#include "pfn.h"
+#include "debug.h"
 
 /*
  * A page list is the head of a doubly-linked list of pages.
@@ -22,6 +22,12 @@ typedef struct __page_list {
     ULONG64 list_size;          // 8 bytes
     SRWLOCK lock;               // 8 bytes
 } PAGE_LIST, *PPAGE_LIST;
+
+// Page lists
+extern PAGE_LIST zero_list;
+extern PAGE_LIST free_list;
+extern PAGE_LIST modified_list;
+extern PAGE_LIST standby_list;
 
 /*
  *  Initialize a page list. This creates the critical section, initializes the list head,

@@ -3,8 +3,6 @@
 //
 
 #include "../include/scheduler.h"
-#include "../include/initializer.h"
-#include "../include/simulator.h"
 
 VOID print_statistics(VOID) {
 
@@ -19,7 +17,7 @@ VOID print_statistics(VOID) {
         *n_modified, 100.0 * *n_modified / allocated_frame_count);
     printf("STANDBY PAGE COUNT:\t%llu\tSTANDBY PAGE PERCENTAGE:%.2f%%\n",
         *n_standby, 100.0 * *n_standby / allocated_frame_count);
-    printf("EMPTY DISK SLOTS:\t%llu\n", empty_disk_slots);
+    printf("EMPTY DISK SLOTS:\t%lld\n", pf.empty_disk_slots);
     printf("\nHARD FAULTS RESOLVED:\t%llu\tSOFT FAULTS RESOLVED:\t%llu\n\n",
         n_hard, n_soft);
 }

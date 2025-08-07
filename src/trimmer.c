@@ -1,8 +1,6 @@
 //
 // Created by zblickensderfer on 5/6/2025.
 //
-#include "../include/debug.h"
-#include "../include/initializer.h"
 #include "../include/trimmer.h"
 
 VOID trim_pages(VOID) {
@@ -30,20 +28,11 @@ VOID trim_pages(VOID) {
         // Wrap around!
         if (pte == (PTE_base + NUM_PTEs)) pte = PTE_base;
 
-        // TODO consider removing this (again). It does not seem like we need to lock this as long as we
-        // can update the PTE with an interlocked operation. Is writeNoFence atomic?
-
         // If the PTE is not valid, no need for us to try to lock it.
         if (!IS_PTE_VALID(pte)) continue;
 
         // Try to acquire the PTE lock
         if (!try_lock_pte(pte)) continue;
-
-        // Check the PTE is again (now that we have the lock)
-        if (!IS_PTE_VALID(pte)) {
-            unlock_pte(pte);
-            continue;
-        }
 
         // Read in the the PFN.
         pfn = get_PFN_from_PTE(pte);
@@ -83,12 +72,6 @@ VOID trim_pages(VOID) {
         // Release the pte lock, which was acquired earlier when the trim batch was initially assembled.
         unlock_pte(pte);
     }
-
-    // TODO consider waking the writer in the middle of the previous loop.
-    // Once we are adding pages to the tail, the writer should be able
-    // to begin pulling them from the head. Of course, we will want to avoid
-    // contention on the page lock...
-
     // Wake the writer!
     SetEvent(initiate_writing_event);
 }

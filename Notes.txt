@@ -10,34 +10,43 @@ NEXT SUB-GOALS:
 // Anywhere that the struct is used, include the header file. This will tell the compiler that the struct is
 // external of the file, and it will find it where it is actually declared.
 
-// "decl__spec" used to cache align things within a struct to avoid cache contention!
-
-FIRST ORDER OF BUSINESS: clean up. Resolve TODOs. Add functions. Tidy up code. Create README.
-
-THEN: attend to the analysis below!
+// "__declspec" used to cache align things within a struct to avoid cache contention!
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-What is expensive?
+What do we tackle next???
 
-- Map/unmap pages. Use scatter to speed things up in trimmer. Batch kernel unmaps (multiple VAs per thread).
-
-- Kernel read VA lock contention. Add an array of kernel VA space -- increase/decrease it with threads.
-    - Remove locks entirely.
-
-- Grabbing disk slots. Grab whole rows at once. De-fragment the bitmaps from time to time.
+- FIRST ORDER OF BUSINESS: clean up. Resolve TODOs. Add functions. Tidy up code. Create README.
+    - Add structs
+    - Declare & initialize with extern properly
+    - Make the list operations cleaner -- incrementing/decrementing counts and list sizes should be simpler.
 
 - List operations. Use read/write locks to speed things up. Batch prune to multiple free lists.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+THEN, any of the below:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+- Lock contention. Move to PTE region locks, not individual PTE locks.
+    - Try removing locks from as many places as possible.
+
+- More elegantly schedule trimming/writing batch sizes based on anticipated consumption
+    - Use QueryPerformanceCounter(&modified_list);
 
 - Cache-optimize structs to reduce contention.
 
-- If possible, remove all locks entirely.
+- Add read/write accesses. Check readwrite bit in trimmer -- move read-only directly to standby.
 
+- Add aging via accessed bit. Use this in the trimmer to trim the right candidates.
+    - Then, add in non-random user accessing. Read in from disk more generously.
+
+- De-fragment the bitmaps from time to time.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ~~~~ LOCK ORDERS ~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 A - PTE locks
 B - PFN locks
 C - list locks
-
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ~~~ OLD THOUGHTS THAT ARE SEEMINGLY IRRELEVANT ~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 PAGE = 4k chunk of virtual memory
 FRAME = 4k chunk of physical memory

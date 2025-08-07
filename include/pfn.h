@@ -36,9 +36,7 @@
 #define SET_PFN_STATUS(pfn, s)          ((pfn)->status = (s))
 
 // We need the list entry to be first, as its address is also the address of the PFN.
-// Size: 80 bytes total. 1 will not completely fit in a cache line.
-// TODO Later on, reduce the size of the PFN to be 64 bytes (so it can fit in a cache line).
-// We can do this by making lock smaller (32 bytes, not 40)
+// Size: 64 bytes total. 1 will completely fit in a cache line.
 typedef struct __pfn {
     LIST_ENTRY entry;               // Size: 16 bytes
     UINT64 disk_index;              // Size: 8 bytes
@@ -47,8 +45,14 @@ typedef struct __pfn {
     SHORT soft_fault_mid_trim;          // Set when a soft-fault occurs during a batched trim.
     PPTE PTE;                       // Size: 8 bytes
         // FYI -- The 3 least-significant bits here are always zer0, so we can save some bits with cleverness...
-    BYTE_LOCK lock;          // Size: 40 bytes
+    BYTE_LOCK lock;                 // Size: 8 bytes
+    // char padding[12];               // Size: 12 bytes
 } PFN, *PPFN;
+
+/*
+ *  The base of our sparse array of PFNs.
+ */
+extern PPFN PFN_array;
 
 /*
  *  Initializes a zeroed PFN. This is usually done when creating a PFN for the first time.
@@ -102,20 +106,6 @@ PPFN get_PFN_from_PTE(PPTE pte);
  *  Acquires the lock on a PFN, waiting as long as necessary.
  */
 VOID lock_pfn(PPFN pfn);
-
-
-/*
- *  These functions support the soft fault mid write situation, in which a disk-bound page was soft-faulted.
- *  In this case, the writer will check this bit after acquiring the page lock. If the bit is cleared, the
- *  write continues as normal. But if the bit is set, the write is aborted, and the corresponding disk slot is
- *  cleared. After this, the bit is cleared as well to reset it for the next possible occurance of this situation.
- *
- *  Precondition: pfn lock has already been acquired.
- */
-VOID set_soft_fault_write_bit(PPFN pfn);
-VOID set_soft_fault_trim_bit(PPFN pfn);
-BOOL soft_fault_happened_mid_write(PPFN pfn);
-BOOL soft_fault_happened_mid_trim(PPFN pfn);
 
 /*
  *  Tries to, but does not always, acquire the lock on a PFN.

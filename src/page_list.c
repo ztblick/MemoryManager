@@ -3,8 +3,11 @@
 //
 
 #include "../include/page_list.h"
-#include "../include/initializer.h"
-#include "../include/macros.h"
+
+PAGE_LIST zero_list;
+PAGE_LIST free_list;
+PAGE_LIST modified_list;
+PAGE_LIST standby_list;
 
 VOID initialize_page_list(PPAGE_LIST list) {
     InitializeListHead(&list->head);
