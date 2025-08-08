@@ -4,20 +4,14 @@ Current goal:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 NEXT SUB-GOALS:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// TODO -- add all global variables to structs -- this allows you to pad them to cache align, categorize, etc.
-// HOW? Actually declare (and initialize) the structs only once, in initializer.c. Do not use "extern."
-// In the header file, declare the struct with "extern".
-// Anywhere that the struct is used, include the header file. This will tell the compiler that the struct is
-// external of the file, and it will find it where it is actually declared.
-
 // "__declspec" used to cache align things within a struct to avoid cache contention!
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 What do we tackle next???
 
-- FIRST ORDER OF BUSINESS: clean up. Resolve TODOs. Add functions. Tidy up code. Create README.
-    - Add structs
-    - Declare & initialize with extern properly
-    - Make the list operations cleaner -- incrementing/decrementing counts and list sizes should be simpler.
+- FIRST ORDER OF BUSINESS: clean up. Resolve TODOs. Create README.
+    - TODO Make the list operations cleaner -- incrementing/decrementing counts and list sizes should be simpler.
+    - TODO add more structs to easily package global data
+    - TODO Create README
 
 - List operations. Use read/write locks to speed things up. Batch prune to multiple free lists.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

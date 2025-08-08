@@ -7,21 +7,20 @@
 PPFN PFN_array;
 
 VOID create_zeroed_pfn(PPFN new_pfn) {
-    new_pfn->status = PFN_FREE;
-    new_pfn->PTE = NULL;
-    new_pfn->disk_index = NO_DISK_INDEX;
-    new_pfn->soft_fault_mid_write = 0;
-    new_pfn->soft_fault_mid_trim = 0;
-    initialize_byte_lock(&new_pfn->lock);
+
+    // Here, we will create a temporary PFN. We will read its data into
+    // our new PFN in 64-byte chunks (to prevent tearing).
+    PFN temp = {0};
+    temp.lock.semaphore = UNLOCKED;
+    temp.fields.status = PFN_FREE;
+    temp.fields.disk_index = NO_DISK_INDEX;
+
+    WriteULong64NoFence(&new_pfn->raw_pfn_data, temp.raw_pfn_data);
+    WriteULong64NoFence((DWORD64 *) &new_pfn->PTE, (DWORD64) NULL);
 }
 
 ULONG_PTR get_frame_from_PFN(PPFN pfn) {
-    if (pfn < PFN_array) {
-        fatal_error("PFN out of bounds while attempting to get frame number from PFN.");
-    }
-    if (pfn - PFN_array > max_frame_number) {
-        fatal_error("Max frame number exceeded in get_frame_from_pfn mapping.");
-    }
+    ASSERT (pfn >= PFN_array && pfn <= PFN_array + max_frame_number);
     return pfn - PFN_array;
 }
 
@@ -36,62 +35,78 @@ PPFN get_PFN_from_PTE(PPTE pte) {
 }
 
 PPFN get_PFN_from_frame(ULONG_PTR frame_number) {
-    if (frame_number < min_frame_number || frame_number > max_frame_number) {
-        fatal_error("Frame number out of bounds while attempting to get PFN from frame number.");
-    }
+    ASSERT (frame_number >= min_frame_number && frame_number <= max_frame_number);
     return PFN_array + frame_number;
 }
 
 VOID set_PFN_active(PPFN pfn, PPTE pte) {
-    // TODO Update this to read in all at once into the PFN to prevent word tearing
+    // Here, we will create a temporary PFN. We will read its data into
+    // our new PFN in 64-byte chunks (to prevent tearing).
+    PFN snapshot = *pfn;
+    PFN temp = {0};
+    temp.lock.semaphore = snapshot.lock.semaphore;
+    temp.fields.status = PFN_ACTIVE;
+    temp.fields.disk_index = NO_DISK_INDEX;
 
-    pfn->status = PFN_ACTIVE;
-    pfn->PTE = pte;
-    pfn->disk_index = NO_DISK_INDEX;
+    WriteULong64NoFence(&pfn->raw_pfn_data, temp.raw_pfn_data);
+    WriteULong64NoFence((DWORD64 *) &pfn->PTE, (DWORD64) pte);
 }
 
 VOID set_PFN_free(PPFN pfn) {
 
-    pfn->status = PFN_FREE;
-    pfn->PTE = NULL;
-    pfn->disk_index = NO_DISK_INDEX;
-    pfn->soft_fault_mid_write = 0;
-    pfn->soft_fault_mid_trim = 0;
+    // Here, we will create a temporary PFN. We will read its data into
+    // our new PFN in 64-byte chunks (to prevent tearing).
+    PFN snapshot = *pfn;
+    PFN temp = {0};
+    temp.lock.semaphore = snapshot.lock.semaphore;
+    temp.fields.status = PFN_FREE;
+    temp.fields.disk_index = NO_DISK_INDEX;
+
+    WriteULong64NoFence(&pfn->raw_pfn_data, temp.raw_pfn_data);
+    WriteULong64NoFence((DWORD64 *) &pfn->PTE, (DWORD64) NULL);
 }
 
 VOID set_pfn_standby(PPFN pfn, ULONG64 disk_index) {
-    pfn->status = PFN_STANDBY;
-    pfn->disk_index = disk_index;
+
+    // Here, we will create a temporary PFN. We will read its data into
+    // our new PFN in 64-byte chunks (to prevent tearing).
+    PFN snapshot = *pfn;
+    PFN temp = {0};
+    temp.lock.semaphore = snapshot.lock.semaphore;
+    temp.fields.status = PFN_STANDBY;
+    temp.fields.disk_index = disk_index;
+
+    WriteULong64NoFence(&pfn->raw_pfn_data, temp.raw_pfn_data);
 }
 
-/*
- *  Acquires the lock on a PFN, waiting as long as necessary.
- */
 VOID lock_pfn(PPFN pfn) {
     lock(&pfn->lock);
 }
 
-
-/*
- *  Tries to, but does not always, acquire the lock on a PFN.
- */
 BOOL try_lock_pfn(PPFN pfn) {
     return try_lock(&pfn->lock);
 }
 
-/*
- *  Releases the lock on a PFN.
- */
 VOID unlock_pfn(PPFN pfn) {
     unlock(&pfn->lock);
 }
 
 VOID set_pfn_mid_trim(PPFN pfn) {
-    pfn->status = PFN_MID_TRIM;
-    pfn->soft_fault_mid_trim = NO_SOFT_FAULT_YET;
+    PFN snapshot = *pfn;
+    PFN temp = {0};
+    temp.lock.semaphore = snapshot.lock.semaphore;
+    temp.fields.status = PFN_MID_TRIM;
+    temp.fields.disk_index = snapshot.fields.disk_index;
+
+    WriteULong64NoFence(&pfn->raw_pfn_data, temp.raw_pfn_data);
 }
 
 VOID set_pfn_mid_write(PPFN pfn) {
-    pfn->status = PFN_MID_WRITE;
-    pfn->soft_fault_mid_write = NO_SOFT_FAULT_YET;
+    PFN snapshot = *pfn;
+    PFN temp = {0};
+    temp.lock.semaphore = snapshot.lock.semaphore;
+    temp.fields.status = PFN_MID_WRITE;
+    temp.fields.disk_index = snapshot.fields.disk_index;
+
+    WriteULong64NoFence(&pfn->raw_pfn_data, temp.raw_pfn_data);
 }

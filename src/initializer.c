@@ -8,6 +8,7 @@ MEM_EXTENDED_PARAMETER virtual_alloc_shared_parameter;
 PULONG_PTR application_va_base;
 PULONG_PTR kernel_write_va;
 HANDLE physical_page_handle;
+
 // PFN Data Structures
 ULONG_PTR max_frame_number;
 ULONG_PTR min_frame_number;
@@ -21,6 +22,8 @@ volatile PULONG64 n_modified;
 volatile PULONG64 n_standby;
 volatile LONG64 n_hard;
 volatile LONG64 n_soft;
+
+PTHREAD_INFO user_thread_info;
 
 BOOL GetPrivilege (VOID) {
     struct {
@@ -199,15 +202,16 @@ void initialize_PFN_data(void) {
                                 MEM_RESERVE,
                                 PAGE_READWRITE);
 
-    if (!PFN_array) {
-        fatal_error("Failed to reserve VA space for PFN_array\n");
-    }
+    ASSERT(PFN_array);
 
     // Create all PFNs, adding them to the free list
     // Note -- it is critical to not save the returned value of VirtualAlloc as the VA of the PFN.
     // VirtualAlloc returns the beginning of the page that has been committed, which can round down.
     // Once the memory is successfully committed, the PFN should map to the region inside that page
     // That corresponds with the value of the frame number.
+
+    // TODO -- sort frame number array, then commit ONCE for each group of PFNs that share a page.
+
     for (ULONG64 i = 0; i < allocated_frame_count; i++) {
 
         LPVOID result = VirtualAlloc((LPVOID)(PFN_array + allocated_frame_numbers[i]),
@@ -255,23 +259,13 @@ void initialize_user_VA_space(void) {
 
 void initialize_threads(void) {
 
-    // Initialize handles to for each thread.
+    // Initialize array of user thread handles and IDs
     user_threads = (PHANDLE) zero_malloc(num_user_threads * sizeof(HANDLE));
-    aging_threads = (PHANDLE) zero_malloc(NUM_AGING_THREADS * sizeof(HANDLE));
-    scheduling_threads = (PHANDLE) zero_malloc(NUM_SCHEDULING_THREADS * sizeof(HANDLE));
-    trimming_threads = (PHANDLE) zero_malloc(NUM_TRIMMING_THREADS * sizeof(HANDLE));
-    writing_threads = (PHANDLE) zero_malloc(NUM_WRITING_THREADS * sizeof(HANDLE));
-
     user_thread_ids = (PULONG) zero_malloc(num_user_threads * sizeof(ULONG));
-    aging_thread_ids = (PULONG) zero_malloc(NUM_AGING_THREADS * sizeof(ULONG));
-    scheduling_thread_ids = (PULONG) zero_malloc(NUM_SCHEDULING_THREADS * sizeof(ULONG));
-    trimming_thread_ids = (PULONG) zero_malloc(NUM_TRIMMING_THREADS * sizeof(ULONG));
-    writing_thread_ids = (PULONG) zero_malloc(NUM_WRITING_THREADS * sizeof(ULONG));
-
 
     // Create structs to pass to user threads, including each thread's kernel
     // read spaces, which are divided into 16 individual read spaces.
-    PTHREAD_INFO user_thread_info = (PTHREAD_INFO) zero_malloc(num_user_threads * sizeof(THREAD_INFO));
+    user_thread_info = (PTHREAD_INFO) zero_malloc(num_user_threads * sizeof(THREAD_INFO));
 
     for (ULONG i = 0; i < num_user_threads; i++) {
         for (int j = 0; j < NUM_KERNEL_READ_ADDRESSES; j++) {
@@ -290,60 +284,42 @@ void initialize_threads(void) {
         user_threads[i] = CreateThread (DEFAULT_SECURITY,
                                DEFAULT_STACK_SIZE,
                                (LPTHREAD_START_ROUTINE) run_user_app_simulation,
-                               (LPVOID) &user_thread_info[i],
+                               &user_thread_info[i],
                                DEFAULT_CREATION_FLAGS,
                                &user_thread_ids[i]);
 
-        NULL_CHECK(user_threads[i], "Could not create user threads.");
+        ASSERT(user_threads[i]);
     }
 
-    // Create system scheduling threads
-    for (ULONG64 i = 0; i < NUM_SCHEDULING_THREADS; i++) {
-        scheduling_threads[i] = CreateThread (DEFAULT_SECURITY,
+    // Create system scheduling thread
+    scheduling_thread = CreateThread (DEFAULT_SECURITY,
                                DEFAULT_STACK_SIZE,
                                (LPTHREAD_START_ROUTINE) schedule_tasks,
-                               (LPVOID) i,
+                               NULL,
                                DEFAULT_CREATION_FLAGS,
-                               &scheduling_thread_ids[i]);
+                               &scheduling_thread_id);
 
-        NULL_CHECK(scheduling_threads[i], "Could not create scheduling threads.");
-    }
+    ASSERT(scheduling_thread);
 
-    // Create system aging threads
-    for (ULONG64 i = 0; i < NUM_AGING_THREADS; i++) {
-        aging_threads[i] = CreateThread (DEFAULT_SECURITY,
-                               DEFAULT_STACK_SIZE,
-                               (LPTHREAD_START_ROUTINE) age_active_ptes,
-                               (LPVOID) i,
-                               DEFAULT_CREATION_FLAGS,
-                               &aging_thread_ids[i]);
-
-        NULL_CHECK(aging_threads[i], "Could not create aging threads.");
-    }
-
-    // Create system trimming threads
-    for (ULONG64 i = 0; i < NUM_TRIMMING_THREADS; i++) {
-        trimming_threads[i] = CreateThread (DEFAULT_SECURITY,
+    // Create system trimming thread
+    trimming_thread = CreateThread (DEFAULT_SECURITY,
                                DEFAULT_STACK_SIZE,
                                (LPTHREAD_START_ROUTINE) trim_pages_thread,
-                               (LPVOID) i,
+                               NULL,
                                DEFAULT_CREATION_FLAGS,
-                               &trimming_thread_ids[i]);
+                               &trimming_thread_id);
 
-        NULL_CHECK(trimming_threads[i], "Could not create trimming threads.");
-    }
+    ASSERT(trimming_thread);
 
-    // Create system writing threads
-    for (ULONG64 i = 0; i < NUM_WRITING_THREADS; i++) {
-        writing_threads[i] = CreateThread (DEFAULT_SECURITY,
+    // Create system writing thread
+    writing_thread = CreateThread (DEFAULT_SECURITY,
                                DEFAULT_STACK_SIZE,
                                (LPTHREAD_START_ROUTINE) write_pages_thread,
-                               (LPVOID) i,
+                               NULL,
                                DEFAULT_CREATION_FLAGS,
-                               &writing_thread_ids[i]);
+                               &writing_thread_id);
 
-        NULL_CHECK(writing_threads[i], "Could not create writing threads.");
-    }
+    ASSERT(writing_thread);
 }
 
 void initialize_events(void) {
@@ -372,7 +348,6 @@ void initialize_shared_page_parameter(void) {
     virtual_alloc_shared_parameter.Handle = physical_page_handle;
 }
 
-// Initialize the above structures
 void initialize_system(void) {
 
     // Get the privilege and physical pages from the OS.

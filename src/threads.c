@@ -14,14 +14,14 @@ HANDLE system_exit_event;
 
 // Thread handles
 PHANDLE user_threads;
-PHANDLE scheduling_threads;
-PHANDLE aging_threads;
-PHANDLE trimming_threads;
-PHANDLE writing_threads;
+HANDLE scheduling_thread;
+HANDLE aging_thread;
+HANDLE trimming_thread;
+HANDLE writing_thread;
 
 // Thread IDs
 PULONG user_thread_ids;
-PULONG scheduling_thread_ids;
-PULONG aging_thread_ids;
-PULONG trimming_thread_ids;
-PULONG writing_thread_ids;
+ULONG scheduling_thread_id = 0;
+ULONG aging_thread_id = 1;
+ULONG trimming_thread_id = 2;
+ULONG writing_thread_id = 3;

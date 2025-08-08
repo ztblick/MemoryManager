@@ -38,14 +38,16 @@ extern HANDLE system_exit_event;
 
 // Thread handles
 extern PHANDLE user_threads;
-extern PHANDLE scheduling_threads;
-extern PHANDLE aging_threads;
-extern PHANDLE trimming_threads;
-extern PHANDLE writing_threads;
+extern HANDLE scheduling_thread;
+extern HANDLE aging_thread;
+extern HANDLE trimming_thread;
+extern HANDLE writing_thread;
 
 // Thread IDs
 extern PULONG user_thread_ids;
-extern PULONG scheduling_thread_ids;
-extern PULONG aging_thread_ids;
-extern PULONG trimming_thread_ids;
-extern PULONG writing_thread_ids;
+extern ULONG scheduling_thread_id;
+extern ULONG aging_thread_id;
+extern ULONG trimming_thread_id;
+extern ULONG writing_thread_id;
+
+extern PTHREAD_INFO user_thread_info;

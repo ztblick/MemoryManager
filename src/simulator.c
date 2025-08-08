@@ -70,9 +70,9 @@ void begin_system_test(void) {
     // Test is finished! Tell all threads to stop.
     SetEvent(system_exit_event);
 
-    WaitForMultipleObjects(NUM_TRIMMING_THREADS, trimming_threads, TRUE, INFINITE);
-    WaitForMultipleObjects(NUM_WRITING_THREADS, writing_threads, TRUE, INFINITE);
-    WaitForMultipleObjects(NUM_SCHEDULING_THREADS, scheduling_threads, TRUE, INFINITE);
+    WaitForSingleObject(trimming_thread, INFINITE);
+    WaitForSingleObject(writing_thread, INFINITE);
+    WaitForSingleObject(scheduling_thread, INFINITE);
 }
 
 VOID main (int argc, char** argv) {

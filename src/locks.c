@@ -5,7 +5,7 @@
 #include "../include/locks.h"
 
 VOID initialize_byte_lock(PBYTE_LOCK lock) {
-    WriteULong64NoFence(&lock->semaphore, UNLOCKED);
+    lock->semaphore = UNLOCKED;
 }
 
 VOID lock(PBYTE_LOCK lock) {
@@ -23,7 +23,7 @@ VOID lock(PBYTE_LOCK lock) {
         // Here we will try to acquire the lock. If we cannot, we will wrap around
         // and try again, with a doubled delay to prevent constant attempts.
 
-    } while (InterlockedCompareExchange64((volatile LONG64 *) &lock->semaphore,
+    } while (InterlockedCompareExchange16(&lock->semaphore,
                                             LOCKED,
                                             UNLOCKED) != UNLOCKED);
 }
@@ -34,7 +34,7 @@ BOOL try_lock(PBYTE_LOCK lock) {
     if (lock->semaphore == LOCKED)
         return FALSE;
 
-    return(InterlockedCompareExchange64((volatile LONG64 *) &lock->semaphore,
+    return(InterlockedCompareExchange16(&lock->semaphore,
                                             LOCKED,
                                             UNLOCKED) == UNLOCKED);
 }
@@ -43,5 +43,5 @@ VOID unlock(PBYTE_LOCK lock) {
 
     // Ensure that we are unlocking something already locked.
     ASSERT(lock->semaphore == LOCKED);
-    InterlockedDecrement64((volatile LONG64*) &lock->semaphore);
+    InterlockedDecrement16(&lock->semaphore);
 }

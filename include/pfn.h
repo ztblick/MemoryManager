@@ -15,6 +15,8 @@
                                     // written out.
 #define PFN_STANDBY     0x5
 
+#define PFN_STATUS_BITS 3
+
 // This is the default value given to a PFN's disk index variable. It is zero so there are never any issues
 // brought up by increasing the size of the page file.
 #define NO_DISK_INDEX                   0
@@ -25,28 +27,40 @@
 #define SOFT_FAULT_OCCURRED              1
 
 // Macros for easy analysis later.
-#define IS_PFN_FREE(pfn)                ((pfn)->status == PFN_FREE)
-#define IS_PFN_ACTIVE(pfn)              ((pfn)->status == PFN_ACTIVE)
-#define IS_PFN_MODIFIED(pfn)            ((pfn)->status == PFN_MODIFIED)
-#define IS_PFN_MID_WRITE(pfn)           ((pfn)->status == PFN_MID_WRITE)
-#define IS_PFN_MID_TRIM(pfn)            ((pfn)->status == PFN_MID_TRIM)
-#define IS_PFN_STANDBY(pfn)             ((pfn)->status == PFN_STANDBY)
+#define IS_PFN_FREE(pfn)                ((pfn)->fields.status == PFN_FREE)
+#define IS_PFN_ACTIVE(pfn)              ((pfn)->fields.status == PFN_ACTIVE)
+#define IS_PFN_MODIFIED(pfn)            ((pfn)->fields.status == PFN_MODIFIED)
+#define IS_PFN_MID_WRITE(pfn)           ((pfn)->fields.status == PFN_MID_WRITE)
+#define IS_PFN_MID_TRIM(pfn)            ((pfn)->fields.status == PFN_MID_TRIM)
+#define IS_PFN_STANDBY(pfn)             ((pfn)->fields.status == PFN_STANDBY)
 
 // To easily set the status bits.
-#define SET_PFN_STATUS(pfn, s)          ((pfn)->status = (s))
+#define SET_PFN_STATUS(pfn, s)          ((pfn)->fields.status = (s))
+
+// PFN lock data
+#define PFN_LOCK_SIZE_IN_BITS            16
+
+typedef struct __pfn_fields {
+    ULONG64 lock : PFN_LOCK_SIZE_IN_BITS;
+    ULONG64 disk_index : DISK_INDEX_BITS;
+    ULONG64 status : PFN_STATUS_BITS;
+    ULONG64 reserved : 5;
+} FIELDS;
 
 // We need the list entry to be first, as its address is also the address of the PFN.
-// Size: 64 bytes total. 1 will completely fit in a cache line.
+// Size: 32 bytes total. 2 will completely fit in a cache line.
+// Ideally, we will cache pages that are used by the same thread. If not, we may want to add
+// 32 bytes of padding to prevent cache ping-ponging.
+
 typedef struct __pfn {
-    LIST_ENTRY entry;               // Size: 16 bytes
-    UINT64 disk_index;              // Size: 8 bytes
-    SHORT status;                   // Size: 8 bytes
-    SHORT soft_fault_mid_write;          // Set when a soft-fault occurs during a disk write.
-    SHORT soft_fault_mid_trim;          // Set when a soft-fault occurs during a batched trim.
-    PPTE PTE;                       // Size: 8 bytes
-        // FYI -- The 3 least-significant bits here are always zer0, so we can save some bits with cleverness...
-    BYTE_LOCK lock;                 // Size: 8 bytes
-    // char padding[12];               // Size: 12 bytes
+    LIST_ENTRY entry;                           // Size: 16 bytes
+    PPTE PTE;                                   // Size: 8 bytes -- FYI -- The 3 least-significant bits here are always zero, so we can save some bits with cleverness...
+    union {                                     // Size: 8 bytes
+        FIELDS fields;
+        ULONG64 raw_pfn_data;
+        BYTE_LOCK lock;
+    };
+    char padding[32];
 } PFN, *PPFN;
 
 /*

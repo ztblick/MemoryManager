@@ -25,6 +25,6 @@
 #include "simulator.h"
 
 /*
- *  Initialize all data structures, as declared above.
+ *  Initialize all global data structures. Called at startup.
  */
 void initialize_system(void);

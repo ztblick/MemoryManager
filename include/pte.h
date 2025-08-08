@@ -5,7 +5,7 @@
 #pragma once
 
 #include "locks.h"
-#include "utils.h"
+#include "disk.h"
 
 #define PTE_INVALID             0
 #define PTE_VALID               1
@@ -19,10 +19,10 @@
 
 #define STATE_BITS              5
 
-#define DISK_INDEX_BITS         22
+#define DISK_INDEX_BITS         40
 
 #define FRAME_NUMBER_BITS       40
-#define MAX_FRAME_NUMBER        ((1U << FRAME_NUMBER_BITS) - 1)
+#define MAX_FRAME_NUMBER        ((1ULL << FRAME_NUMBER_BITS) - 1)
 
 // This is the default value given to the frame_number field for a PTE that has no connected frame.
 #define NO_FRAME_ASSIGNED       0
@@ -71,7 +71,6 @@ typedef struct {
 #define IS_PTE_VALID(pte)       ((pte)->memory_format.valid == PTE_VALID)
 #define IS_PTE_TRANSITION(pte)  ((pte)->transition_format.valid == PTE_INVALID && (pte)->transition_format.status == PTE_IN_TRANSITION && (pte)->transition_format.frame_number != NO_FRAME_ASSIGNED)
 #define IS_PTE_ON_DISK(pte)     ((pte)->disk_format.valid == PTE_INVALID && (pte)->disk_format.status == PTE_ON_DISK)
-
 
 /*
  *  This represents the base of our page table. For now, it is simply

@@ -37,32 +37,27 @@ PVOID get_VA_from_PTE(PPTE pte) {
     return (PVOID) ((ULONG_PTR) application_va_base + index * PAGE_SIZE);
 }
 
-// Using a strategy of not modifying the PTE one piece at a time, but all at once.
 void set_PTE_to_transition(PPTE pte) {
 
-    // TODO read with no fence to prevent tearing on the read
-    // TODO grab a snapshot of the pte, use that to populate the new pte, then read the new pte into the pte (no fence)
-
     // Start by copying the whole PTE
-    PTE temp;
-    temp.transition_format = pte->transition_format;
+    ULONG64 raw = ReadULong64NoFence((ULONG64 *) pte);
+    PTE temp = {0};
+    temp.entire_pte = raw;
 
-    // Clear the valid and status bits
+    // Update our two fields
     temp.transition_format.valid = PTE_INVALID;
     temp.transition_format.status = PTE_IN_TRANSITION;
-    temp.transition_format.frame_number = pte->transition_format.frame_number;
 
     // Write back all bits at once to avoid partial modification
-    WriteULong64NoFence((DWORD64*) pte, temp.entire_pte);
+    WriteULong64NoFence((ULONG64 *) pte, temp.entire_pte);
 }
 
 void set_PTE_to_valid(PPTE pte, ULONG_PTR frame_number) {
 
-    // Start creating a zeroed PTE
+    // Start by copying the whole PTE
+    ULONG64 raw = ReadULong64NoFence((ULONG64 *) pte);
     PTE temp = {0};
-
-    // This copies over all data from the PTE.
-    temp.memory_format = pte->memory_format;
+    temp.entire_pte = raw;
 
     // Set valid bit, set frame number
     temp.memory_format.valid = PTE_VALID;
@@ -78,8 +73,9 @@ void map_pte_to_disk(PPTE pte, UINT64 disk_index) {
     validate_disk_slot(disk_index);
 
     // Start by copying the whole PTE
+    ULONG64 raw = ReadULong64NoFence((ULONG64 *) pte);
     PTE temp = {0};
-    temp.memory_format = pte->memory_format;
+    temp.entire_pte = raw;
 
     // Clear the frame number, add the disk index, update the status bits
     temp.memory_format.frame_number = NO_FRAME_ASSIGNED;
@@ -106,6 +102,5 @@ VOID unlock_pte(PPTE pte) {
 VOID map_single_page_from_pte(PPTE pte) {
     ULONG64 frame_pointer = pte->memory_format.frame_number;
     PULONG_PTR va = get_VA_from_PTE(pte);
-
     map_pages(1, va, &frame_pointer);
 }

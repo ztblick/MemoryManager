@@ -39,16 +39,7 @@ void free_all_data_and_shut_down(void) {
 
 void free_events(void) {
     free(user_threads);
-    free(scheduling_threads);
-    free(aging_threads);
-    free(trimming_threads);
-    free(writing_threads);
-
     free(user_thread_ids);
-    free(scheduling_thread_ids);
-    free(aging_thread_ids);
-    free(trimming_thread_ids);
-    free(writing_thread_ids);
 
     CloseHandle(system_start_event);
     CloseHandle(standby_pages_ready_event);
@@ -62,8 +53,11 @@ void free_VA_space_data(void) {
     VirtualFree(application_va_base, 0, MEM_RELEASE);
     VirtualFree(kernel_write_va, 0, MEM_RELEASE);
 
-
-    // TODO free all user thread kernel read VA spaces
+    for (ULONG i = 0; i < num_user_threads; i++) {
+        for (int j = 0; j < NUM_KERNEL_READ_ADDRESSES; j++) {
+            VirtualFree(user_thread_info[i].kernel_va_spaces[j],0, MEM_RELEASE);
+        }
+    }
 }
 
 void free_PFN_data(void) {

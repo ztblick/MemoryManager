@@ -20,7 +20,7 @@
 #define VERSION_SHIFT   0x02
 
 typedef struct {
-    ULONG64 semaphore;
+    volatile SHORT semaphore;
 } BYTE_LOCK, *PBYTE_LOCK;
 
 VOID initialize_byte_lock(PBYTE_LOCK lock);
