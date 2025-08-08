@@ -31,6 +31,12 @@ THEN, any of the below:
     - Then, add in non-random user accessing. Read in from disk more generously.
 
 - De-fragment the bitmaps from time to time.
+
+- Sort the frame number array, then commit ONCE for each group of PFNs that share a page.
+    - This will drastically reduce the number of calls to VirtualAlloc with the commit flag,
+      which would really speed things up during the startup phase.
+
+- More generally: use virtual alloc (mem commit) in ANY place we are using malloc.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ~~~~ LOCK ORDERS ~~~~
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

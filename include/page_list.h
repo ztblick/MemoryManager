@@ -58,7 +58,7 @@ BOOL is_at_head_of_list(PPAGE_LIST list, PPFN pfn);
 /*
  *  Adds a page to the tail of the list. This assumes the page being added is already locked by the caller!
  */
-VOID lock_list_then_insert_to_tail(PPAGE_LIST list, PLIST_ENTRY entry);
+VOID lock_list_then_insert_to_tail(PPAGE_LIST list, PPFN pfn);
 
 /*
  *  Increments the list size.

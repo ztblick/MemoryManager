@@ -101,14 +101,13 @@ VOID remove_page_from_list(PPAGE_LIST list, PPFN pfn) {
     }
 }
 
-// TODO modify this to accept PPFN as the parameter, not PLIST_ENTRY
-VOID lock_list_then_insert_to_tail(PPAGE_LIST list, PLIST_ENTRY entry) {
+VOID lock_list_then_insert_to_tail(PPAGE_LIST list, PPFN pfn) {
 
     lock_list_exclusive(list);
 #if DEBUG
     validate_list(list);
 #endif
-    InsertTailList(&list->head, entry);
+    InsertTailList(&list->head, &pfn->entry);
     increment_list_size(list);
 #if DEBUG
     validate_list(list);

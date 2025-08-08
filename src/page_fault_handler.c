@@ -263,7 +263,7 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO user_thread_info) {
         memset(kernel_read_va, 0, PAGE_SIZE);
 
         // Add the page to the free list and update its status
-        lock_list_then_insert_to_tail(&free_list, &available_pfn->entry);
+        lock_list_then_insert_to_tail(&free_list, available_pfn);
         increment_available_count();
         set_PFN_free(available_pfn);
 

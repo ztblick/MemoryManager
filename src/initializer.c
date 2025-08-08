@@ -210,7 +210,6 @@ void initialize_PFN_data(void) {
     // Once the memory is successfully committed, the PFN should map to the region inside that page
     // That corresponds with the value of the frame number.
 
-    // TODO -- sort frame number array, then commit ONCE for each group of PFNs that share a page.
 
     for (ULONG64 i = 0; i < allocated_frame_count; i++) {
 
@@ -225,7 +224,7 @@ void initialize_PFN_data(void) {
         // Initialize the new PFN, then insert it to the free list.
         PPFN new_pfn = PFN_array + allocated_frame_numbers[i];
         create_zeroed_pfn(new_pfn);
-        lock_list_then_insert_to_tail(&free_list, &new_pfn->entry);
+        lock_list_then_insert_to_tail(&free_list, new_pfn);
     }
 }
 

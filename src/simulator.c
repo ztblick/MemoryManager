@@ -40,7 +40,6 @@ void run_user_app_simulation(PVOID user_thread_info) {
             // Try stamping the page.
             __try {
                 *arbitrary_va = (ULONG_PTR) arbitrary_va;
-                // TODO set accessed bit in PTE
             }
 
             // If we fault, we set this flag to go around again.

@@ -144,7 +144,7 @@ VOID write_pages(VOID) {
             set_pfn_standby(pfn, disk_slot);
 
             // Add page to the standby list
-            lock_list_then_insert_to_tail(&standby_list, &pfn->entry);
+            lock_list_then_insert_to_tail(&standby_list, pfn);
             increment_available_count();
 
             // Update our count

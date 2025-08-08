@@ -67,7 +67,7 @@ VOID trim_pages(VOID) {
         SET_PFN_STATUS(pfn, PFN_MODIFIED);
 
         // Add this page to the modified list -- now the page is hot!
-        lock_list_then_insert_to_tail(&modified_list, &pfn->entry);
+        lock_list_then_insert_to_tail(&modified_list, pfn);
 
         // Release the pte lock, which was acquired earlier when the trim batch was initially assembled.
         unlock_pte(pte);
