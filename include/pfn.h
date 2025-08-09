@@ -60,7 +60,7 @@ typedef struct __pfn {
         ULONG64 raw_pfn_data;
         BYTE_LOCK lock;
     };
-    char padding[32];
+    // char padding[32];                        // Initial tests indicate that sharing cache lines yields ~8% speedups!
 } PFN, *PPFN;
 
 /*
