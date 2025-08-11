@@ -92,7 +92,7 @@ tricky race conditions (what if we fault on a page mid-trim or mid-write?), but 
 could not be resolved. **Speedup: 75%!**
 
 
-- <u>Page file Bitmap:</u> Finding and locking regions in the page file was a prohibitively
+- <u>Page File Bitmap:</u> Finding and locking regions in the page file was a prohibitively
 slow part of my system. To speed it up, I created a bitmap to represent the state of each slot.
 I used atomic operations to update the bitmaps without locks, and I added a stack of slots to
 stash any reserved but unused disk slots (for easy retrieval during the next write). Furthermore,

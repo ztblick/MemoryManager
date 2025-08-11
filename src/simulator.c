@@ -28,10 +28,10 @@ void run_user_app_simulation(PVOID user_thread_info) {
 #if RUN_FOREVER
     while (TRUE) {
 #else
-    for (int i = 0; i < iterations; i += 1) {
+    for (int i = 0; i < vm.iterations; i += 1) {
 #endif
         // Randomly access different portions of the virtual address space.
-        PULONG_PTR arbitrary_va = get_arbitrary_va(application_va_base);
+        PULONG_PTR arbitrary_va = get_arbitrary_va(vm.application_va_base);
 
         // Attempt to write the virtual address into memory page.
         do {
@@ -64,7 +64,7 @@ void begin_system_test(void) {
 
     // This waits for the tests to finish running before exiting the function
     // Our controlling thread will wait for this function to finish before exiting the test and reporting stats
-    WaitForMultipleObjects(num_user_threads, user_threads, TRUE, INFINITE);
+    WaitForMultipleObjects(vm.num_user_threads, user_threads, TRUE, INFINITE);
 
     // Test is finished! Tell all threads to stop.
     SetEvent(system_exit_event);
@@ -85,8 +85,8 @@ VOID main (int argc, char** argv) {
         printf("No arguments passed.\n");
         return;
     }
-    num_user_threads = strtol(argv[1], NULL, 10);  // Base 10
-    iterations = strtol(argv[2], NULL, 10);
+    vm.num_user_threads = strtol(argv[1], NULL, 10);  // Base 10
+    vm.iterations = strtol(argv[2], NULL, 10);
 #endif
     // Initialize all data structures, events, threads, and handles. Get physical pages from OS.
     initialize_system();
@@ -107,6 +107,6 @@ VOID main (int argc, char** argv) {
 
     // Print statistics
     printf("Test successful. Time elapsed: %llu milliseconds.\n", end_time - start_time);
-    printf ("Each of %llu threads accessed %llu VAs.\n", num_user_threads, iterations);
+    printf ("Each of %llu threads accessed %llu VAs.\n", vm.num_user_threads, vm.iterations);
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
 }

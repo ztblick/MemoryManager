@@ -61,8 +61,40 @@ VOID decrement_list_size(PPAGE_LIST list) {
     InterlockedDecrement64(&list->list_size);
 }
 
-VOID lock_list_and_remove_page(PPAGE_LIST list, PPFN pfn) {
+VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn) {
+	// First, we will try to lock pfn, its flink, and its blink
+	// We will attempt this a few times. If we are not successful,
+	// then we will lock the list exclusively.
+	ULONG attempts = 0;
+	PPFN flink = (PPFN) pfn->entry.Flink;
+	PPFN blink = (PPFN) pfn->entry.Blink;
+
+	// We cannot proceed while someone else has an exclusive lock on this
+	// list, so we will wait until we can acquire the shared lock
+	lock_list_shared(list);
+
+	// Attempt to grab both flink and blink locks
+	while (attempts < MAX_SOFT_FAULT_ATTEMPTS) {
+		attempts++;
+		if (!try_lock_pfn(flink)) continue;
+
+	    if (!try_lock_pfn(blink)) {
+	        unlock_pfn(flink);
+	        continue;
+	    }
+
+	    // If we can get both locks, we can safely remove our entry!
+	    RemoveEntryList(&pfn->entry);
+	    unlock_list_shared(list);
+	    unlock_pfn(flink);
+	    unlock_pfn(blink);
+	    return;
+	}
+
+	// If we get here, we will need to lock the list exclusively
+    unlock_list_shared(list);
     lock_list_exclusive(list);
+
 #if DEBUG
     validate_list(list);
 #endif
@@ -143,6 +175,14 @@ PPFN peek_from_list_head(PPAGE_LIST list) {
     PLIST_ENTRY entry = list->head.Flink;
     PPFN pfn = CONTAINING_RECORD(entry, PFN, entry);
     return pfn;
+}
+
+VOID lock_list_shared(PPAGE_LIST list) {
+    AcquireSRWLockShared(&list->lock);
+}
+
+VOID unlock_list_shared(PPAGE_LIST list) {
+    ReleaseSRWLockShared(&list->lock);
 }
 
 VOID lock_list_exclusive(PPAGE_LIST list) {

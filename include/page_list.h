@@ -16,6 +16,10 @@
  *  from a list.
  */
 
+// This will determine the number of times we will attempt to grab page locks
+// before grabbing the exclusive lock.
+#define MAX_SOFT_FAULT_ATTEMPTS		10
+
 // Total size: 32 bytes. Two will fit in a cache line.
 typedef struct __page_list {
     LIST_ENTRY head;            // 16 bytes
@@ -77,10 +81,10 @@ VOID decrement_list_size(PPAGE_LIST list);
 PPFN pop_from_head_list(PPAGE_LIST list);
 
 /*
- *  Locks the list, then removes an entry from that list. If, for some reason, the page is not on that list,
- *  then the function may behave in unexpected ways...
+ *  @brief Locks the list, then removes an entry from that list.
+ *  @precondition pfn is locked and on the given list
  */
-VOID lock_list_and_remove_page(PPAGE_LIST list, PPFN pfn);
+VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn);
 
 /*
  *  Removes a page from its list. Does not acquire any locks. Does not assume ANYTHING -- the caller
@@ -100,6 +104,12 @@ PPFN lock_list_then_pop_from_head(PPAGE_LIST list);
  *  Returns NULL is the list is empty.
  */
 PPFN peek_from_list_head(PPAGE_LIST list);
+
+/*
+ *  Locks the list shared.
+ */
+VOID lock_list_shared(PPAGE_LIST list);
+VOID unlock_list_shared(PPAGE_LIST list);
 
 /*
  *  Waits until it can acquire the lock on a given page list!

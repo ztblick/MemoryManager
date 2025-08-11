@@ -1,27 +1,9 @@
 
 #include "../include/initializer.h"
 
-// Declare and initialize various global variables
-ULONG64 num_user_threads = DEFAULT_NUM_USER_THREADS;
-ULONG64 iterations = DEFAULT_ITERATIONS;
-MEM_EXTENDED_PARAMETER virtual_alloc_shared_parameter;
-PULONG_PTR application_va_base;
-PULONG_PTR kernel_write_va;
-HANDLE physical_page_handle;
-
-// PFN Data Structures
-ULONG_PTR max_frame_number;
-ULONG_PTR min_frame_number;
-PULONG_PTR allocated_frame_numbers;
-ULONG_PTR allocated_frame_count;
-
-// Statistics
-volatile LONG64 n_available;
-volatile PULONG64 n_free;
-volatile PULONG64 n_modified;
-volatile PULONG64 n_standby;
-volatile LONG64 n_hard;
-volatile LONG64 n_soft;
+// Initializing global structs
+STATS stats = {0};
+VM vm = {0};
 
 PTHREAD_INFO user_thread_info;
 
@@ -107,22 +89,26 @@ BOOL GetPrivilege (VOID) {
 }
 
 VOID set_max_frame_number(VOID) {
-    max_frame_number = 0;
-    min_frame_number = ULONG_MAX;
-    for (int i = 0; i < allocated_frame_count; i++) {
-        max_frame_number = max(max_frame_number, allocated_frame_numbers[i]);
-        min_frame_number = min(min_frame_number, allocated_frame_numbers[i]);
+    ULONG64 max_frame_number = 0;
+    ULONG64 min_frame_number = ULONG_MAX;
+    for (int i = 0; i < vm.allocated_frame_count; i++) {
+        max_frame_number = max(max_frame_number, vm.allocated_frame_numbers[i]);
+        min_frame_number = min(min_frame_number, vm.allocated_frame_numbers[i]);
     }
+
+    // Update globals
+    vm.max_frame_number = max_frame_number;
+    vm.min_frame_number = min_frame_number;
 }
 
 void initialize_statistics(void) {
-    n_free = &free_list.list_size;
-    n_modified = &modified_list.list_size;
-    n_standby = &standby_list.list_size;
-    n_hard = 0;
-    n_soft = 0;
+    stats.n_free = &(free_list.list_size);
+    stats.n_modified = &modified_list.list_size;
+    stats.n_standby = &standby_list.list_size;
+    stats.n_hard = 0;
+    stats.n_soft = 0;
 
-    n_available = *n_free;
+    stats.n_available = *(stats.n_free);
 }
 
 HANDLE CreateSharedMemorySection (VOID) {
@@ -160,28 +146,28 @@ void initialize_physical_pages(void) {
         fatal_error ("full_virtual_memory_test : could not get privilege.");
     }
 
-    physical_page_handle = CreateSharedMemorySection();
+    vm.physical_page_handle = CreateSharedMemorySection();
 
-    if (physical_page_handle == NULL) {
+    if (vm.physical_page_handle == NULL) {
         printf ("CreateFileMapping2 failed, error %#x\n", GetLastError ());
         return;
     }
 
     // Grab physical pages from the OS
-    allocated_frame_count = NUMBER_OF_PHYSICAL_PAGES;
-    allocated_frame_numbers = zero_malloc (NUMBER_OF_PHYSICAL_PAGES * sizeof (ULONG_PTR));
-    NULL_CHECK (allocated_frame_numbers, "full_virtual_memory_test : could not allocate array to hold physical page numbers.");
+    vm.allocated_frame_count = NUMBER_OF_PHYSICAL_PAGES;
+    vm.allocated_frame_numbers = zero_malloc (NUMBER_OF_PHYSICAL_PAGES * sizeof (ULONG_PTR));
+    NULL_CHECK (vm.allocated_frame_numbers, "full_virtual_memory_test : could not allocate array to hold physical page numbers.");
 
-    allocated = AllocateUserPhysicalPages (physical_page_handle,
-                                           &allocated_frame_count,
-                                           allocated_frame_numbers);
+    allocated = AllocateUserPhysicalPages (vm.physical_page_handle,
+                                           &vm.allocated_frame_count,
+                                           vm.allocated_frame_numbers);
     if (allocated == FALSE) {
         fatal_error ("full_virtual_memory_test : could not allocate physical pages.");
     }
-    if (allocated_frame_count != NUMBER_OF_PHYSICAL_PAGES) {
+    if (vm.allocated_frame_count != NUMBER_OF_PHYSICAL_PAGES) {
 
         printf ("full_virtual_memory_test : allocated only %llu pages out of %llu pages requested\n",
-                allocated_frame_count,
+                vm.allocated_frame_count,
                 NUMBER_OF_PHYSICAL_PAGES);
     }
 }
@@ -198,7 +184,7 @@ void initialize_PFN_data(void) {
 
     // Initialize PFN sparse array
     PFN_array = VirtualAlloc    (NULL,
-                                sizeof(PFN) * (max_frame_number + 1),
+                                sizeof(PFN) * (vm.max_frame_number + 1),
                                 MEM_RESERVE,
                                 PAGE_READWRITE);
 
@@ -211,9 +197,9 @@ void initialize_PFN_data(void) {
     // That corresponds with the value of the frame number.
 
 
-    for (ULONG64 i = 0; i < allocated_frame_count; i++) {
+    for (ULONG64 i = 0; i < vm.allocated_frame_count; i++) {
 
-        LPVOID result = VirtualAlloc((LPVOID)(PFN_array + allocated_frame_numbers[i]),
+        LPVOID result = VirtualAlloc((LPVOID)(PFN_array + vm.allocated_frame_numbers[i]),
                                      sizeof(PFN),
                                      MEM_COMMIT,
                                      PAGE_READWRITE);
@@ -222,7 +208,7 @@ void initialize_PFN_data(void) {
         }
 
         // Initialize the new PFN, then insert it to the free list.
-        PPFN new_pfn = PFN_array + allocated_frame_numbers[i];
+        PPFN new_pfn = PFN_array + vm.allocated_frame_numbers[i];
         create_zeroed_pfn(new_pfn);
         lock_list_then_insert_to_tail(&free_list, new_pfn);
     }
@@ -231,32 +217,34 @@ void initialize_PFN_data(void) {
 void initialize_kernel_VA_spaces(void) {
 
     // Initialize kernel VA space
-    kernel_write_va = VirtualAlloc2 (NULL,
+    vm.kernel_write_va = VirtualAlloc2 (NULL,
                     NULL,
                   PAGE_SIZE * MAX_WRITE_BATCH_SIZE,
                   MEM_RESERVE | MEM_PHYSICAL,
                   PAGE_READWRITE,
-                  &virtual_alloc_shared_parameter,
+                  &vm.virtual_alloc_shared_parameter,
                   1);
 
-    NULL_CHECK (kernel_write_va, "Could not reserve kernal write VA space.");
+    NULL_CHECK (vm.kernel_write_va, "Could not reserve kernal write VA space.");
 }
 
 void initialize_user_VA_space(void) {
 
     // Reserve user virtual address space.
-    application_va_base = VirtualAlloc2 (NULL,
+    vm.application_va_base = VirtualAlloc2 (NULL,
                        NULL,
                        VIRTUAL_ADDRESS_SIZE,
                        MEM_RESERVE | MEM_PHYSICAL,
                        PAGE_READWRITE,
-                       &virtual_alloc_shared_parameter,
+                       &vm.virtual_alloc_shared_parameter,
                        1);
 
-    NULL_CHECK (application_va_base, "Could not reserve user VA space.");
+    NULL_CHECK (vm.application_va_base, "Could not reserve user VA space.");
 }
 
 void initialize_threads(void) {
+
+    ULONG64 num_user_threads = vm.num_user_threads;
 
     // Initialize array of user thread handles and IDs
     user_threads = (PHANDLE) zero_malloc(num_user_threads * sizeof(HANDLE));
@@ -273,7 +261,7 @@ void initialize_threads(void) {
                           PAGE_SIZE,
                           MEM_RESERVE | MEM_PHYSICAL,
                           PAGE_READWRITE,
-                          &virtual_alloc_shared_parameter,
+                          &vm.virtual_alloc_shared_parameter,
                           1);
         }
     }
@@ -342,12 +330,21 @@ void initialize_events(void) {
 }
 
 void initialize_shared_page_parameter(void) {
-    memset(&virtual_alloc_shared_parameter, 0, sizeof(virtual_alloc_shared_parameter));
-    virtual_alloc_shared_parameter.Type = MemExtendedParameterUserPhysicalHandle;
-    virtual_alloc_shared_parameter.Handle = physical_page_handle;
+    memset(&vm.virtual_alloc_shared_parameter, 0, sizeof(vm.virtual_alloc_shared_parameter));
+    vm.virtual_alloc_shared_parameter.Type = MemExtendedParameterUserPhysicalHandle;
+    vm.virtual_alloc_shared_parameter.Handle = vm.physical_page_handle;
+}
+
+void set_defaults(void) {
+    // Declare and initialize various global variables
+    vm.num_user_threads = DEFAULT_NUM_USER_THREADS;
+    vm.iterations = DEFAULT_ITERATIONS;
 }
 
 void initialize_system(void) {
+
+    // Initialize structs with default values
+    set_defaults();
 
     // Get the privilege and physical pages from the OS.
     initialize_physical_pages();

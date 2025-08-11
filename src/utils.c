@@ -24,13 +24,13 @@ void unmap_pages(ULONG64 num_pages, PULONG_PTR va) {
 }
 
 VOID increment_available_count(VOID) {
-    InterlockedIncrement64(&n_available);
+    InterlockedIncrement64(&stats.n_available);
 }
 
 
 VOID decrement_available_count(VOID) {
-    ASSERT(n_available > 0);
-    InterlockedDecrement64(&n_available);
+    ASSERT(stats.n_available > 0);
+    InterlockedDecrement64(&stats.n_available);
 
-    if (n_available == START_TRIMMING_THRESHOLD) SetEvent(initiate_trimming_event);
+    if (stats.n_available == START_TRIMMING_THRESHOLD) SetEvent(initiate_trimming_event);
 }

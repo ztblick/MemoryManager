@@ -9,7 +9,6 @@ NEXT SUB-GOALS:
 What do we tackle next???
 
 - FIRST ORDER OF BUSINESS: clean up. Resolve TODOs. Create README.
-    - TODO Make the list operations cleaner -- incrementing/decrementing counts and list sizes should be simpler.
     - TODO add more structs to easily package global data
 
 - List operations. Use read/write locks to speed things up. Batch prune to multiple free lists.

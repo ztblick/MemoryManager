@@ -8,36 +8,49 @@
 #include <Windows.h>
 #include "debug.h"
 
-// This is the number of threads that run the simulating thread -- which become fault-handling threads.
-extern ULONG64 num_user_threads;
+// This is our overarching VM state struct, which will package together information
+// about the defining characteristics of each test, such as the number of physical pages
+// and the base of the VA region.
+typedef struct __vm_state {
+    // This is the number of threads that run the simulating thread -- which become fault-handling threads.
+    ULONG64 num_user_threads;
 
-// This is the number of iterations each thread will run, as set by a command-line argument.
-extern ULONG64 iterations;
+    // This is the number of iterations each thread will run, as set by a command-line argument.
+    ULONG64 iterations;
 
-// VA spaces
-extern PULONG_PTR application_va_base;
-extern PULONG_PTR kernel_write_va;
+    // VA spaces
+    PULONG_PTR application_va_base;
+    PULONG_PTR kernel_write_va;
 
-// PFN Data Structures
-extern ULONG_PTR max_frame_number;
-extern ULONG_PTR min_frame_number;
-extern PULONG_PTR allocated_frame_numbers;
-extern ULONG_PTR allocated_frame_count;
+    // PFN Data Structures
+    ULONG_PTR max_frame_number;
+    ULONG_PTR min_frame_number;
+    PULONG_PTR allocated_frame_numbers;
+    ULONG_PTR allocated_frame_count;
 
-// Statistics
-extern volatile LONG64 n_available;
-extern volatile PULONG64 n_free;
-extern volatile PULONG64 n_modified;
-extern volatile PULONG64 n_standby;
-extern volatile LONG64 n_hard;
-extern volatile LONG64 n_soft;
+    // Handles
+    HANDLE physical_page_handle;
 
-// Handles
-extern HANDLE physical_page_handle;
+    // Parameter to provide VirtualAlloc2 with the ability to create a VA space
+    // that supports multiple VAs to map to the same shared page.
+    MEM_EXTENDED_PARAMETER virtual_alloc_shared_parameter;
+} VM, *PVM;
 
-// Parameter to provide VirtualAlloc2 with the ability to create a VA space
-// that supports multiple VAs to map to the same shared page.
-extern MEM_EXTENDED_PARAMETER virtual_alloc_shared_parameter;
+// Our global vm variable
+extern VM vm;
+
+// Statistics struct
+typedef struct __stats {
+    volatile LONG64 n_available;
+    volatile PULONG64 n_free;
+    volatile PULONG64 n_modified;
+    volatile PULONG64 n_standby;
+    volatile LONG64 n_hard;
+    volatile LONG64 n_soft;
+} STATS, *PSTATS;
+
+// Our global statistics variable
+extern STATS stats;
 
 // These are the number of threads running background tasks for the system -- scheduler, trimmer, writer
 #define NUM_SCHEDULING_THREADS          0

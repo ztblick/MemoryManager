@@ -104,7 +104,7 @@ VOID write_pages(VOID) {
     }
 
     // Map all pages to the kernel VA space
-    map_pages(num_pages_in_write_batch, kernel_write_va, frame_numbers_to_map);
+    map_pages(num_pages_in_write_batch, vm.kernel_write_va, frame_numbers_to_map);
 
     // Flag to indicate that SOME pages were successfully written
     ULONG64 pages_written = 0;
@@ -122,7 +122,7 @@ VOID write_pages(VOID) {
         char* page_file_location = get_page_file_offset(disk_slot);
 
         // Write the next page location in the kernal VA space
-        memcpy(page_file_location, kernel_write_va + i * PAGE_SIZE / 8, PAGE_SIZE);
+        memcpy(page_file_location, vm.kernel_write_va + i * PAGE_SIZE / 8, PAGE_SIZE);
 
         // Lock the PFN again
         lock_pfn(pfn);
@@ -155,7 +155,7 @@ VOID write_pages(VOID) {
     }
 
     // Un-map kernal VA
-    unmap_pages(num_pages_in_write_batch, kernel_write_va);
+    unmap_pages(num_pages_in_write_batch, vm.kernel_write_va);
 
     // Broadcast to waiting user threads that there are standby pages ready.
     if (pages_written > 0) SetEvent(standby_pages_ready_event);

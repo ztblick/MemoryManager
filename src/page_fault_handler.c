@@ -170,7 +170,7 @@ BOOL resolve_soft_fault(PPTE pte) {
         }
 
         // Remove the page from its list (standby or modified)
-        lock_list_and_remove_page(list_to_decrement, available_pfn);
+        remove_page_on_soft_fault(list_to_decrement, available_pfn);
     }
 
     // Regardless, these steps should happen to perform a soft fault!
@@ -184,7 +184,7 @@ BOOL resolve_soft_fault(PPTE pte) {
     unlock_pte(pte);
 
     // Update statistics
-    InterlockedIncrement64(&n_soft);
+    InterlockedIncrement64(&stats.n_soft);
 
     return TRUE;
 }
@@ -310,7 +310,7 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO user_thread_info) {
     unlock_pte(pte);
 
     // Update statistics
-    InterlockedIncrement64(&n_hard);
+    InterlockedIncrement64(&stats.n_hard);
     return TRUE;
 }
 
@@ -321,7 +321,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, PTHREAD_INFO user_thread_info) {
         // A - a hardware failure. This is beyond the scope of this program.
         // B - the user provides an invalid VA (beyond the VA space allocated)
     // This handles situation B:
-    if (faulting_va < application_va_base || faulting_va > application_va_base + VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS)
+    if (faulting_va < vm.application_va_base || faulting_va > vm.application_va_base + VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS)
         return FALSE;
 
     // This is the PTE of our faulting VA. We will need him. But we will lock him as little

@@ -20,7 +20,7 @@ VOID create_zeroed_pfn(PPFN new_pfn) {
 }
 
 ULONG_PTR get_frame_from_PFN(PPFN pfn) {
-    ASSERT (pfn >= PFN_array && pfn <= PFN_array + max_frame_number);
+    ASSERT (pfn >= PFN_array && pfn <= PFN_array + vm.max_frame_number);
     return pfn - PFN_array;
 }
 
@@ -35,7 +35,7 @@ PPFN get_PFN_from_PTE(PPTE pte) {
 }
 
 PPFN get_PFN_from_frame(ULONG_PTR frame_number) {
-    ASSERT (frame_number >= min_frame_number && frame_number <= max_frame_number);
+    ASSERT (frame_number >= vm.min_frame_number && frame_number <= vm.max_frame_number);
     return PFN_array + frame_number;
 }
 

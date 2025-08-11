@@ -20,6 +20,8 @@ VOID initialize_page_table(VOID) {
 // by the page_size, resulting in the index of the VA within the PTE array.
 PPTE get_PTE_from_VA(PULONG_PTR va) {
 
+    PULONG_PTR application_va_base = vm.application_va_base;
+
     ASSERT(va >= application_va_base && va <= application_va_base + VIRTUAL_ADDRESS_SIZE);
 
     ULONG_PTR va_offset = (ULONG_PTR)va - (ULONG_PTR)application_va_base;
@@ -34,7 +36,7 @@ PVOID get_VA_from_PTE(PPTE pte) {
     ASSERT(pte >= PTE_base && pte <= PTE_base + NUM_PTEs);
 
     ULONG_PTR index = (ULONG_PTR) (pte - PTE_base);  // Already scaled correctly
-    return (PVOID) ((ULONG_PTR) application_va_base + index * PAGE_SIZE);
+    return (PVOID) ((ULONG_PTR) vm.application_va_base + index * PAGE_SIZE);
 }
 
 void set_PTE_to_transition(PPTE pte) {
