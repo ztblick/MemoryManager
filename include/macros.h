@@ -7,6 +7,11 @@
 #include <stdlib.h>
 #include <Windows.h>
 
+/*
+ *      Note: all operations here assume locks have been acquired on all three
+ *      pages OR that the exclusive list lock has been acquired.
+ */
+
 FORCEINLINE
         VOID
 InitializeListHead(

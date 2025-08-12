@@ -18,12 +18,13 @@
 
 // This will determine the number of times we will attempt to grab page locks
 // before grabbing the exclusive lock.
-#define MAX_SOFT_FAULT_ATTEMPTS		10
+#define MAX_HARD_ACCESS_ATTEMPTS		10
+#define MAX_SOFT_ACCESS_ATTEMPTS		30
 
-// Total size: 32 bytes. Two will fit in a cache line.
+// Total size: 48 bytes
 typedef struct __page_list {
-    LIST_ENTRY head;            // 16 bytes
-    ULONG64 list_size;          // 8 bytes
+    PFN head;                   // 32 bytes
+    volatile LONG64 list_size;          // 8 bytes
     SRWLOCK lock;               // 8 bytes
 } PAGE_LIST, *PPAGE_LIST;
 
@@ -62,7 +63,7 @@ BOOL is_at_head_of_list(PPAGE_LIST list, PPFN pfn);
 /*
  *  Adds a page to the tail of the list. This assumes the page being added is already locked by the caller!
  */
-VOID lock_list_then_insert_to_tail(PPAGE_LIST list, PPFN pfn);
+VOID insert_page_to_tail(PPAGE_LIST list, PPFN pfn);
 
 /*
  *  Increments the list size.
@@ -106,10 +107,18 @@ PPFN lock_list_then_pop_from_head(PPAGE_LIST list);
 PPFN peek_from_list_head(PPAGE_LIST list);
 
 /*
+ *  Attempts to pop a page from the head of the list.
+ *  @postcondition If successful, returns a locked page.
+ *  Otherwise, returns NULL
+ */
+PPFN try_pop_from_list(PPAGE_LIST list);
+
+/*
  *  Locks the list shared.
  */
 VOID lock_list_shared(PPAGE_LIST list);
 VOID unlock_list_shared(PPAGE_LIST list);
+BOOL try_lock_list_shared(PPAGE_LIST list);
 
 /*
  *  Waits until it can acquire the lock on a given page list!

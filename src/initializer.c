@@ -102,7 +102,7 @@ VOID set_max_frame_number(VOID) {
 }
 
 void initialize_statistics(void) {
-    stats.n_free = &(free_list.list_size);
+    stats.n_free = &free_list.list_size;
     stats.n_modified = &modified_list.list_size;
     stats.n_standby = &standby_list.list_size;
     stats.n_hard = 0;
@@ -112,7 +112,6 @@ void initialize_statistics(void) {
 }
 
 HANDLE CreateSharedMemorySection (VOID) {
-    HANDLE section;
     MEM_EXTENDED_PARAMETER parameter = { 0 };
 
     //
@@ -123,15 +122,15 @@ HANDLE CreateSharedMemorySection (VOID) {
     parameter.Type = MemSectionExtendedParameterUserPhysicalFlags;
     parameter.ULong = 0;
 
-    section = CreateFileMapping2 (INVALID_HANDLE_VALUE,
-                                  NULL,
-                                  SECTION_MAP_READ | SECTION_MAP_WRITE,
-                                  PAGE_READWRITE,
-                                  SEC_RESERVE,
-                                  0,
-                                  NULL,
-                                  &parameter,
-                                  1);
+    HANDLE section = CreateFileMapping2(INVALID_HANDLE_VALUE,
+                                        NULL,
+                                        SECTION_MAP_READ | SECTION_MAP_WRITE,
+                                        PAGE_READWRITE,
+                                        SEC_RESERVE,
+                                        0,
+                                        NULL,
+                                        &parameter,
+                                        1);
 
     return section;
 }
@@ -210,7 +209,7 @@ void initialize_PFN_data(void) {
         // Initialize the new PFN, then insert it to the free list.
         PPFN new_pfn = PFN_array + vm.allocated_frame_numbers[i];
         create_zeroed_pfn(new_pfn);
-        lock_list_then_insert_to_tail(&free_list, new_pfn);
+        insert_page_to_tail(&free_list, new_pfn);
     }
 }
 
@@ -342,9 +341,6 @@ void set_defaults(void) {
 }
 
 void initialize_system(void) {
-
-    // Initialize structs with default values
-    set_defaults();
 
     // Get the privilege and physical pages from the OS.
     initialize_physical_pages();

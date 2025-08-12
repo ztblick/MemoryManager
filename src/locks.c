@@ -45,3 +45,11 @@ VOID unlock(PBYTE_LOCK lock) {
     ASSERT(lock->semaphore == LOCKED);
     InterlockedDecrement16(&lock->semaphore);
 }
+
+VOID wait(ULONG time) {
+    time = min(time, MAX_WAIT_TIME_BEFORE_RETRY);
+
+    for (int i = 0; i < time; i++) {
+        YieldProcessor();
+    }
+}

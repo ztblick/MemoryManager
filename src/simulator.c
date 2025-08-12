@@ -82,8 +82,8 @@ VOID main (int argc, char** argv) {
     if (argc > 2) {
         printf("About to initiate test with %s threads running\n%s iterations each...\n", argv[1], argv[2]);
     } else {
-        printf("No arguments passed.\n");
-        return;
+        printf("No arguments passed. Using defaults...\n");
+        set_defaults();
     }
     vm.num_user_threads = strtol(argv[1], NULL, 10);  // Base 10
     vm.iterations = strtol(argv[2], NULL, 10);
@@ -108,5 +108,6 @@ VOID main (int argc, char** argv) {
     // Print statistics
     printf("Test successful. Time elapsed: %llu milliseconds.\n", end_time - start_time);
     printf ("Each of %llu threads accessed %llu VAs.\n", vm.num_user_threads, vm.iterations);
+    print_statistics();
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
 }

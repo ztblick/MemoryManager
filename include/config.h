@@ -42,9 +42,9 @@ extern VM vm;
 // Statistics struct
 typedef struct __stats {
     volatile LONG64 n_available;
-    volatile PULONG64 n_free;
-    volatile PULONG64 n_modified;
-    volatile PULONG64 n_standby;
+    volatile LONG64 *n_free;
+    volatile LONG64 *n_modified;
+    volatile LONG64 *n_standby;
     volatile LONG64 n_hard;
     volatile LONG64 n_soft;
 } STATS, *PSTATS;

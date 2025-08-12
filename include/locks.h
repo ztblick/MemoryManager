@@ -30,3 +30,5 @@ VOID lock(PBYTE_LOCK lock);
 BOOL try_lock(PBYTE_LOCK lock);
 
 VOID unlock(PBYTE_LOCK lock);
+
+VOID wait(ULONG time);

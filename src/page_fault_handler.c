@@ -8,62 +8,25 @@ PULONG_PTR get_beginning_of_VA_region(PULONG_PTR va) {
 
 BOOL try_acquire_page_from_list(PPFN* available_page_address, PPAGE_LIST list) {
 
-    // First, we will try to get a page. To do so, we will ask the list for its size (without a lock).
-    // If this returns a zero value, we can reasonably conclude that the list is empty
-    while (!is_page_list_empty(list)) {
+    // We will attempt our shared lock approach:
+    ULONG attempts = 0;
+    ULONG wait_time = 1;
 
-        // Now, we will get more serious. Let's lock the free list
-        // then try to acquire the lock on its first element.
-        lock_list_exclusive(list);
+    while (attempts < MAX_HARD_ACCESS_ATTEMPTS) {
+        if (is_page_list_empty(list)) return FALSE;
 
-        // Let's make sure that the list is STILL empty...! If it's not, let's leave and try for standby pages.
-        if (is_page_list_empty(list)) {
-            unlock_list_exclusive(list);
-            break;
+        attempts++;
+        wait_time = (wait_time << 1);
+
+        *available_page_address = try_pop_from_list(list);
+        if (*available_page_address != NULL) {
+            decrement_available_count();
+            return TRUE;
         }
-
-        PPFN pfn = peek_from_list_head(list);
-
-        // If we can't acquire the lock on the front page, let's release all our locks,
-        // then just try again!
-        if (!try_lock_pfn(pfn)) {
-            unlock_list_exclusive(list);
-            continue;
-        }
-
-        // It is possible that the page, since being peeked at, was removed from the free or
-        // standby lists. If that is the case, then we may not be able to acquire it.
-        // It may now be an active page. So, we will double-check to make sure the page
-        // has the anticipated status.
-
-        if ((list == &free_list && !IS_PFN_FREE(pfn)) ||
-            (list == &standby_list && !IS_PFN_STANDBY(pfn))) {
-            unlock_list_exclusive(list);
-            unlock_pfn(pfn);
-            continue;
-        }
-
-        // It is possible that the page is still on the list, but no longer at the head. Let's double-check:
-        if (!is_at_head_of_list(list, pfn)) {
-            unlock_list_exclusive(list);
-            unlock_pfn(pfn);
-            continue;
-        }
-
-        // Now that we have the page lock and we are sure it is in the right state,
-        // we will remove it from its list.
-        remove_page_from_list(list, pfn);
-        decrement_available_count();
-        ASSERT(pfn);
-
-        // Finally, release the list lock!
-        unlock_list_exclusive(list);
-
-        // We have acquired a free page! Set this flag for future flow of control.
-        *available_page_address = pfn;
-        return TRUE;
+        wait(wait_time);
     }
 
+    // If we got here, we must have failed to get a page. Oh well!
     return FALSE;
 }
 
@@ -263,7 +226,7 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO user_thread_info) {
         memset(kernel_read_va, 0, PAGE_SIZE);
 
         // Add the page to the free list and update its status
-        lock_list_then_insert_to_tail(&free_list, available_pfn);
+        insert_page_to_tail(&free_list, available_pfn);
         increment_available_count();
         set_PFN_free(available_pfn);
 
@@ -339,8 +302,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, PTHREAD_INFO user_thread_info) {
         // First: if we need to unmap ALL the kernel read VAs, we will do so in one big batch
         if (user_thread_info->kernel_va_index == NUM_KERNEL_READ_ADDRESSES) {
             if (!MapUserPhysicalPagesScatter(user_thread_info->kernel_va_spaces,
-                NUM_KERNEL_READ_ADDRESSES,
-                NULL)) DebugBreak();
+                NUM_KERNEL_READ_ADDRESSES, NULL)) DebugBreak();
             user_thread_info->kernel_va_index = 0;
         }
 

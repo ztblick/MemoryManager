@@ -28,3 +28,5 @@
  *  Initialize all global data structures. Called at startup.
  */
 void initialize_system(void);
+
+void set_defaults(void);

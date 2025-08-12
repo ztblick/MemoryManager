@@ -48,37 +48,19 @@ VOID write_pages(VOID) {
     // Get all pages to write
     while (num_pages_batched < num_pages_in_write_batch) {
 
-        // Get list lock
-        lock_list_exclusive(&modified_list);
-
-        // If there are no longer pages on the modified list, stop looping. Unlock the modified list.
-        // Most importantly, we update the size of the write batch to our count.
+        // Here we will check the list size. This is approximate: the list size may
+        // change, but all we need is a snapshot. If there are no longer pages on the list,
+        // we will move on.
         if (is_page_list_empty(&modified_list)) {
-            unlock_list_exclusive(&modified_list);
             num_pages_in_write_batch = num_pages_batched;
             break;
         }
 
         // Get the PFN for the page we want to try to use
-        pfn = peek_from_list_head(&modified_list);
+        pfn = try_pop_from_list(&modified_list);
 
-        // Try to get the page lock out of order
-        if (!try_lock_pfn(pfn)) {
-            // If we can't get the lock, we will unlock the modified list and just try again.
-            unlock_list_exclusive(&modified_list);
-            continue;
-        }
-
-        // Here, it is POSSIBLE that the page is no longer at the head of the list.
-        // If that is the case, we will let it go and try again.
-        if (!IS_PFN_MODIFIED(pfn) || !is_at_head_of_list(&modified_list, pfn)) {
-            unlock_list_exclusive(&modified_list);
-            unlock_pfn(pfn);
-            continue;
-        }
-
-        // Now that we have acquired the page lock, remove it from the modified list.
-        remove_page_from_list(&modified_list, pfn);
+        // If we couldn't get a page, that's okay! We will try again later
+        if (!pfn) continue;
 
         // Update PFN status
         set_pfn_mid_write(pfn);
@@ -88,8 +70,6 @@ VOID write_pages(VOID) {
         num_pages_batched++;
 
         // Release the PFN lock, now that we pulled it off the modified list.
-        // Also release the list lock (we will get it again shortly)
-        unlock_list_exclusive(&modified_list);
         unlock_pfn(pfn);
     }
 
@@ -130,6 +110,7 @@ VOID write_pages(VOID) {
         // If we had a soft fault on the page mid-write, we will need to undo this disk write.
         // We will do so by clearing the disk slot and not modifying the PFN's status.
         if (!IS_PFN_MID_WRITE(pfn)) {
+            unlock_pfn(pfn);
             clear_disk_slot(disk_slot);
             slots_cleared++;
         }
@@ -144,14 +125,13 @@ VOID write_pages(VOID) {
             set_pfn_standby(pfn, disk_slot);
 
             // Add page to the standby list
-            lock_list_then_insert_to_tail(&standby_list, pfn);
+            insert_page_to_tail(&standby_list, pfn);
+            unlock_pfn(pfn);
             increment_available_count();
 
             // Update our count
             pages_written++;
         }
-        // Unlock the PFN
-        unlock_pfn(pfn);
     }
 
     // Un-map kernal VA

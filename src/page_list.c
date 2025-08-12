@@ -10,7 +10,8 @@ PAGE_LIST modified_list;
 PAGE_LIST standby_list;
 
 VOID initialize_page_list(PPAGE_LIST list) {
-    InitializeListHead(&list->head);
+    create_zeroed_pfn(&list->head);
+    InitializeListHead(&list->head.entry);
     list->list_size = 0;
     InitializeSRWLock(&list->lock);
 #if DEBUG
@@ -19,37 +20,11 @@ VOID initialize_page_list(PPAGE_LIST list) {
 }
 
 BOOL is_page_list_empty(PPAGE_LIST list) {
-    return IsListEmpty(&list->head);
+    return IsListEmpty(&list->head.entry);
 }
 
 ULONG64 get_size(PPAGE_LIST list) {
     return list->list_size;
-}
-
-PPFN pop_from_head_list(PPAGE_LIST list) {
-#if DEBUG
-    validate_list(list);
-#endif
-    PLIST_ENTRY entry = RemoveHeadList(&list->head);
-    entry->Flink = NULL;
-    entry->Blink = NULL;
-    PPFN pfn = CONTAINING_RECORD(entry, PFN, entry);
-    decrement_list_size(list);
-#if DEBUG
-    validate_list(list);
-#endif
-    return pfn;
-}
-
-VOID add_to_tail_list(PPAGE_LIST list, PPFN pfn) {
-#if DEBUG
-    validate_list(list);
-#endif
-    InsertTailList(&list->head, &pfn->entry);
-    increment_list_size(list);
-#if DEBUG
-    validate_list(list);
-#endif
 }
 
 VOID increment_list_size(PPAGE_LIST list) {
@@ -66,20 +41,34 @@ VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn) {
 	// We will attempt this a few times. If we are not successful,
 	// then we will lock the list exclusively.
 	ULONG attempts = 0;
+    ULONG wait_time = 1;
 	PPFN flink = (PPFN) pfn->entry.Flink;
 	PPFN blink = (PPFN) pfn->entry.Blink;
 
 	// We cannot proceed while someone else has an exclusive lock on this
 	// list, so we will wait until we can acquire the shared lock
-	lock_list_shared(list);
+
 
 	// Attempt to grab both flink and blink locks
-	while (attempts < MAX_SOFT_FAULT_ATTEMPTS) {
+	while (attempts < MAX_SOFT_ACCESS_ATTEMPTS) {
 		attempts++;
-		if (!try_lock_pfn(flink)) continue;
+	    wait_time = (wait_time << 1);
+
+	    if (!try_lock_list_shared(list)) {
+            wait(wait_time);
+	        continue;
+	    }
+
+		if (!try_lock_pfn(flink)) {
+		    unlock_list_shared(list);
+		    wait(wait_time);
+		    continue;
+		}
 
 	    if (!try_lock_pfn(blink)) {
+	        unlock_list_shared(list);
 	        unlock_pfn(flink);
+	        wait(wait_time);
 	        continue;
 	    }
 
@@ -88,17 +77,22 @@ VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn) {
 	    unlock_list_shared(list);
 	    unlock_pfn(flink);
 	    unlock_pfn(blink);
+        decrement_list_size(list);
 	    return;
 	}
 
 	// If we get here, we will need to lock the list exclusively
-    unlock_list_shared(list);
     lock_list_exclusive(list);
-
 #if DEBUG
     validate_list(list);
 #endif
+    // Remove our relevant page, then immediately unlock the list
     RemoveEntryList(&pfn->entry);
+    unlock_list_exclusive(list);
+
+    // Now we can update metadata appropriately. This happens without the lock, as none
+    // of it is mission-critical.
+    decrement_list_size(list);
 
     // If we have pulled off the standby list, we will want to decrement our available count
     if (list == &standby_list) {
@@ -108,77 +102,116 @@ VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn) {
         // until there are available standby pages.
         if (is_page_list_empty(&standby_list)) ResetEvent(standby_pages_ready_event);
     }
-    decrement_list_size(list);
-
 #if DEBUG
     validate_list(list);
 #endif
-    unlock_list_exclusive(list);
 }
 
-VOID remove_page_from_list(PPAGE_LIST list, PPFN pfn) {
-#if DEBUG
-    validate_list(list);
-#endif
-    RemoveEntryList(&pfn->entry);
-    pfn->entry.Flink = NULL;
-    pfn->entry.Blink = NULL;
-    decrement_list_size(list);
-#if DEBUG
-    validate_list(list);
-#endif
-    // If we are removing the last standby page, we will reset the "pages available" event.
-    if (list == &standby_list && is_page_list_empty(list)) {
-        ResetEvent(standby_pages_ready_event);
+/*
+ *  Precondition: pfn is already locked when called by writer. PFN is not locked
+ *  when called by trimmer, but PTE is locked, which protects the page.
+ */
+VOID insert_page_to_tail(PPAGE_LIST list, PPFN pfn) {
+
+    PPFN head = &list->head;
+
+    // Continue to try to acquire the necessary page locks
+    while (TRUE) {
+
+        lock_list_shared(list);
+
+        // First, get the head lock
+        if (!try_lock_pfn(head)) {
+            unlock_list_shared(list);
+            continue;
+        }
+
+        // Then, get the lock on the last page
+        PPFN blink = (PPFN) head->entry.Blink;
+
+        // Special case: if the list is empty, then blink is the same as the head.
+        // In this case, we do not need to worry about locking blink.
+        if (blink == head) {
+            InsertTailList(&list->head.entry, &pfn->entry);
+            unlock_list_shared(list);
+            unlock_pfn(head);
+            increment_list_size(list);
+            return;
+        }
+
+        // Otherwise, we will need to lock the blink, too
+        if (!try_lock_pfn(blink)) {
+            unlock_list_shared(list);
+            unlock_pfn(head);
+            continue;
+        }
+
+        // With both locks and the shared list lock, we can safely insert
+        InsertTailList(&list->head.entry, &pfn->entry);
+
+        // Unlock and update metadata
+        unlock_list_shared(list);
+        unlock_pfn(blink);
+        unlock_pfn(head);
+        increment_list_size(list);
+        return;
     }
 }
 
-VOID lock_list_then_insert_to_tail(PPAGE_LIST list, PPFN pfn) {
+PPFN try_pop_from_list(PPAGE_LIST list) {
 
-    lock_list_exclusive(list);
-#if DEBUG
-    validate_list(list);
-#endif
-    InsertTailList(&list->head, &pfn->entry);
-    increment_list_size(list);
-#if DEBUG
-    validate_list(list);
-#endif
-    unlock_list_exclusive(list);
-}
+    // If someone has the exclusive lock, return and try again later.
+    if (!try_lock_list_shared(list)) return NULL;
 
-VOID lock_list_then_insert_to_head(PPAGE_LIST list, PLIST_ENTRY entry) {
-    lock_list_exclusive(list);
-#if DEBUG
-    validate_list(list);
-#endif
-    InsertHeadList(&list->head, entry);
-    increment_list_size(list);
-#if DEBUG
-    validate_list(list);
-#endif
-    unlock_list_exclusive(list);
-}
+    PPFN head = &list->head;
 
-BOOL is_at_head_of_list(PPAGE_LIST list, PPFN pfn) {
-    return (PPFN) list->head.Flink == pfn;
-}
+    // If we can't lock the head, unlock and return.
+    if (!try_lock_pfn(head)) {
+        unlock_list_shared(list);
+        return NULL;
+    }
 
+    // At this point we will need to make sure the list has at least one page!
+    PPFN page = (PPFN) head->entry.Flink;
+    if (head == page) {
+        unlock_list_shared(list);
+        unlock_pfn(head);
+        return NULL;
+    }
 
-PPFN peek_from_list_head(PPAGE_LIST list) {
+    // If we can't lock the first entry, unlock and return
+    if (!try_lock_pfn(page)) {
+        unlock_list_shared(list);
+        unlock_pfn(head);
+        return NULL;
+    }
 
-    ASSERT(!is_page_list_empty(list));
-#if DEBUG
-    validate_list(list);
-#endif
+    // If we can't lock the second entry, unlock and return
+    PPFN flink = (PPFN) page->entry.Flink;
+    if (!try_lock_pfn(flink)) {
+        unlock_list_shared(list);
+        unlock_pfn(head);
+        unlock_pfn(page);
+        return NULL;
+    }
 
-    PLIST_ENTRY entry = list->head.Flink;
-    PPFN pfn = CONTAINING_RECORD(entry, PFN, entry);
-    return pfn;
+    // If we got here -- we were able to acquire all three locks!
+    // Remove the page, update and unlock the head/flink, and unlock the list
+    RemoveEntryList(&page->entry);
+    unlock_list_shared(list);
+    unlock_pfn(flink);
+    unlock_pfn(head);
+    decrement_list_size(list);
+
+    return page;
 }
 
 VOID lock_list_shared(PPAGE_LIST list) {
     AcquireSRWLockShared(&list->lock);
+}
+
+BOOL try_lock_list_shared(PPAGE_LIST list) {
+    return TryAcquireSRWLockShared(&list->lock);
 }
 
 VOID unlock_list_shared(PPAGE_LIST list) {
