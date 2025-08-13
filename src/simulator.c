@@ -1,5 +1,5 @@
 //
-// Created by zblickensderfer on 5/5/2025.
+// Created by ztblick on 5/5/2025.
 //
 
 #include "../include/simulator.h"
@@ -9,7 +9,7 @@ PULONG_PTR get_arbitrary_va(PULONG_PTR p) {
     unsigned random_number = rand () * rand () * rand ();
     random_number %= VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS;
 
-    // Ensure the write to the arbitrary virtual address doesn't
+    // Ensure our 8-byte stamp to the arbitrary virtual address doesn't
     // straddle a PAGE_SIZE boundary.
     random_number &= ~0x7;
     return p + random_number;
@@ -79,14 +79,16 @@ VOID main (int argc, char** argv) {
 #if RUN_FOREVER
     num_user_threads = DEFAULT_USER_THREAD_COUNT;
 #else
+    set_defaults();
+
     if (argc > 2) {
         printf("About to initiate test with %s threads running\n%s iterations each...\n", argv[1], argv[2]);
-    } else {
-        printf("No arguments passed. Using defaults...\n");
-        set_defaults();
+        vm.num_user_threads = strtol(argv[1], NULL, 10);  // Base 10
+        vm.iterations = strtol(argv[2], NULL, 10);
     }
-    vm.num_user_threads = strtol(argv[1], NULL, 10);  // Base 10
-    vm.iterations = strtol(argv[2], NULL, 10);
+    else {
+        printf("No arguments passed. Using defaults...\n");
+    }
 #endif
     // Initialize all data structures, events, threads, and handles. Get physical pages from OS.
     initialize_system();
@@ -107,7 +109,7 @@ VOID main (int argc, char** argv) {
 
     // Print statistics
     printf("Test successful. Time elapsed: %llu milliseconds.\n", end_time - start_time);
-    printf ("Each of %llu threads accessed %llu VAs.\n", vm.num_user_threads, vm.iterations);
+    printf ("Each of %lu threads accessed %llu VAs.\n", vm.num_user_threads, vm.iterations);
     print_statistics();
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
 }

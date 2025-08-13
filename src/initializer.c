@@ -4,6 +4,7 @@
 // Initializing global structs
 STATS stats = {0};
 VM vm = {0};
+PAGE_LIST_ARRAY free_lists = {0};
 
 PTHREAD_INFO user_thread_info;
 
@@ -102,7 +103,7 @@ VOID set_max_frame_number(VOID) {
 }
 
 void initialize_statistics(void) {
-    stats.n_free = &free_list.list_size;
+    stats.n_free = &free_lists.page_count;
     stats.n_modified = &modified_list.list_size;
     stats.n_standby = &standby_list.list_size;
     stats.n_hard = 0;
@@ -174,9 +175,17 @@ void initialize_physical_pages(void) {
 void initialize_page_lists(void) {
     // Initialize lists for PFN state machine
     initialize_page_list(&zero_list);
-    initialize_page_list(&free_list);
     initialize_page_list(&modified_list);
     initialize_page_list(&standby_list);
+
+    // Initialize group of free lists
+    ULONG count = vm.num_free_lists;
+    free_lists.number_of_lists = count;
+    free_lists.page_count = 0;
+    free_lists.list_array = zero_malloc(sizeof(PAGE_LIST) * count);
+    for (int i = 0; i < count; i++) {
+        initialize_page_list(&free_lists.list_array[i]);
+    }
 }
 
 void initialize_PFN_data(void) {
@@ -194,7 +203,8 @@ void initialize_PFN_data(void) {
     // VirtualAlloc returns the beginning of the page that has been committed, which can round down.
     // Once the memory is successfully committed, the PFN should map to the region inside that page
     // That corresponds with the value of the frame number.
-
+    ULONG list_index = 0;
+    ULONG num_lists = free_lists.number_of_lists;
 
     for (ULONG64 i = 0; i < vm.allocated_frame_count; i++) {
 
@@ -209,7 +219,13 @@ void initialize_PFN_data(void) {
         // Initialize the new PFN, then insert it to the free list.
         PPFN new_pfn = PFN_array + vm.allocated_frame_numbers[i];
         create_zeroed_pfn(new_pfn);
-        insert_page_to_tail(&free_list, new_pfn);
+
+        // Add the page to one of the free lists
+        PPAGE_LIST list = &free_lists.list_array[list_index];
+        insert_to_list_tail(list, new_pfn);
+        increment_list_size(list);
+        increment_free_lists_total_count();
+        list_index = (list_index + 1) % num_lists;
     }
 }
 
@@ -243,7 +259,7 @@ void initialize_user_VA_space(void) {
 
 void initialize_threads(void) {
 
-    ULONG64 num_user_threads = vm.num_user_threads;
+    ULONG num_user_threads = vm.num_user_threads;
 
     // Initialize array of user thread handles and IDs
     user_threads = (PHANDLE) zero_malloc(num_user_threads * sizeof(HANDLE));
@@ -263,6 +279,7 @@ void initialize_threads(void) {
                           &vm.virtual_alloc_shared_parameter,
                           1);
         }
+        user_thread_info[i].thread_id = i;
     }
 
     // Create user threads, each of which are running the user app simulation.
@@ -338,6 +355,7 @@ void set_defaults(void) {
     // Declare and initialize various global variables
     vm.num_user_threads = DEFAULT_NUM_USER_THREADS;
     vm.iterations = DEFAULT_ITERATIONS;
+    vm.num_free_lists = DEFAULT_FREE_LIST_COUNT;
 }
 
 void initialize_system(void) {

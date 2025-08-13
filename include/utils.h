@@ -9,7 +9,7 @@
 /*
  *  Malloc the given amount of space, then zero the memory.
  */
-PULONG_PTR zero_malloc(size_t bytes_to_allocate);
+PVOID zero_malloc(size_t bytes_to_allocate);
 
 /*
  *  Maps the given page (or pages) to the given VA.

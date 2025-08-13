@@ -5,7 +5,6 @@ set(CMAKE_C_STANDARD 11)
 
 add_executable(MemoryManager src/initializer.c
         include/initializer.h
-        include/macros.h
         include/pfn.h
         include/pte.h
         src/page_fault_handler.c

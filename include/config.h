@@ -13,7 +13,8 @@
 // and the base of the VA region.
 typedef struct __vm_state {
     // This is the number of threads that run the simulating thread -- which become fault-handling threads.
-    ULONG64 num_user_threads;
+    ULONG num_user_threads;
+    ULONG num_free_lists;
 
     // This is the number of iterations each thread will run, as set by a command-line argument.
     ULONG64 iterations;
@@ -57,8 +58,11 @@ extern STATS stats;
 #define NUM_AGING_THREADS               0
 #define NUM_TRIMMING_THREADS            1
 #define NUM_WRITING_THREADS             1
+
+// Default values for variables
 #define DEFAULT_NUM_USER_THREADS        8
 #define DEFAULT_ITERATIONS              (MB(1))
+#define DEFAULT_FREE_LIST_COUNT         16
 
 // We will begin trimming and writing when our standby + free page count falls below this threshold.
 #define START_TRIMMING_THRESHOLD        (NUMBER_OF_PHYSICAL_PAGES / 8)

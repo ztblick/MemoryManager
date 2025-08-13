@@ -1,6 +1,5 @@
 #pragma once
 
-#include "macros.h"
 #include "pfn.h"
 #include "debug.h"
 
@@ -21,18 +20,42 @@
 #define MAX_HARD_ACCESS_ATTEMPTS		10
 #define MAX_SOFT_ACCESS_ATTEMPTS		30
 
-// Total size: 48 bytes
+// Total size: 24 bytes
 typedef struct __page_list {
-    PFN head;                   // 32 bytes
-    volatile LONG64 list_size;          // 8 bytes
-    SRWLOCK lock;               // 8 bytes
+    PPFN head;                   // 8 bytes
+    volatile LONG64 list_size;   // 8 bytes
+    SRWLOCK lock;                // 8 bytes
 } PAGE_LIST, *PPAGE_LIST;
+
+typedef struct __page_list_array {
+    ULONG number_of_lists;
+    volatile LONG64 page_count;
+    PAGE_LIST *list_array;
+} PAGE_LIST_ARRAY, *PPAGE_LIST_ARRAY;
+
+extern PAGE_LIST_ARRAY free_lists;
 
 // Page lists
 extern PAGE_LIST zero_list;
-extern PAGE_LIST free_list;
 extern PAGE_LIST modified_list;
 extern PAGE_LIST standby_list;
+
+/*
+ *  Pushes a page onto a free list.
+ */
+VOID add_page_to_free_lists(PPFN page, ULONG first_index);
+
+/*
+ *  This attempts to grab a free page from the array of free lists.
+ */
+BOOL try_get_free_page(PPFN *address_to_save, ULONG first_index);
+
+/*
+ *  Attempts to lock a particular free list. If it can be locked, and there is at least one
+ *  page on the list, it pops that page and returns it. Otherwise, it releases locks and
+ *  returns null. Note: since the page is free, it does NOT need to be locked.
+ */
+PPFN try_pop_from_free_list(ULONG list_index);
 
 /*
  *  Initialize a page list. This creates the critical section, initializes the list head,
@@ -76,6 +99,13 @@ VOID increment_list_size(PPAGE_LIST list);
 VOID decrement_list_size(PPAGE_LIST list);
 
 /*
+    Bumps up the free list total count. Done so with interlocked operations, as access can be
+    concurrent.
+ */
+VOID increment_free_lists_total_count(VOID);
+VOID decrement_free_lists_total_count(VOID);
+
+/*
  *  This pops an entry from the head of the list. It assumes nothing -- the programmer
  *  must first be sure that the list is non-empty before calling this function.
  */
@@ -86,12 +116,6 @@ PPFN pop_from_head_list(PPAGE_LIST list);
  *  @precondition pfn is locked and on the given list
  */
 VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn);
-
-/*
- *  Removes a page from its list. Does not acquire any locks. Does not assume ANYTHING -- the caller
- *  must ensure that the entry is, in fact, on the given list!
- */
-VOID remove_page_from_list(PPAGE_LIST list, PPFN pfn);
 
 
 /*
@@ -135,6 +159,11 @@ BOOL try_lock_list_exclusive(PPAGE_LIST list);
  *  Unlocks a previously locked page list.
  */
 VOID unlock_list_exclusive(PPAGE_LIST list);
+
+VOID initialize_list_head(PPFN head);
+BOOL remove_page_from_list(PPFN page);
+PPFN remove_from_head_of_list(PPAGE_LIST list);
+VOID insert_to_list_tail(PPAGE_LIST list, PPFN page);
 
 #if DEBUG
 VOID validate_list(PPAGE_LIST list);

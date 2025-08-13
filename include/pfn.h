@@ -53,7 +53,8 @@ typedef struct __pfn_fields {
 // 32 bytes of padding to prevent cache ping-ponging.
 
 typedef struct __pfn {
-    LIST_ENTRY entry;                           // Size: 16 bytes
+    PVOID flink;                                // Size: 16 bytes
+    PVOID blink;
     PPTE PTE;                                   // Size: 8 bytes -- FYI -- The 3 least-significant bits here are always zero, so we can save some bits with cleverness...
     union {                                     // Size: 8 bytes
         FIELDS fields;

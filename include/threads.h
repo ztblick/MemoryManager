@@ -19,11 +19,11 @@
 #define NUM_KERNEL_READ_ADDRESSES   (16)
 
 // User thread struct. This will contain a set of kernel VA spaces. Each thread
-// will manage many, which will allow us to removes locks and contention on them.
+// will manage many, which will allow us to remove locks and contention on them.
 // Additionally, it will allow us to delay unmap calls, giving us the opportunity
 // to batch them.
 typedef struct _USER_THREAD_INFO {
-
+    ULONG thread_id;
     ULONG kernel_va_index;
     PULONG_PTR kernel_va_spaces[NUM_KERNEL_READ_ADDRESSES];
 } THREAD_INFO, *PTHREAD_INFO;

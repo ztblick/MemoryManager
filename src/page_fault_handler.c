@@ -21,6 +21,7 @@ BOOL try_acquire_page_from_list(PPFN* available_page_address, PPAGE_LIST list) {
         *available_page_address = try_pop_from_list(list);
         if (*available_page_address != NULL) {
             decrement_available_count();
+            if (is_page_list_empty(&standby_list)) ResetEvent(standby_pages_ready_event);
             return TRUE;
         }
         wait(wait_time);
@@ -38,7 +39,6 @@ BOOL try_acquire_page_from_list(PPFN* available_page_address, PPAGE_LIST list) {
  *  the VA, causing another fault. In this case, a page to be validated could be zeroed,
  *  and that's okay.
  */
-
 // This is currently ALWAYS returning true to avoid issues with Landy's TLB Flush bug.
 BOOL validate_page(PULONG_PTR va) {
 #if DEBUG
@@ -128,7 +128,6 @@ BOOL resolve_soft_fault(PPTE pte) {
             // Clear the disk slot for the copy of our data on the disk.
             // We can do this lockless because we hold the PTE and PFN locks.
             clear_disk_slot(available_pfn->fields.disk_index);
-
             list_to_decrement = &standby_list;
         }
 
@@ -157,12 +156,6 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO user_thread_info) {
     // This wil hold the physical frame number that we are mapping to the faulting VA.
     ULONG_PTR frame_number_to_map;
 
-    // This variable exists to capture the state of the pte associated with the VA's PTE.
-    // This is necessary to perform page validation (which only happens on disk-format PTEs) after the
-    // PTE has been moved from disk to valid. Without this, there would be no way to know if the PTE
-    // had previously been on disk, as the PTE itself has changed its state.
-    BYTE pte_entry_state;
-
     // The PFN associated with the page that will be mapped to the faulting VA.
     PPFN available_pfn;
 
@@ -170,7 +163,7 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO user_thread_info) {
     BOOL standby_page_acquired = FALSE;
 
     // First, attempt to grab a free page.
-    free_page_acquired = try_acquire_page_from_list(&available_pfn, &free_list);
+    free_page_acquired = try_get_free_page(&available_pfn, user_thread_info->thread_id);
 
     // If no page is available on the free list, then we will repurpose one from the standby list
     if (!free_page_acquired) {
@@ -226,7 +219,7 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO user_thread_info) {
         memset(kernel_read_va, 0, PAGE_SIZE);
 
         // Add the page to the free list and update its status
-        insert_page_to_tail(&free_list, available_pfn);
+        add_page_to_free_lists(available_pfn, user_thread_info->thread_id);
         increment_available_count();
         set_PFN_free(available_pfn);
 

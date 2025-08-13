@@ -4,7 +4,7 @@
 
 #include "../include/utils.h"
 
-PULONG_PTR zero_malloc(size_t bytes_to_allocate) {
+PVOID zero_malloc(size_t bytes_to_allocate) {
     PULONG_PTR destination = malloc(bytes_to_allocate);
     NULL_CHECK(destination, "Zero malloc failed!");
     memset(destination, 0, bytes_to_allocate);
@@ -30,7 +30,7 @@ VOID increment_available_count(VOID) {
 
 VOID decrement_available_count(VOID) {
     ASSERT(stats.n_available > 0);
-    InterlockedDecrement64(&stats.n_available);
+    LONG64 new_count = InterlockedDecrement64(&stats.n_available);
 
-    if (stats.n_available == START_TRIMMING_THRESHOLD) SetEvent(initiate_trimming_event);
+    if (new_count == START_TRIMMING_THRESHOLD) SetEvent(initiate_trimming_event);
 }
