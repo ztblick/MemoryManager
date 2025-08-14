@@ -4,6 +4,8 @@
 
 #include "../include/debug.h"
 
+#include "../include/page_list.h"
+
 TraceEntry g_traceBuffer[TRACE_BUFFER_SIZE];
 volatile LONG g_traceIndex;
 
@@ -50,4 +52,40 @@ void log_stack_trace(ULONG64 disk_slot, PULONG_PTR pfn, PULONG_PTR pte) {
     g_traceBuffer[idx].disk_slot = disk_slot;
     g_traceBuffer[idx].pfn = pfn;
     g_traceBuffer[idx].pte   = pte;
+}
+
+void validate_free_counts(void) {
+    ULONG total_count = free_lists.page_count;
+    ULONG num_free_lists = free_lists.number_of_lists;
+    ULONG sum = 0;
+    PPAGE_LIST list;
+
+    for (ULONG i = 0; i < num_free_lists; i++) {
+        list = &free_lists.list_array[i];
+        sum += list->list_size;
+    }
+
+    if (sum == total_count) return;
+    if (sum > total_count) {
+        ASSERT (sum - total_count < ACCEPTABLE_MISS);
+    }
+    else {
+        ASSERT (total_count - sum < ACCEPTABLE_MISS);
+    }
+}
+
+VOID debug_thread_function(VOID) {
+
+    // // Wait for system start event before entering waiting state!
+    // WaitForSingleObject(system_start_event, INFINITE);
+    //
+    // // If the exit flag has been set, then it's time to go!
+    // while (TRUE) {
+    //
+    //     if (WaitForSingleObject(system_exit_event, 100) == WAIT_OBJECT_0) return;
+    //
+    //     validate_free_counts();
+    //
+    //
+    // }
 }

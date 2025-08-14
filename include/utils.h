@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "threads.h"
+#include "debug.h"
 
 /*
  *  Malloc the given amount of space, then zero the memory.

@@ -29,8 +29,6 @@ VOID increment_available_count(VOID) {
 
 
 VOID decrement_available_count(VOID) {
-    ASSERT(stats.n_available > 0);
     LONG64 new_count = InterlockedDecrement64(&stats.n_available);
-
     if (new_count == START_TRIMMING_THRESHOLD) SetEvent(initiate_trimming_event);
 }

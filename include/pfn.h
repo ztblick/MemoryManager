@@ -52,9 +52,13 @@ typedef struct __pfn_fields {
 // Ideally, we will cache pages that are used by the same thread. If not, we may want to add
 // 32 bytes of padding to prevent cache ping-ponging.
 
-typedef struct __pfn {
-    PVOID flink;                                // Size: 16 bytes
-    PVOID blink;
+struct __pfn;          // forward declaration
+typedef struct __pfn PFN;
+typedef PFN* PPFN;
+
+struct __pfn {
+    PPFN flink;                                // Size: 16 bytes
+    PPFN blink;
     PPTE PTE;                                   // Size: 8 bytes -- FYI -- The 3 least-significant bits here are always zero, so we can save some bits with cleverness...
     union {                                     // Size: 8 bytes
         FIELDS fields;
@@ -62,7 +66,7 @@ typedef struct __pfn {
         BYTE_LOCK lock;
     };
     // char padding[32];                        // Initial tests indicate that sharing cache lines yields ~8% speedups!
-} PFN, *PPFN;
+};
 
 /*
  *  The base of our sparse array of PFNs.

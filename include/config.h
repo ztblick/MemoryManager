@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <Windows.h>
-#include "debug.h"
 
 // This is our overarching VM state struct, which will package together information
 // about the defining characteristics of each test, such as the number of physical pages

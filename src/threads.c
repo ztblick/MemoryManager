@@ -18,6 +18,7 @@ HANDLE scheduling_thread;
 HANDLE aging_thread;
 HANDLE trimming_thread;
 HANDLE writing_thread;
+HANDLE debug_thread;
 
 // Thread IDs
 PULONG user_thread_ids;

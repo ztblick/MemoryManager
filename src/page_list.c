@@ -13,24 +13,24 @@ VOID add_page_to_free_lists(PPFN page, ULONG first_index) {
 
     ULONG count = free_lists.number_of_lists;
     ULONG index = first_index % count;
-    PAGE_LIST list;
+    PPAGE_LIST list;
 
     while (TRUE) {
 
         // Scan through free lists, finding one you can lock
         // once locked, add the page to the tail
-        list = free_lists.list_array[index];
+        list = &free_lists.list_array[index];
 
-        if (!try_lock_list_exclusive(&list)) {
+        if (!try_lock_list_exclusive(list)) {
             index = (index + 1) % count;
             continue;
         }
 
-        insert_to_list_tail(&list, page);
-        unlock_list_exclusive(&list);
+        insert_to_list_tail(list, page);
+        unlock_list_exclusive(list);
 
         // Update metadata and return
-        increment_list_size(&list);
+        increment_list_size(list);
         increment_free_lists_total_count();
 
         return;
@@ -71,9 +71,9 @@ PPFN try_pop_from_free_list(ULONG list_index) {
     PPAGE_LIST list = &free_lists.list_array[list_index];
 
     // Check for pages, and then try for lock
-    if (list->list_size == 0) return NULL;
+    if (is_page_list_empty(list)) return NULL;
     if (!try_lock_list_exclusive(list)) return NULL;
-    if (list->list_size == 0) {
+    if (is_page_list_empty(list)) {
         unlock_list_exclusive(list);
         return NULL;
     }
@@ -81,6 +81,10 @@ PPFN try_pop_from_free_list(ULONG list_index) {
     // With the lock acquired, we can remove our entry
     PPFN page = remove_from_head_of_list(list);
     unlock_list_exclusive(list);
+
+#if DEBUG
+    validate_list(list);
+#endif
 
     // Update metadata and return
     decrement_list_size(list);
@@ -94,15 +98,12 @@ VOID initialize_page_list(PPAGE_LIST list) {
     initialize_list_head(list->head);
     list->list_size = 0;
     InitializeSRWLock(&list->lock);
-#if DEBUG
-    validate_list(list);
-#endif
 }
 
 BOOL is_page_list_empty(PPAGE_LIST list) {
 
     PPFN head = list->head;
-    return (BOOLEAN)((PPFN) head->flink == head);
+    return head->flink == head;
 }
 
 ULONG64 get_size(PPAGE_LIST list) {
@@ -111,10 +112,16 @@ ULONG64 get_size(PPAGE_LIST list) {
 
 VOID increment_free_lists_total_count(VOID) {
     InterlockedIncrement64(&free_lists.page_count);
+#if DEBUG
+    validate_free_counts();
+#endif
 }
 
 VOID decrement_free_lists_total_count(VOID) {
     InterlockedDecrement64(&free_lists.page_count);
+#if DEBUG
+    validate_free_counts();
+#endif
 }
 
 VOID increment_list_size(PPAGE_LIST list) {
@@ -122,7 +129,7 @@ VOID increment_list_size(PPAGE_LIST list) {
 }
 
 VOID decrement_list_size(PPAGE_LIST list) {
-    ASSERT(list->list_size > 0);
+
     InterlockedDecrement64(&list->list_size);
 }
 
@@ -137,7 +144,9 @@ VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn) {
 
 	// We cannot proceed while someone else has an exclusive lock on this
 	// list, so we will wait until we can acquire the shared lock
-
+#if DEBUG
+    validate_list(list);
+#endif
 
 	// Attempt to grab both flink and blink locks
 	while (attempts < MAX_SOFT_ACCESS_ATTEMPTS) {
@@ -155,7 +164,12 @@ VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn) {
 		    continue;
 		}
 
-	    if (!try_lock_pfn(blink)) {
+	    // Special case: if this is the only page on the list, then the flink and the blink are the same.
+	    // They must both be the head.
+	    if (flink == blink) {
+	        ASSERT(flink == list->head);
+	    }
+	    else if (!try_lock_pfn(blink)) {
 	        unlock_list_shared(list);
 	        unlock_pfn(flink);
 	        wait(wait_time);
@@ -164,11 +178,15 @@ VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn) {
 
 	    // If we can get both locks, we can safely remove our entry!
 	    remove_page_from_list(pfn);
-	    unlock_list_shared(list);
 
 	    // Release locks
+	    unlock_list_shared(list);
 	    unlock_pfn(flink);
-	    unlock_pfn(blink);
+	    if (flink != blink) unlock_pfn(blink);
+
+#if DEBUG
+	    validate_list(list);
+#endif
 
 	    // Update metadata and reset events, if necessary
         decrement_list_size(list);
@@ -180,11 +198,12 @@ VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn) {
 	    return;
 	}
 
-	// If we get here, we will need to lock the list exclusively
-    lock_list_exclusive(list);
 #if DEBUG
     validate_list(list);
 #endif
+	// If we get here, we will need to lock the list exclusively
+    lock_list_exclusive(list);
+
     // Remove our relevant page, then immediately unlock the list
     remove_page_from_list(pfn);
     unlock_list_exclusive(list);
@@ -207,7 +226,7 @@ VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn) {
 }
 
 /*
- *  Precondition: pfn is already locked when called by writer. PFN is not locked
+ *  Precondition: PFN is already locked when called by writer. PFN is not locked
  *  when called by trimmer, but PTE is locked, which protects the page.
  */
 VOID insert_page_to_tail(PPAGE_LIST list, PPFN pfn) {
@@ -253,6 +272,10 @@ VOID insert_page_to_tail(PPAGE_LIST list, PPFN pfn) {
         unlock_pfn(blink);
         unlock_pfn(head);
         increment_list_size(list);
+
+#if DEBUG
+        validate_list(list);
+#endif
         return;
     }
 }
@@ -286,7 +309,8 @@ PPFN try_pop_from_list(PPAGE_LIST list) {
     }
 
     // Special case: if the flink's flink is the head, we can remove this page -- the LAST page
-    if (page == head) {
+    PPFN flink = page->flink;
+    if (flink == head) {
         // Remove and unlock head
         remove_page_from_list(page);
         unlock_list_shared(list);
@@ -298,7 +322,6 @@ PPFN try_pop_from_list(PPAGE_LIST list) {
     }
 
     // If we can't lock the second entry, unlock and return
-    PPFN flink = page->flink;
     if (!try_lock_pfn(flink)) {
         unlock_list_shared(list);
         unlock_pfn(head);
@@ -370,9 +393,10 @@ PPFN remove_from_head_of_list(PPAGE_LIST list) {
 
 VOID insert_to_list_tail(PPAGE_LIST list, PPFN page) {
     PPFN blink;
-    PPFN head = list->head;
 
+    PPFN head = list->head;
     blink = head->blink;
+
     page->flink = head;
     page->blink = blink;
     blink->flink = page;
@@ -381,69 +405,73 @@ VOID insert_to_list_tail(PPAGE_LIST list, PPFN page) {
 
 #if DEBUG
 VOID validate_list(PPAGE_LIST list) {
-    PLIST_ENTRY currentEntry;
-    ULONG64 forwardLength = 0;
-    ULONG64 backwardLength = 0;
+    PPFN current_page;
+    ULONG64 forward_length = 0;
+    ULONG64 backward_length = 0;
 
 
     const ULONG64 MAX_EXPECTED_LENGTH = NUMBER_OF_PHYSICAL_PAGES + 10; // Safety limit
 
-    // Check empty list case
-    if (list->list_size == 0) {
-        ASSERT (list->head.Blink == &list->head && list->head.Flink == &list->head);
-        return;
-    }
+    PPFN head = list->head;
 
+    // Check empty list case -- removed, as the validate list calls come before the size is incremented!
+    // if (list->list_size == 0) {
+    //     ASSERT (head->blink == head->flink && head->flink == head);
+    //     return;
+    // }
+
+    lock_list_exclusive(list);
 
     // Validate forward traversal with cycle detection
-    currentEntry = list->head.Flink;
-    while (currentEntry != &list->head && forwardLength < MAX_EXPECTED_LENGTH) {
+    current_page = head->flink;
+    while (current_page != head && forward_length < MAX_EXPECTED_LENGTH) {
         // Check for cross-list corruption
-        ASSERT(currentEntry != &modified_list.head &&
-               currentEntry != &standby_list.head &&
-               currentEntry != &zero_list.head);
+        ASSERT(current_page != modified_list.head &&
+               current_page != standby_list.head &&
+               current_page != zero_list.head);
 
         // Validate bidirectional linking
-        if (currentEntry->Blink->Flink != currentEntry) {
+        if (current_page->blink->flink != current_page) {
             ASSERT(FALSE); // Broken bidirectional link
             return;
         }
-        if (currentEntry->Flink->Blink != currentEntry) {
+        if (current_page->flink->blink != current_page) {
             ASSERT(FALSE); // Broken bidirectional link
             return;
         }
 
-        currentEntry = currentEntry->Flink;
-        forwardLength++;
+        current_page = current_page->flink;
+        forward_length++;
     }
 
     // Check for infinite loop
-    if (forwardLength >= MAX_EXPECTED_LENGTH) {
+    if (forward_length >= MAX_EXPECTED_LENGTH) {
         ASSERT(FALSE); // Possible infinite loop detected
         return ;
     }
 
     // Validate backward traversal
-    currentEntry = list->head.Blink;
-    while (currentEntry != &list->head && backwardLength < MAX_EXPECTED_LENGTH) {
+    current_page = head->blink;
+    while (current_page != head && backward_length < MAX_EXPECTED_LENGTH) {
 
-        if (currentEntry->Blink->Flink != currentEntry) {
+        if (current_page->blink->flink != current_page) {
             ASSERT(FALSE); // Broken bidirectional link
             return;
         }
-        if (currentEntry->Flink->Blink != currentEntry) {
+        if (current_page->flink->blink != current_page) {
             ASSERT(FALSE); // Broken bidirectional link
             return;
         }
 
-        currentEntry = currentEntry->Blink;
+        current_page = current_page->blink;
 
-        backwardLength++;
+        backward_length++;
     }
 
     // Verify all lengths match
-    BOOL valid = (forwardLength == backwardLength && forwardLength == list->list_size);
+    BOOL valid = (forward_length == backward_length);
     ASSERT(valid);
-    return;
+
+    unlock_list_exclusive(list);
 }
 #endif

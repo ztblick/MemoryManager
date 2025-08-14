@@ -3,8 +3,7 @@
 //
 
 #pragma once
-#include <Windows.h>
-#include <stdio.h>
+#include "threads.h"
 #include <winternl.h>  // for RtlCaptureStackBackTrace
 #pragma comment(lib, "ntdll.lib")
 
@@ -38,8 +37,10 @@
 #define COLOR_RESET "\x1b[0m"
 
 // Here is some code to help me track stack traces
-#define MAX_STACK_FRAMES   16
-#define TRACE_BUFFER_SIZE 1024
+#define MAX_STACK_FRAMES    16
+#define TRACE_BUFFER_SIZE   1024
+
+#define ACCEPTABLE_MISS     100
 
 typedef struct {
     DWORD    threadId;
@@ -60,3 +61,7 @@ extern volatile LONG g_traceIndex;
 VOID fatal_error(char *msg);
 
 void log_stack_trace(ULONG64 disk_slot, PULONG_PTR pfn, PULONG_PTR pte);
+
+VOID debug_thread_function(VOID);
+
+VOID validate_free_counts(VOID);

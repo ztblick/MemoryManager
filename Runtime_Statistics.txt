@@ -59,3 +59,15 @@ Adding events back to signal wakeups for the trimmer
 4 threads   2640 milliseconds.
 5 threads   2734 milliseconds.
 6 threads   2734 milliseconds.
+
+Adding SRW locks and multiple free lists:
+
+1 threads   1937 milliseconds.
+2 threads   2000 milliseconds.
+3 threads   2094 milliseconds.
+4 threads   2234 milliseconds.
+5 threads   2484 milliseconds.
+6 threads   2594 milliseconds.
+7 threads   2703 milliseconds.
+8 threads   2812 milliseconds.
+9 threads   2922 milliseconds.

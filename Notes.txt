@@ -8,10 +8,10 @@ NEXT SUB-GOALS:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 What do we tackle next???
 
-- FIRST ORDER OF BUSINESS: clean up. Resolve TODOs. Create README.
-    - TODO add more structs to easily package global data
+- Add debug thread that verifies counts and lists periodically
+- Modify statistics counts to be more clear, correct, and efficient
+- Finish debugging free lists...!
 
-- List operations. Use read/write locks to speed things up. Batch prune to multiple free lists.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 THEN, any of the below:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -22,6 +22,7 @@ THEN, any of the below:
     - Use QueryPerformanceCounter(&modified_list);
 
 - Cache-optimize structs to reduce contention.
+    - Free page caches in each thread!
 
 - Add read/write accesses. Check readwrite bit in trimmer -- move read-only directly to standby.
 

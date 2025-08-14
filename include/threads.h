@@ -42,6 +42,8 @@ extern HANDLE scheduling_thread;
 extern HANDLE aging_thread;
 extern HANDLE trimming_thread;
 extern HANDLE writing_thread;
+extern HANDLE debug_thread;
+
 
 // Thread IDs
 extern PULONG user_thread_ids;

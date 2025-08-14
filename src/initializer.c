@@ -223,6 +223,8 @@ void initialize_PFN_data(void) {
         // Add the page to one of the free lists
         PPAGE_LIST list = &free_lists.list_array[list_index];
         insert_to_list_tail(list, new_pfn);
+
+        // Adjust metadata
         increment_list_size(list);
         increment_free_lists_total_count();
         list_index = (list_index + 1) % num_lists;
@@ -323,6 +325,15 @@ void initialize_threads(void) {
                                &writing_thread_id);
 
     ASSERT(writing_thread);
+
+#if DEBUG
+    debug_thread = CreateThread (DEFAULT_SECURITY,
+                               DEFAULT_STACK_SIZE,
+                               (LPTHREAD_START_ROUTINE) debug_thread_function,
+                               NULL,
+                               DEFAULT_CREATION_FLAGS,
+                               NULL);
+#endif
 }
 
 void initialize_events(void) {
