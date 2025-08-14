@@ -81,7 +81,7 @@ of my program first. These optimizations included:
   of global data, and when failing, would back off with a wait time that doubled for each failure.
   This value is capped, of course, to prevent starvation. In doing so, waiting threads will burn up
   fewer cycles for highly-used global data. This saved nearly 38 bytes of data for each PTE and PFN.
-  **Speedup: 50%!**
+  **Speedup: 50%**
 
 
 - <u>Batched Trims and Writes:</u> Instead of trimming or writing one page at a time, I would
@@ -89,7 +89,7 @@ batch together a reasonably large group of pages and change their states togethe
 lock releases during this process (lock a page to add it to a batch, unlock it while batching
 together more pages, re-acquire the lock to add the page to its new state). This led to some
 tricky race conditions (what if we fault on a page mid-trim or mid-write?), but nothing that
-could not be resolved. **Speedup: 75%!**
+could not be resolved. **Speedup: 75%**
 
 
 - <u>Page File Bitmap:</u> Finding and locking regions in the page file was a prohibitively
@@ -97,16 +97,36 @@ slow part of my system. To speed it up, I created a bitmap to represent the stat
 I used atomic operations to update the bitmaps without locks, and I added a stack of slots to
 stash any reserved but unused disk slots (for easy retrieval during the next write). Furthermore,
 I added functionality allowing an *entire* row of 64 slots to be reserved at once.
-**Speedup: 85%!**
+**Speedup: 85%**
+
+
+- <u>Shared Locks on Lists and Multiple Free Lists:</u> To reduce contention on the free, modified, and
+  standby lists, I switched to using read/write locks. This approach has the threads acquire
+  a shared lock before attempting to do list operations. Then, to perform list operations,
+  only the locks on the relevant pages are necessary (usually three: the page, its flink, and
+  its blink). This provides MASSIVE benefits for soft-faulting threads, which can now remove their
+  pages from the same list in parallel (as long as they are not neighbors, which is unlikely).
+  Additionally, at this point I added 16 free lists (instead of just one). This reduced contention
+  on the free list locks, allowing for multiple faulting threads to grab free pages simultaneously.
+  **Speedup: 20%**
 
 ### Coming Soon...!
-- <u>Read/Write locks on Page Lists:</u> My next goal is to reduce contention on the modified and
-standby lists by using read/write locks. I intend to provide parallel soft-faulting, as each thread
-only needs access to three pages (the target and its Flink and Blink).
+
 - <u>Pte Region Locks:</u> To be more realistic, I intend to create locks on *regions* of PTEs, not individual PTEs.
 This will create a more space-efficient system. It will also give me the opportunity to speculatively
 trim or read pages associated with neighboring PTEs, which will be helpful when doing non-random
 accesses to the VA region.
+
+
+- <u>Free Page Caches for Each Thread:</u> This would also improve parallelism. To provide
+  free pages for faulting threads, it would be advantageous to batch remove free pages and
+  store them in a cache local to each thread. This would guarantee lock-free access for the
+  faulting thread.
+
+- <u>Page Consumption Tracking:</u> To provide fresh pages to the standby list just in time
+  for faulting threads, it is important to monitor page consumption over time. This would
+  allow my program to know exactly how many pages to trim and write. The size of the batches
+  should expand or contract to prepare just enough available pages at any point in time.
 
 ---
 ## Future Plans
@@ -122,14 +142,16 @@ this feature, I would need speculative reads from disk (to provide not just the 
 page but also memory most likely to be used next). It would also be important to
 develop a reasonable algorithm to  select candidates to trim (by counting cumulative usage as well
 as time since previous usage).
----
+
+
 - Read and write access would be another excellent feature to add. This could utilize
 a bit in the PTE indicating the level of privilege the process has with the data.
 Using this, I could more efficiently trim read-only pages to the standby list,
 as there would never be modifications to write to the disk (assuming, of course,
 there is a copy of the data on the disk already). A dirty bit could be used in the PTE
 to also track pages with write privileges to see if they have actually been written to. 
----
+
+
 - Disk indices provide an interesting challenge: over time, they can become fragmented, 
 reducing the efficiency with which empty disk slots can be batched together for a
 modified write. A defragmentation thread could do some work in the background to
