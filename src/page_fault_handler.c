@@ -203,9 +203,6 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO user_thread_info) {
     // Get the frame number
     frame_number_to_map = get_frame_from_PFN(available_pfn);
 
-    // Map the kernel VA to the available frame
-    map_pages(1, kernel_read_va, &frame_number_to_map);
-
     // Since we are committing to using this read va, we will need to increase the count.
     user_thread_info->kernel_va_index++;
 
@@ -219,9 +216,6 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO user_thread_info) {
         // If we were able to get the lock, release it. There is no need for it.
         if (pte_lock_acquired) unlock_pte(pte);
 
-        // Zero the page
-        memset(kernel_read_va, 0, PAGE_SIZE);
-
         // Add the page to the free list and update its status
         add_page_to_free_lists(available_pfn, user_thread_info->thread_id);
         increment_available_count();
@@ -232,7 +226,11 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO user_thread_info) {
         return FALSE;
     }
 
-    // Now that we have a page, let's check if we need to do a disk read.
+    // Since we have the PTE and page locks, we can now safely map the page.
+    // We map the available frame to the kernel VA AND the faulting VA at the same time (for efficiency)
+    map_both_va_to_same_page(kernel_read_va, get_VA_from_PTE(pte), frame_number_to_map);
+
+    // Now that we have the page in memory, let's check if we need to do a disk read.
     // If PTE is zeroed, do not do the disk read. But if the PTE is on the disk, read its contents back!
     if (IS_PTE_ON_DISK(pte)) {
 
@@ -254,9 +252,6 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO user_thread_info) {
         // Zero the page
         memset(kernel_read_va, 0, PAGE_SIZE);
     }
-
-    // Map page to user VA
-    map_pages(1, get_VA_from_PTE(pte), &frame_number_to_map);
 
     // Ensure that the page contents correctly contain the relevant VA!
     ASSERT(validate_page(get_VA_from_PTE(pte)));

@@ -84,10 +84,12 @@ PPFN try_pop_from_free_list(ULONG list_index) {
 
 #if DEBUG
     validate_list(list);
+
+    // list size is only used in debugger
+    decrement_list_size(list);
 #endif
 
     // Update metadata and return
-    decrement_list_size(list);
     decrement_free_lists_total_count();
     decrement_available_count();
     return page;

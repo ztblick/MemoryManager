@@ -42,6 +42,7 @@
 
 #define ACCEPTABLE_MISS     100
 
+#if DEBUG
 typedef struct {
     DWORD    threadId;
     ULONG64  timestamp;      // e.g. GetTickCount64()
@@ -55,13 +56,14 @@ typedef struct {
 extern TraceEntry g_traceBuffer[TRACE_BUFFER_SIZE];
 extern volatile LONG g_traceIndex;
 
-/*
- *  Fatal error outputs crucial information to the console. It also terminates all processes.
- */
-VOID fatal_error(char *msg);
-
 void log_stack_trace(ULONG64 disk_slot, PULONG_PTR pfn, PULONG_PTR pte);
 
 VOID debug_thread_function(VOID);
 
 VOID validate_free_counts(VOID);
+#endif
+
+/*
+ *  Fatal error outputs crucial information to the console. It also terminates all processes.
+ */
+VOID fatal_error(char *msg);

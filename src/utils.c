@@ -17,6 +17,23 @@ void map_pages(ULONG64 num_pages, PULONG_PTR va, PULONG_PTR frame_numbers) {
     }
 }
 
+void map_both_va_to_same_page(PULONG_PTR va_one, PULONG_PTR va_two, ULONG64 frame_number) {
+
+    PULONG_PTR va_array[2];
+    ULONG64 frame_array[2];
+
+    va_array[0] = va_one;
+    va_array[1] = va_two;
+    frame_array[0] = frame_number;
+    frame_array[1] = frame_number;
+
+    if (MapUserPhysicalPagesScatter(va_array, 2, frame_array) == FALSE) {
+        fatal_error("Could not map both VAs to same page.");
+    }
+}
+
+
+
 void unmap_pages(ULONG64 num_pages, PULONG_PTR va) {
     if (MapUserPhysicalPages (va, num_pages, NULL) == FALSE) {
         fatal_error("Could not un-map old VA.");

@@ -9,12 +9,15 @@ NEXT SUB-GOALS:
     - Do this first! This will kick off the trimmer and writer earlier, which, in turn, may reduce the number
         of hard faults and increase the number of soft faults. Or reduce the wait time...?
 
+- Batch prune from standby to free lists
+
+- Batch movement from modified to standby -- acquire locks once, then do a massive move. Set up flinks/blinks
+    ahead of time?
+
 - Lock contention. Move to PTE region locks, not individual PTE locks.
     - Try removing locks from as many places as possible.
 
 - Modify statistics counts to be more clear, correct, and efficient
-
-- Periodically prune batches from standby to free lists.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 THEN, any of the below:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

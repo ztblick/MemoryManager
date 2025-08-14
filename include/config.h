@@ -100,4 +100,3 @@ extern STATS stats;
 #define GB(x)                           (MB((x)) * 1024)
 #define BITS_PER_BYTE                   8
 #define BYTES_PER_VA                    8
-

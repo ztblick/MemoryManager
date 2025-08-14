@@ -71,3 +71,15 @@ Adding SRW locks and multiple free lists:
 7 threads   2703 milliseconds.
 8 threads   2812 milliseconds.
 9 threads   2922 milliseconds.
+
+After removing and combining map pages calls:
+
+1 threads   2000 milliseconds.
+2 threads   1954 milliseconds.
+3 threads   2172 milliseconds.
+4 threads   2250 milliseconds.
+5 threads   2375 milliseconds.
+6 threads   2469 milliseconds.
+7 threads   2515 milliseconds.
+8 threads   2547 milliseconds.
+9 threads   2688 milliseconds.
