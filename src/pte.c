@@ -7,11 +7,14 @@
 PPTE PTE_base = {0};
 
 VOID initialize_page_table(VOID) {
+
+    vm.num_ptes = vm.va_size_in_bytes / PAGE_SIZE;
+
     // Allocate and zero all PTE data.
-    PTE_base = (PPTE) zero_malloc(sizeof(PTE) * NUM_PTEs);
+    PTE_base = (PPTE) zero_malloc(sizeof(PTE) * vm.num_ptes);
 
     // Initialize all PTE locks
-    for (PPTE pte = PTE_base; pte < PTE_base + NUM_PTEs; pte++) {
+    for (PPTE pte = PTE_base; pte < PTE_base + vm.num_ptes; pte++) {
         initialize_byte_lock(&pte->lock);
     }
 }
@@ -22,7 +25,7 @@ PPTE get_PTE_from_VA(PULONG_PTR va) {
 
     PULONG_PTR application_va_base = vm.application_va_base;
 
-    ASSERT(va >= application_va_base && va <= application_va_base + VIRTUAL_ADDRESS_SIZE);
+    ASSERT(va >= application_va_base && va <= application_va_base + vm.va_size_in_bytes);
 
     ULONG_PTR va_offset = (ULONG_PTR)va - (ULONG_PTR)application_va_base;
     ULONG_PTR pte_index = va_offset / PAGE_SIZE;
@@ -33,7 +36,7 @@ PPTE get_PTE_from_VA(PULONG_PTR va) {
 // Returns the VA associated with the beginning of the region of VAs for this PTE.
 PVOID get_VA_from_PTE(PPTE pte) {
 
-    ASSERT(pte >= PTE_base && pte <= PTE_base + NUM_PTEs);
+    ASSERT(pte >= PTE_base && pte <= PTE_base + vm.num_ptes);
 
     ULONG_PTR index = (ULONG_PTR) (pte - PTE_base);  // Already scaled correctly
     return (PVOID) ((ULONG_PTR) vm.application_va_base + index * PAGE_SIZE);

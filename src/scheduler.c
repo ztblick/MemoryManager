@@ -8,7 +8,7 @@ VOID print_statistics(VOID) {
 
     ULONG64 allocated_frame_count = vm.allocated_frame_count;
 
-    ULONG64 active_page_count = NUMBER_OF_PHYSICAL_PAGES -
+    ULONG64 active_page_count = vm.allocated_frame_count -
         (*stats.n_free + *stats.n_modified + *stats.n_standby);
 
     printf("\n");
@@ -25,6 +25,8 @@ VOID print_statistics(VOID) {
         stats.n_hard, 100.0 * stats.n_hard / (stats.n_hard + stats.n_soft));
     printf("SOFT:\t\t%llu\t\t%.2f%%\n",
         stats.n_soft, 100.0 * stats.n_soft / (stats.n_hard + stats.n_soft));
+    printf("\nTotal time user threads spent waiting: %llu\n", stats.wait_time);
+    printf("\nTotal hard fault misses: %llu\n", stats.hard_faults_missed);
 }
 
 VOID schedule_tasks(VOID) {

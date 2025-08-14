@@ -9,7 +9,7 @@ void free_lock(PCRITICAL_SECTION lock) {
 }
 
 void unmap_all_pages(void) {
-    for (PPTE pte = PTE_base; pte < PTE_base + NUM_PTEs; pte++) {
+    for (PPTE pte = PTE_base; pte < PTE_base + vm.num_ptes; pte++) {
         if (pte->disk_format.valid) {
             PULONG_PTR va = get_VA_from_PTE(pte);
             unmap_pages(1, va);

@@ -7,7 +7,7 @@
 PULONG_PTR get_arbitrary_va(PULONG_PTR p) {
     // Randomly access different portions of the virtual address space.
     unsigned random_number = rand () * rand () * rand ();
-    random_number %= VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS;
+    random_number %= vm.va_size_in_pointers;
 
     // Ensure our 8-byte stamp to the arbitrary virtual address doesn't
     // straddle a PAGE_SIZE boundary.

@@ -26,7 +26,7 @@ VOID trim_pages(VOID) {
         attempts++;
 
         // Wrap around!
-        if (pte == (PTE_base + NUM_PTEs)) pte = PTE_base;
+        if (pte == (PTE_base + vm.num_ptes)) pte = PTE_base;
 
         // If the PTE is not valid, no need for us to try to lock it.
         if (!IS_PTE_VALID(pte)) continue;

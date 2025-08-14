@@ -247,10 +247,16 @@ void initialize_kernel_VA_spaces(void) {
 
 void initialize_user_VA_space(void) {
 
+    ULONG64 va_span = VA_SPAN;
+    // In case fewer pages were allocated, we reduce the size.
+    va_span -= (NUMBER_OF_PHYSICAL_PAGES - vm.allocated_frame_count);
+    vm.va_size_in_bytes = va_span * PAGE_SIZE;
+    vm.va_size_in_pointers = vm.va_size_in_bytes / sizeof(PULONG_PTR);
+
     // Reserve user virtual address space.
     vm.application_va_base = VirtualAlloc2 (NULL,
                        NULL,
-                       VIRTUAL_ADDRESS_SIZE,
+                       vm.va_size_in_bytes,
                        MEM_RESERVE | MEM_PHYSICAL,
                        PAGE_READWRITE,
                        &vm.virtual_alloc_shared_parameter,
@@ -377,6 +383,11 @@ void initialize_system(void) {
     // Find largest frame number for PFN array
     set_max_frame_number();
 
+    // Initialize VA spaces
+    initialize_shared_page_parameter();
+    initialize_user_VA_space();
+    initialize_kernel_VA_spaces();
+
     // Initialize PTEs
     initialize_page_table();
 
@@ -388,11 +399,6 @@ void initialize_system(void) {
 
     // Initialize all page file and metadata
     initialize_page_file_and_metadata();
-
-    // Initialize VA spaces
-    initialize_shared_page_parameter();
-    initialize_kernel_VA_spaces();
-    initialize_user_VA_space();
 
     // Initialize events
     initialize_events();

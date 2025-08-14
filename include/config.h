@@ -19,8 +19,11 @@ typedef struct __vm_state {
     ULONG64 iterations;
 
     // VA spaces
+    ULONG64 va_size_in_bytes;
+    ULONG64 va_size_in_pointers;
     PULONG_PTR application_va_base;
     PULONG_PTR kernel_write_va;
+    ULONG64 num_ptes;
 
     // PFN Data Structures
     ULONG_PTR max_frame_number;
@@ -47,6 +50,8 @@ typedef struct __stats {
     volatile LONG64 *n_standby;
     volatile LONG64 n_hard;
     volatile LONG64 n_soft;
+    volatile LONG64 wait_time;
+    volatile LONG64 hard_faults_missed;
 } STATS, *PSTATS;
 
 // Our global statistics variable
@@ -88,8 +93,6 @@ extern STATS stats;
 // So, we will always set the first bit in our page file bitmap, invalidating that location and wasting one
 // page of disk space (oh no, 4KB lost, so sad).
 #define VA_SPAN                                         (NUMBER_OF_PHYSICAL_PAGES + PAGES_IN_PAGE_FILE - 2)
-#define VIRTUAL_ADDRESS_SIZE                            (VA_SPAN * PAGE_SIZE)
-#define VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS         (VIRTUAL_ADDRESS_SIZE / sizeof (ULONG_PTR))
 
 #define PAGE_SIZE                       4096
 #define KB(x)                           ((x) * 1024ULL)         // ULL in case our operation exceeds 2^32 - 1

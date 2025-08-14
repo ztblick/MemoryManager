@@ -186,7 +186,11 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO user_thread_info) {
     // the page fault lock again.
     if (!free_page_acquired && !standby_page_acquired) {
         SetEvent(initiate_trimming_event);
+        ULONG64 start = GetTickCount64();
         WaitForSingleObject(standby_pages_ready_event, INFINITE);
+        ULONG64 end = GetTickCount64();
+        InterlockedAdd64(&stats.wait_time, (LONG64) (end - start));
+        InterlockedIncrement64(&stats.hard_faults_missed);
         return FALSE;
     }
 
@@ -277,7 +281,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, PTHREAD_INFO user_thread_info) {
         // A - a hardware failure. This is beyond the scope of this program.
         // B - the user provides an invalid VA (beyond the VA space allocated)
     // This handles situation B:
-    if (faulting_va < vm.application_va_base || faulting_va > vm.application_va_base + VIRTUAL_ADDRESS_SIZE_IN_UNSIGNED_CHUNKS)
+    if (faulting_va < vm.application_va_base || faulting_va > vm.application_va_base + vm.va_size_in_pointers)
         return FALSE;
 
     // This is the PTE of our faulting VA. We will need him. But we will lock him as little
