@@ -20,7 +20,8 @@
 #define MAX_HARD_ACCESS_ATTEMPTS		10
 #define MAX_SOFT_ACCESS_ATTEMPTS		30
 
-// Total size: 24 bytes
+// Total size: 24 bytes + 40 bytes of padding
+__declspec(align(64))
 typedef struct __page_list {
     PPFN head;                   // 8 bytes
     volatile LONG64 list_size;   // 8 bytes

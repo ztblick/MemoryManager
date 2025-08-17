@@ -35,6 +35,7 @@
 // Color settings for fatal error.
 #define COLOR_RED "\x1b[31m"
 #define COLOR_RESET "\x1b[0m"
+#define COLOR_GREEN "\x1b[32m"
 
 // Here is some code to help me track stack traces
 #define MAX_STACK_FRAMES    16

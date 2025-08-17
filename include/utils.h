@@ -38,3 +38,14 @@ VOID increment_available_count(VOID);
  *  Asserts that the count must be positive.
  */
 VOID decrement_available_count(VOID);
+
+/*
+ *  Returns a timestamp from QueryPerformanceCounter
+ */
+LONGLONG get_timestamp(VOID);
+
+
+/*
+ *  Returns the time difference of the two timestamps in fractional seconds.
+ */
+double get_time_difference(LONGLONG end, LONGLONG start);

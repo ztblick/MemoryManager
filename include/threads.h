@@ -53,3 +53,36 @@ extern ULONG trimming_thread_id;
 extern ULONG writing_thread_id;
 
 extern PTHREAD_INFO user_thread_info;
+
+#define NUMBER_OF_SAMPLES       512
+
+typedef struct {
+    ULONG64 batch_size;
+    double time_in_seconds;
+} batch_sample;
+
+typedef struct {
+    batch_sample data[NUMBER_OF_SAMPLES];
+    SHORT head;
+} sample_buffer;
+
+extern sample_buffer trim_samples;
+extern sample_buffer write_samples;
+
+/*
+    Records information statistical information about the previous batch of
+    trimming or writing.
+ */
+VOID record_batch_size_and_time(double time_in_fractional_seconds,
+                                ULONG64 batch_size,
+                                ULONG thread_id);
+
+/*
+    Adds sample to circular buffer of batch data
+ */
+VOID push_to_samples(batch_sample *sample, ULONG thread_id);
+
+/*
+ *  Prints out data on statistics
+ */
+VOID analyze_and_print_statistics(ULONG thread_id);

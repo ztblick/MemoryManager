@@ -186,10 +186,12 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO user_thread_info) {
     // the page fault lock again.
     if (!free_page_acquired && !standby_page_acquired) {
         SetEvent(initiate_trimming_event);
-        ULONG64 start = GetTickCount64();
+        LARGE_INTEGER start;
+        QueryPerformanceCounter(&start);
         WaitForSingleObject(standby_pages_ready_event, INFINITE);
-        ULONG64 end = GetTickCount64();
-        InterlockedAdd64(&stats.wait_time, (LONG64) (end - start));
+        LARGE_INTEGER end;
+        QueryPerformanceCounter(&end);
+        InterlockedAdd64(&stats.wait_time, (end.QuadPart - start.QuadPart));
         InterlockedIncrement64(&stats.hard_faults_missed);
         return FALSE;
     }

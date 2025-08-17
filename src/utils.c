@@ -49,3 +49,13 @@ VOID decrement_available_count(VOID) {
     LONG64 new_count = InterlockedDecrement64(&stats.n_available);
     if (new_count == START_TRIMMING_THRESHOLD) SetEvent(initiate_trimming_event);
 }
+
+LONGLONG get_timestamp(VOID) {
+    LARGE_INTEGER t;
+    QueryPerformanceCounter(&t);
+    return t.QuadPart;
+}
+
+double get_time_difference(LONGLONG end, LONGLONG start) {
+    return (double) (end - start) / stats.timer_frequency;
+}

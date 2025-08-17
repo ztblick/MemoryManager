@@ -55,6 +55,8 @@ VOID push_slots_from_bitmap_row(ULONG64 bitmap_row) {
                 push_slot(current_disk_slot);
                 current_disk_slot++;
             }
+            LONG64 result = InterlockedAdd64(&pf.empty_disk_slots, -64);
+            ASSERT(result < PAGES_IN_PAGE_FILE && result >= 0);
             return;
         }
     }
@@ -148,7 +150,8 @@ VOID clear_disk_slot(ULONG64 disk_slot) {
     ASSERT((original_value & ~mask) == ~mask);
 
     // Increment our count of clear slots!
-    InterlockedIncrement64(&pf.empty_disk_slots);
+    LONG64 result = InterlockedIncrement64(&pf.empty_disk_slots);
+    ASSERT(result < PAGES_IN_PAGE_FILE && result >= 0);
 }
 
 VOID set_disk_slot(UINT64 disk_slot) {
@@ -165,5 +168,6 @@ VOID set_disk_slot(UINT64 disk_slot) {
     ASSERT((original_value & mask) == 0ULL);
 
     // Decrement the empty disk slot count without risking race conditions.
-    InterlockedDecrement64(&pf.empty_disk_slots);
+    LONG64 result = InterlockedDecrement64(&pf.empty_disk_slots);
+    ASSERT(result < PAGES_IN_PAGE_FILE && result >= 0);
 }

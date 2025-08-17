@@ -4,6 +4,8 @@
 
 #include "../include/simulator.h"
 
+#include <sys/stat.h>
+
 PULONG_PTR get_arbitrary_va(PULONG_PTR p) {
     // Randomly access different portions of the virtual address space.
     unsigned random_number = rand () * rand () * rand ();
@@ -66,6 +68,11 @@ void begin_system_test(void) {
     // Our controlling thread will wait for this function to finish before exiting the test and reporting stats
     WaitForMultipleObjects(vm.num_user_threads, user_threads, TRUE, INFINITE);
 
+#if STATS_MODE
+    analyze_and_print_statistics(trimming_thread_id);
+    analyze_and_print_statistics(writing_thread_id);
+#endif
+
     // Test is finished! Tell all threads to stop.
     SetEvent(system_exit_event);
 
@@ -83,6 +90,7 @@ VOID main (int argc, char** argv) {
 
     if (argc > 2) {
         printf("About to initiate test with %s threads running\n%s iterations each...\n", argv[1], argv[2]);
+        printf("~~~~~~~~~~~~~~~~~~~~~\n");
         vm.num_user_threads = strtol(argv[1], NULL, 10);  // Base 10
         vm.iterations = strtol(argv[2], NULL, 10);
     }
@@ -94,7 +102,7 @@ VOID main (int argc, char** argv) {
     initialize_system();
 
     // Set up a timer to evaluate speed
-    ULONG64 start_time = GetTickCount64();
+    LONGLONG start_time = get_timestamp();
 
     // Run system test. This will broadcast the system start event to all listening threads,
     // including the user threads. This begins the user app simulation, which begins faulting.
@@ -102,14 +110,17 @@ VOID main (int argc, char** argv) {
     begin_system_test();
 
     // Grab the time to evaluate speed
-    ULONG64 end_time = GetTickCount64();
+    LONGLONG end_time = get_timestamp();
 
-    // Free all memory and end the simulation.
-    free_all_data_and_shut_down();
+    // Get total runtime in seconds
+    double runtime = get_time_difference(end_time, start_time);
 
     // Print statistics
-    printf("Test successful. Time elapsed: %llu milliseconds.\n", end_time - start_time);
+    printf("Test successful. Time elapsed: " COLOR_GREEN "%.3f" COLOR_RESET " seconds.\n", runtime);
     printf ("Each of %lu threads accessed %llu VAs.\n", vm.num_user_threads, vm.iterations);
     print_statistics();
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+
+    // Free all memory and end the simulation.
+    free_all_data_and_shut_down();
 }

@@ -110,6 +110,11 @@ void initialize_statistics(void) {
     stats.n_soft = 0;
 
     stats.n_available = *(stats.n_free);
+
+    // Get the frequency of the performance counter
+    LARGE_INTEGER lpFrequency;
+    QueryPerformanceFrequency(&lpFrequency);
+    stats.timer_frequency = lpFrequency.QuadPart;
 }
 
 HANDLE CreateSharedMemorySection (VOID) {
@@ -331,6 +336,15 @@ void initialize_threads(void) {
                                &writing_thread_id);
 
     ASSERT(writing_thread);
+
+
+    // Initialize trimmer and writer sampling
+#if STATS_MODE
+    trim_samples.head = 0;
+    write_samples.head = 0;
+    memset(trim_samples.data, 0, NUMBER_OF_SAMPLES * sizeof(batch_sample));
+    memset(write_samples.data, 0, NUMBER_OF_SAMPLES * sizeof(batch_sample));
+#endif
 
 #if DEBUG
     debug_thread = CreateThread (DEFAULT_SECURITY,

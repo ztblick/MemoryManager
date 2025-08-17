@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <Windows.h>
 
+#define STATS_MODE                  1
+
 // This is our overarching VM state struct, which will package together information
 // about the defining characteristics of each test, such as the number of physical pages
 // and the base of the VA region.
@@ -52,6 +54,7 @@ typedef struct __stats {
     volatile LONG64 n_soft;
     volatile LONG64 wait_time;
     volatile LONG64 hard_faults_missed;
+    LONGLONG timer_frequency;
 } STATS, *PSTATS;
 
 // Our global statistics variable
@@ -69,14 +72,10 @@ extern STATS stats;
 #define DEFAULT_FREE_LIST_COUNT         16
 
 // We will begin trimming and writing when our standby + free page count falls below this threshold.
-#define START_TRIMMING_THRESHOLD        (NUMBER_OF_PHYSICAL_PAGES / 8)
-// Trimming will stop when we fall below our active page threshold
-#define ACTIVE_PAGE_THRESHOLD           (NUMBER_OF_PHYSICAL_PAGES * 3 / 4)
-// We will begin writing when the modified list has sufficient pages!
-#define BEGIN_WRITING_THRESHOLD         (NUMBER_OF_PHYSICAL_PAGES / 32)
+#define START_TRIMMING_THRESHOLD        (10000)
 
 // These will change as we decide how many pages to write, read, or trim at once.
-#define MAX_WRITE_BATCH_SIZE            512
+#define MAX_WRITE_BATCH_SIZE            4096
 #define MIN_WRITE_BATCH_SIZE            1
 #define MAX_READ_BATCH_SIZE             1
 #define MAX_TRIM_BATCH_SIZE             512

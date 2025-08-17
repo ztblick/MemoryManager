@@ -30,7 +30,9 @@ VOID add_page_to_free_lists(PPFN page, ULONG first_index) {
         unlock_list_exclusive(list);
 
         // Update metadata and return
+#if DEBUG
         increment_list_size(list);
+#endif
         increment_free_lists_total_count();
 
         return;

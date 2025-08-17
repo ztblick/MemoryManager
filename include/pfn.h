@@ -57,7 +57,7 @@ typedef struct __pfn PFN;
 typedef PFN* PPFN;
 
 struct __pfn {
-    PPFN flink;                                // Size: 16 bytes
+    PPFN flink;
     PPFN blink;
     PPTE PTE;                                   // Size: 8 bytes -- FYI -- The 3 least-significant bits here are always zero, so we can save some bits with cleverness...
     union {                                     // Size: 8 bytes
@@ -65,7 +65,7 @@ struct __pfn {
         ULONG64 raw_pfn_data;
         BYTE_LOCK lock;
     };
-    // char padding[32];                        // Initial tests indicate that sharing cache lines yields ~8% speedups!
+    char padding[32];                           // Unclear if sharing cache lines hurts of helps so far...
 };
 
 /*

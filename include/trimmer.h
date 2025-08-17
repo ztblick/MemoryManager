@@ -8,16 +8,11 @@
 #include "page_list.h"
 #include "threads.h"
 
-#define MAX_TRIM_ATTEMPTS       MAX_TRIM_BATCH_SIZE * 8
+#define MAX_TRIM_ATTEMPTS       MAX_TRIM_BATCH_SIZE * 2
 #define TRIMMER_DELAY           10
 
 // The initial trimmer_offset in the PTE region for the trimmer -- this will change over time.
 PPTE pte_to_trim;
-
-/*
- *  Trims active pages, moving them to the modified or standby lists.
- */
-VOID trim_pages(VOID);
 
 /*
  *  This is the function called by CreateThread. It waits for the initialize_system event.

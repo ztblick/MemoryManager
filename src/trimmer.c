@@ -3,7 +3,7 @@
 //
 #include "../include/trimmer.h"
 
-VOID trim_pages(VOID) {
+ULONG64 trim_pages(VOID) {
 
     // We will keep track of the number of pages we have batched
     ULONG64 attempts = 0;
@@ -47,8 +47,12 @@ VOID trim_pages(VOID) {
         trim_batch_size++;
     }
 
-    // If we couldn't trim anyone, return
-    if (trim_batch_size == 0) return;
+    // If we couldn't trim anyone, return -- but still wake the writer! There may be plenty of modified
+    // pages yet to be written!
+    if (trim_batch_size == 0) {
+        SetEvent(initiate_writing_event);
+        return 0;
+    };
 
     // Unmap ALL pages in one batch!
     if (!MapUserPhysicalPagesScatter(trimmed_VAs, trim_batch_size, NULL)) DebugBreak();
@@ -74,6 +78,9 @@ VOID trim_pages(VOID) {
     }
     // Wake the writer!
     SetEvent(initiate_writing_event);
+
+    // Return our batch size, which is used by the statistics thread.
+    return trim_batch_size;
 }
 
 VOID trim_pages_thread(VOID) {
@@ -99,7 +106,15 @@ VOID trim_pages_thread(VOID) {
         if (WaitForMultipleObjects(ARRAYSIZE(events), events, FALSE, INFINITE)
             == EXIT_EVENT_INDEX) return;
 
+#if STATS_MODE
+        LONGLONG start = get_timestamp();
+#endif
         // Once woken, begin trimming a batch of pages. Then go back to sleep.
-        trim_pages();
+        ULONG64 batch_size = trim_pages();
+#if STATS_MODE
+        LONGLONG end = get_timestamp();
+        double difference = get_time_difference(end, start);
+        record_batch_size_and_time(difference, batch_size, trimming_thread_id);
+#endif
     }
 }

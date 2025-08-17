@@ -9,6 +9,17 @@ NEXT SUB-GOALS:
     - Do this first! This will kick off the trimmer and writer earlier, which, in turn, may reduce the number
         of hard faults and increase the number of soft faults. Or reduce the wait time...?
 
+More on this...
+I realize now that the trimmer's job really is to simply make sure that the writer has enough pages to do its job.
+That's it. So, we can tie his performance to the writer. Are there enough pages there? No? Okay, then trim some.
+
+The writer, however, needs to do a more important job: it needs to anticipate the consumption from the standby list
+(and the free lists), and move enough pages to the standby list to provide just enough to keep up with consumption
+(not too many, not too few).
+
+
+Other things in the near future...
+
 - Batch prune from standby to free lists
 
 - Batch movement from modified to standby -- acquire locks once, then do a massive move. Set up flinks/blinks

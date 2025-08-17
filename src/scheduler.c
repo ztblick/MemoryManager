@@ -20,12 +20,12 @@ VOID print_statistics(VOID) {
         *stats.n_modified, 100.0 * *stats.n_modified / allocated_frame_count);
     printf("STANDBY:\t%llu\t\t%.2f%%\n",
         *stats.n_standby, 100.0 * *stats.n_standby / allocated_frame_count);
-    // printf("\nEMPTY DISK SLOTS:\t%lld\n", pf.empty_disk_slots);
+    printf("\nEMPTY DISK SLOTS:\t%lld\n", pf.empty_disk_slots);
     printf("\nHARD:\t\t%llu\t\t%.2f%%\n",
         stats.n_hard, 100.0 * stats.n_hard / (stats.n_hard + stats.n_soft));
     printf("SOFT:\t\t%llu\t\t%.2f%%\n",
         stats.n_soft, 100.0 * stats.n_soft / (stats.n_hard + stats.n_soft));
-    printf("\nTotal time user threads spent waiting: %llu\n", stats.wait_time);
+    printf("\nTotal time user threads spent waiting: %.3f s\n", (double) stats.wait_time / stats.timer_frequency);
     printf("\nTotal hard fault misses: %llu\n", stats.hard_faults_missed);
 }
 

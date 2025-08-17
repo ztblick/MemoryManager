@@ -4,7 +4,7 @@
 
 #include "../include/writer.h"
 
-VOID write_pages(VOID) {
+ULONG64 write_pages(VOID) {
 
     // PFN for the current page being selected for disk write.
     PPFN pfn;
@@ -17,14 +17,14 @@ VOID write_pages(VOID) {
     ULONG64 num_pages_in_write_batch = MAX_WRITE_BATCH_SIZE;
 
     // If there are insufficient empty disk slots, let's hold off on writing
-    if (pf.empty_disk_slots < MIN_WRITE_BATCH_SIZE) return;
+    if (pf.empty_disk_slots < MIN_WRITE_BATCH_SIZE) return 0;
 
     // Let's get a sense of how many modified pages we can reasonably expect. There may be more (from trimming)
     // or fewer (from soft faults), but this gives us an estimate.
     ULONG64 approx_num_mod_pages = get_size(&modified_list);
 
     // First, check to see if there are sufficient pages to write
-    if (approx_num_mod_pages < MIN_WRITE_BATCH_SIZE) return;
+    if (approx_num_mod_pages < MIN_WRITE_BATCH_SIZE) return 0;
 
     // Update our target count -- no need to get too greedy
     ULONG64 target_page_count = min(MAX_WRITE_BATCH_SIZE, approx_num_mod_pages);
@@ -37,7 +37,7 @@ VOID write_pages(VOID) {
 
     // If we couldn't batch enough slots, we will need to return.
     // Note that we did not release our stashed slots!
-    if (pf.num_stashed_slots < MIN_WRITE_BATCH_SIZE) return;
+    if (pf.num_stashed_slots < MIN_WRITE_BATCH_SIZE) return 0;
 
     // Update our upper bound on pages in the batch
     num_pages_in_write_batch = min(pf.num_stashed_slots, target_page_count);
@@ -74,7 +74,7 @@ VOID write_pages(VOID) {
     }
 
     // If we couldn't get any pages, we will return.
-    if (num_pages_in_write_batch == 0) return;
+    if (num_pages_in_write_batch == 0) return 0;
 
     // Create an array of our frame numbers for the calls to map and unmap
     ULONG64 frame_numbers_to_map[MAX_WRITE_BATCH_SIZE];
@@ -139,6 +139,8 @@ VOID write_pages(VOID) {
 
     // Broadcast to waiting user threads that there are standby pages ready.
     if (pages_written > 0) SetEvent(standby_pages_ready_event);
+
+    return pages_written;
 }
 
 VOID write_pages_thread(VOID) {
@@ -157,7 +159,15 @@ VOID write_pages_thread(VOID) {
         if (WaitForMultipleObjects(ARRAYSIZE(events), events, FALSE, INFINITE)
             == EXIT_EVENT_INDEX) return;
 
+#if STATS_MODE
+        LONGLONG start_time = get_timestamp();
+#endif
         // Once woken, begin writing a batch of pages. Then go back to sleep.
-        write_pages();
+        ULONG64 batch_size = write_pages();
+#if STATS_MODE
+        LONGLONG end_time = get_timestamp();
+        double difference = get_time_difference(end_time, start_time);
+        record_batch_size_and_time(difference, batch_size, writing_thread_id);
+#endif
     }
 }

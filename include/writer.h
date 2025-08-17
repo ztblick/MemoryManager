@@ -15,8 +15,3 @@
  *  system exit event (which terminates it).
  */
 VOID write_pages_thread(VOID);
-
-/*
- *  Writes a batch of pages to the disk.
- */
-VOID write_pages(VOID);
