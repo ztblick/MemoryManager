@@ -14,8 +14,22 @@
 #include "disk.h"
 #include "threads.h"
 
-#define SCHEDULER_DELAY_IN_MILLISECONDS         1
+#define SCHEDULER_DELAY_IN_MILLISECONDS         10
 #define PRINT_FREQUENCY_IN_MILLISECONDS         (60 / SCHEDULER_DELAY_IN_MILLISECONDS)
+
+#define NUMBER_OF_CONSUMPTION_SAMPLES       512
+
+typedef struct {
+    ULONG64 consumption_rate;
+    ULONG64 pages_available;
+} consumption_data;
+
+typedef struct {
+    consumption_data data[NUMBER_OF_CONSUMPTION_SAMPLES];
+    ULONG64 head;
+} consumption_buffer;
+
+extern consumption_buffer consumption_rates;
 
 /*
  * Analyzes consumption, then calls ager, trimmer, and writer appropriately.
@@ -31,3 +45,13 @@ VOID update_statistics(VOID);
  *  Print page consumption statistics.
  */
 VOID print_statistics(VOID);
+
+/*
+ *  Updates consumption statistics
+ */
+VOID add_consumption_data(double rate, ULONG64 pages_available);
+
+/*
+    Prints out data on the run's page consumption
+ */
+VOID print_consumption_data(VOID);

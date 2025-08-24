@@ -59,3 +59,28 @@ LONGLONG get_timestamp(VOID) {
 double get_time_difference(LONGLONG end, LONGLONG start) {
     return (double) (end - start) / stats.timer_frequency;
 }
+
+uint64_t xorshift64(ULONG64 *seed) {
+    uint64_t x = *seed;
+    x ^= x >> 12;
+    x ^= x << 25;
+    x ^= x >> 27;
+    *seed = x;
+    return x * 0x2545F4914F6CDD1DULL;
+}
+
+PULONG_PTR get_arbitrary_va(ULONG64 *thread_random_seed) {
+
+    // Begin at the start of our VA region.
+    PULONG_PTR p = vm.application_va_base;
+
+    ULONG64 random_value = xorshift64(thread_random_seed);
+
+    // Choose index safely (mod handles non power-of-two sizes)
+    size_t index = random_value % vm.va_size_in_pointers;
+
+    // Align down so the 8-byte store won’t straddle a page boundary
+    index &= ~0x7ULL;
+
+    return p + index;
+}

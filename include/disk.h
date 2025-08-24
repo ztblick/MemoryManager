@@ -6,17 +6,11 @@
 #include <Windows.h>
 #include "utils.h"
 
-// Page File and Page File Metadata     --  Neither of these values correspond with valid disk indices,
-// as 0 is always set to be filled, and the number of pages in the page file is one greater than the largest index.
-#define MIN_DISK_INDEX                  0
-#define MAX_DISK_INDEX                  (PAGES_IN_PAGE_FILE - 1)
-
 #define DISK_SLOT_IN_USE                1
 #define DISK_SLOT_EMPTY                 0
 
 // Details for the page file and the bitmaps that describe it:
 #define BITS_PER_BITMAP_ROW             64
-#define PAGE_FILE_BITMAP_ROWS           (PAGES_IN_PAGE_FILE / BITS_PER_BITMAP_ROW)
 #define BITMAP_ROW_FULL                 MAXULONG64
 #define BITMAP_ROW_EMPTY                0ULL
 
@@ -26,10 +20,13 @@
 typedef struct __page_file_struct {
     char* page_file;
     PULONG64 page_file_bitmaps;
+    ULONG64 page_file_bitmap_rows;
+    ULONG64 max_disk_index;
     volatile LONG64 empty_disk_slots;
     PULONG64 slot_stack;
     ULONG64 last_checked_bitmap_row;
     volatile LONG64 num_stashed_slots;
+
 } PAGE_FILE_STRUCT, *PPAGE_FILE_STRUCT;
 
 extern PAGE_FILE_STRUCT pf;

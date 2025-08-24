@@ -6,17 +6,6 @@
 
 #include <sys/stat.h>
 
-PULONG_PTR get_arbitrary_va(PULONG_PTR p) {
-    // Randomly access different portions of the virtual address space.
-    unsigned random_number = rand () * rand () * rand ();
-    random_number %= vm.va_size_in_pointers;
-
-    // Ensure our 8-byte stamp to the arbitrary virtual address doesn't
-    // straddle a PAGE_SIZE boundary.
-    random_number &= ~0x7;
-    return p + random_number;
-}
-
 void run_user_app_simulation(PVOID user_thread_info) {
 
     // Wait for system start event before beginning!
@@ -26,6 +15,10 @@ void run_user_app_simulation(PVOID user_thread_info) {
     BOOL page_faulted = FALSE;
     BOOL fault_handler_accessed_correctly = TRUE;
 
+    // Get a reference to the thread's randomness
+    PTHREAD_INFO thread_info = user_thread_info;
+    ULONG64* seed = &thread_info->random_seed;
+
     // Now perform random accesses
 #if RUN_FOREVER
     while (TRUE) {
@@ -33,7 +26,7 @@ void run_user_app_simulation(PVOID user_thread_info) {
     for (int i = 0; i < vm.iterations; i += 1) {
 #endif
         // Randomly access different portions of the virtual address space.
-        PULONG_PTR arbitrary_va = get_arbitrary_va(vm.application_va_base);
+        PULONG_PTR arbitrary_va = get_arbitrary_va(seed);
 
         // Attempt to write the virtual address into memory page.
         do {
@@ -71,6 +64,7 @@ void begin_system_test(void) {
 #if STATS_MODE
     analyze_and_print_statistics(trimming_thread_id);
     analyze_and_print_statistics(writing_thread_id);
+    print_consumption_data();
 #endif
 
     // Test is finished! Tell all threads to stop.
@@ -88,11 +82,16 @@ VOID main (int argc, char** argv) {
 #else
     set_defaults();
 
-    if (argc > 2) {
-        printf("About to initiate test with %s threads running\n%s iterations each...\n", argv[1], argv[2]);
-        printf("~~~~~~~~~~~~~~~~~~~~~\n");
+    if (argc == 5) {
         vm.num_user_threads = strtol(argv[1], NULL, 10);  // Base 10
         vm.iterations = strtol(argv[2], NULL, 10);
+        vm.allocated_frame_count = strtol(argv[3], NULL, 10);
+        vm.pages_in_page_file = strtol(argv[4], NULL, 10);
+        printf("About to initiate test:\n");
+        printf("Memory + Page file is 110%% the size of the VA space.\n");
+        printf("%d user threads\n%llu iterations each\n%llu MB of memory\n%llu MB in page file.\n",
+            vm.num_user_threads, vm.iterations, vm.allocated_frame_count * PAGE_SIZE / KB(1), vm.pages_in_page_file * PAGE_SIZE / KB(1));
+        printf("~~~~~~~~~~~~~~~~~~~~~\n");
     }
     else {
         printf("No arguments passed. Using defaults...\n");

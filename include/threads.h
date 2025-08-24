@@ -18,6 +18,8 @@
 
 #define NUM_KERNEL_READ_ADDRESSES   (16)
 
+#define DEFAULT_WRITE_FREQUENCY     10
+
 // User thread struct. This will contain a set of kernel VA spaces. Each thread
 // will manage many, which will allow us to remove locks and contention on them.
 // Additionally, it will allow us to delay unmap calls, giving us the opportunity
@@ -26,6 +28,7 @@ typedef struct _USER_THREAD_INFO {
     ULONG thread_id;
     ULONG kernel_va_index;
     PULONG_PTR kernel_va_spaces[NUM_KERNEL_READ_ADDRESSES];
+    ULONG64 random_seed;
 } THREAD_INFO, *PTHREAD_INFO;
 
 // Events
@@ -52,6 +55,10 @@ extern ULONG aging_thread_id;
 extern ULONG trimming_thread_id;
 extern ULONG writing_thread_id;
 
+// The frequency for the writing thread
+extern ULONG64 trim_and_write_frequency;
+
+// The info struct for each user thread.
 extern PTHREAD_INFO user_thread_info;
 
 #define NUMBER_OF_SAMPLES       512

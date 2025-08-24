@@ -414,7 +414,7 @@ VOID validate_list(PPAGE_LIST list) {
     ULONG64 backward_length = 0;
 
 
-    const ULONG64 MAX_EXPECTED_LENGTH = NUMBER_OF_PHYSICAL_PAGES + 10; // Safety limit
+    const ULONG64 MAX_EXPECTED_LENGTH = vm.allocated_frame_count + 10; // Safety limit
 
     PPFN head = list->head;
 

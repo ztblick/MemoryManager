@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <Windows.h>
 
-#define STATS_MODE                  1
+#define STATS_MODE                  0
 
 // This is our overarching VM state struct, which will package together information
 // about the defining characteristics of each test, such as the number of physical pages
@@ -16,6 +16,9 @@ typedef struct __vm_state {
     // This is the number of threads that run the simulating thread -- which become fault-handling threads.
     ULONG num_user_threads;
     ULONG num_free_lists;
+
+    // Command line arguments set these values, initially
+    LONG64 pages_in_page_file;
 
     // This is the number of iterations each thread will run, as set by a command-line argument.
     ULONG64 iterations;
@@ -46,6 +49,8 @@ extern VM vm;
 
 // Statistics struct
 typedef struct __stats {
+    LONG64 writer_batch_target;
+    LONG64 trimmer_batch_target;
     volatile LONG64 n_available;
     volatile LONG64 *n_free;
     volatile LONG64 *n_modified;
@@ -81,17 +86,15 @@ extern STATS stats;
 #define MAX_TRIM_BATCH_SIZE             512
 #define MAX_FREE_BATCH_SIZE             1
 
-// Pages in memory and page file, which are used to calculate VA span
-#define NUMBER_OF_PHYSICAL_PAGES        (KB(256))
-#define PAGES_IN_PAGE_FILE              (KB(128))
+// Default pages in memory and page file, which are used to calculate VA span
+#define DEFAULT_NUMBER_OF_PHYSICAL_PAGES        (KB(256))
+#define DEFAULT_PAGES_IN_PAGE_FILE              (KB(128))
 
 // We create a VA space that is never too large -- otherwise, we would run out of memory!
-// The -2 takes into account (1) that we need our VA space to be one smaller than our physical
-// space, as we will always need one page in memory to support movement between memory and disk, and
-// (2) that our page file does not permit ZERO as an index (as it is indistinguishable from a zeroed PTE).
-// So, we will always set the first bit in our page file bitmap, invalidating that location and wasting one
-// page of disk space (oh no, 4KB lost, so sad).
-#define VA_SPAN                                         (NUMBER_OF_PHYSICAL_PAGES + PAGES_IN_PAGE_FILE - 2)
+// Here, we set a ratio of how much less space is in the user's VA space relative to the
+// configuration of our page file and our memory.
+#define VA_TO_PHYSICAL_RATIO            (0.91)
+#define VA_SPAN(x, y)                   ((int) (VA_TO_PHYSICAL_RATIO * (x + y)))
 
 #define PAGE_SIZE                       4096
 #define KB(x)                           ((x) * 1024ULL)         // ULL in case our operation exceeds 2^32 - 1

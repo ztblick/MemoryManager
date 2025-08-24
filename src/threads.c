@@ -27,6 +27,9 @@ ULONG aging_thread_id = 1;
 ULONG trimming_thread_id = 2;
 ULONG writing_thread_id = 3;
 
+// The amount of wait time between writes
+ULONG64 trim_and_write_frequency = DEFAULT_WRITE_FREQUENCY;
+
 #if STATS_MODE
 sample_buffer trim_samples;
 sample_buffer write_samples;

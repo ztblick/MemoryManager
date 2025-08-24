@@ -49,3 +49,8 @@ LONGLONG get_timestamp(VOID);
  *  Returns the time difference of the two timestamps in fractional seconds.
  */
 double get_time_difference(LONGLONG end, LONGLONG start);
+
+/*
+ *  Returns an arbitrary VA in the user's VA region.
+ */
+PULONG_PTR get_arbitrary_va(ULONG64 *thread_random_seed);

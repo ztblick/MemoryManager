@@ -109,12 +109,16 @@ void initialize_statistics(void) {
     stats.n_hard = 0;
     stats.n_soft = 0;
 
-    stats.n_available = *(stats.n_free);
+    stats.n_available = *stats.n_free;
 
     // Get the frequency of the performance counter
     LARGE_INTEGER lpFrequency;
     QueryPerformanceFrequency(&lpFrequency);
     stats.timer_frequency = lpFrequency.QuadPart;
+
+    // Initialize targets for batch sizes
+    stats.trimmer_batch_target = MAX_TRIM_BATCH_SIZE;
+    stats.writer_batch_target = MAX_WRITE_BATCH_SIZE;
 }
 
 HANDLE CreateSharedMemorySection (VOID) {
@@ -159,8 +163,7 @@ void initialize_physical_pages(void) {
     }
 
     // Grab physical pages from the OS
-    vm.allocated_frame_count = NUMBER_OF_PHYSICAL_PAGES;
-    vm.allocated_frame_numbers = zero_malloc (NUMBER_OF_PHYSICAL_PAGES * sizeof (ULONG_PTR));
+    vm.allocated_frame_numbers = zero_malloc (vm.allocated_frame_count * sizeof (ULONG_PTR));
     NULL_CHECK (vm.allocated_frame_numbers, "full_virtual_memory_test : could not allocate array to hold physical page numbers.");
 
     allocated = AllocateUserPhysicalPages (vm.physical_page_handle,
@@ -169,12 +172,9 @@ void initialize_physical_pages(void) {
     if (allocated == FALSE) {
         fatal_error ("full_virtual_memory_test : could not allocate physical pages.");
     }
-    if (vm.allocated_frame_count != NUMBER_OF_PHYSICAL_PAGES) {
-
-        printf ("full_virtual_memory_test : allocated only %llu pages out of %llu pages requested\n",
-                vm.allocated_frame_count,
-                NUMBER_OF_PHYSICAL_PAGES);
-    }
+#if DEBUG
+        printf ("full_virtual_memory_test : allocated %llu pages\n", vm.allocated_frame_count);
+#endif
 }
 
 void initialize_page_lists(void) {
@@ -252,9 +252,8 @@ void initialize_kernel_VA_spaces(void) {
 
 void initialize_user_VA_space(void) {
 
-    ULONG64 va_span = VA_SPAN;
+    ULONG64 va_span = VA_SPAN(vm.allocated_frame_count, vm.pages_in_page_file);
     // In case fewer pages were allocated, we reduce the size.
-    va_span -= (NUMBER_OF_PHYSICAL_PAGES - vm.allocated_frame_count);
     vm.va_size_in_bytes = va_span * PAGE_SIZE;
     vm.va_size_in_pointers = vm.va_size_in_bytes / sizeof(PULONG_PTR);
 
@@ -282,6 +281,7 @@ void initialize_threads(void) {
     // read spaces, which are divided into 16 individual read spaces.
     user_thread_info = (PTHREAD_INFO) zero_malloc(num_user_threads * sizeof(THREAD_INFO));
 
+    // Initialize the kernel VA spaces for each thread
     for (ULONG i = 0; i < num_user_threads; i++) {
         for (int j = 0; j < NUM_KERNEL_READ_ADDRESSES; j++) {
             user_thread_info[i].kernel_va_spaces[j] = VirtualAlloc2 (NULL,
@@ -292,7 +292,13 @@ void initialize_threads(void) {
                           &vm.virtual_alloc_shared_parameter,
                           1);
         }
+
+        // While we're here, update the thread IDs and seed the random number
         user_thread_info[i].thread_id = i;
+        LARGE_INTEGER counter;
+        QueryPerformanceCounter(&counter);
+        ULONG64 seed = counter.QuadPart ^ ((ULONG64) i << 32) ^ (counter.QuadPart >> 16);
+        user_thread_info[i].random_seed = seed;
     }
 
     // Create user threads, each of which are running the user app simulation.
@@ -387,6 +393,8 @@ void set_defaults(void) {
     vm.num_user_threads = DEFAULT_NUM_USER_THREADS;
     vm.iterations = DEFAULT_ITERATIONS;
     vm.num_free_lists = DEFAULT_FREE_LIST_COUNT;
+    vm.allocated_frame_count = DEFAULT_NUMBER_OF_PHYSICAL_PAGES;
+    vm.pages_in_page_file = DEFAULT_PAGES_IN_PAGE_FILE;
 }
 
 void initialize_system(void) {

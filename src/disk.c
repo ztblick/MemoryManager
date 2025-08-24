@@ -9,25 +9,27 @@ PAGE_FILE_STRUCT pf = {0};
 VOID initialize_page_file_and_metadata(VOID) {
 
     // Initialize page file.
-    pf.page_file = (char*) zero_malloc(PAGES_IN_PAGE_FILE * PAGE_SIZE);
+    pf.page_file = (char*) zero_malloc(vm.pages_in_page_file * PAGE_SIZE);
 
     // Initialize page file bitmaps.
     // Note that we ALWAYS set the first slot to full, as there cannot be a disk slot of ZERO.
-    pf.page_file_bitmaps = zero_malloc(PAGES_IN_PAGE_FILE / BITS_PER_BYTE);
+    pf.page_file_bitmaps = zero_malloc(vm.pages_in_page_file / BITS_PER_BYTE);
     pf.page_file_bitmaps[0] |= DISK_SLOT_IN_USE;
+    pf.max_disk_index = vm.pages_in_page_file - 1;
+    pf.page_file_bitmap_rows = vm.pages_in_page_file / BITS_PER_BITMAP_ROW;
 
     // Initialize the writer's array of disk slots
     // This supports extra slots to be stashed for later.
-    pf.slot_stack = zero_malloc((MAX_WRITE_BATCH_SIZE + BITS_PER_BITMAP_ROW * 2) * BYTES_PER_VA);
+    pf.slot_stack = zero_malloc((MAX_WRITE_BATCH_SIZE * 2) * BYTES_PER_VA);
     pf.last_checked_bitmap_row = 0;
     pf.num_stashed_slots = 0;
 
     // Initialize disk slot tracker -- minus one because we have an initially full slot at index zero.
-    pf.empty_disk_slots = PAGES_IN_PAGE_FILE - 1;
+    pf.empty_disk_slots = vm.pages_in_page_file - 1;
 }
 
 VOID validate_disk_slot(ULONG64 disk_slot) {
-    ASSERT (disk_slot <= MAX_DISK_INDEX);
+    ASSERT (disk_slot <= pf.max_disk_index);
 }
 
 VOID push_slots_from_bitmap_row(ULONG64 bitmap_row) {
@@ -56,7 +58,7 @@ VOID push_slots_from_bitmap_row(ULONG64 bitmap_row) {
                 current_disk_slot++;
             }
             LONG64 result = InterlockedAdd64(&pf.empty_disk_slots, -64);
-            ASSERT(result < PAGES_IN_PAGE_FILE && result >= 0);
+            ASSERT(result < vm.pages_in_page_file && result >= 0);
             return;
         }
     }
@@ -96,10 +98,10 @@ VOID set_and_add_slots_to_stack(ULONG64 target_slot_count) {
     ULONG64 current_bitmap_row = pf.last_checked_bitmap_row;
 
     // We will check until we are done batching, or we can no longer get any slots
-    for (ULONG64 i = 0; i < PAGE_FILE_BITMAP_ROWS; i++) {
+    for (ULONG64 i = 0; i < pf.page_file_bitmap_rows; i++) {
 
         // Advance to the next row, wrapping around if necessary
-        current_bitmap_row = (current_bitmap_row + 1) % PAGE_FILE_BITMAP_ROWS;
+        current_bitmap_row = (current_bitmap_row + 1) % pf.page_file_bitmap_rows;
 
         // Get a snapshot of the bitmap -- if it is full, move along
         ULONG64 bitmap_snapshot = pf.page_file_bitmaps[current_bitmap_row];
@@ -124,7 +126,7 @@ VOID pop_and_clear_all_slots(VOID) {
     }
 }
 
-// Since disk slot is from 1 to PAGES_IN_PAGE_FILE, we must decrement it when getting the offset.
+// Since disk slot is from 1 to DEFAULT_PAGES_IN_PAGE_FILE, we must decrement it when getting the offset.
 char* get_page_file_offset(ULONG64 disk_slot) {
     validate_disk_slot(disk_slot);
 
@@ -151,7 +153,7 @@ VOID clear_disk_slot(ULONG64 disk_slot) {
 
     // Increment our count of clear slots!
     LONG64 result = InterlockedIncrement64(&pf.empty_disk_slots);
-    ASSERT(result < PAGES_IN_PAGE_FILE && result >= 0);
+    ASSERT(result < vm.pages_in_page_file && result >= 0);
 }
 
 VOID set_disk_slot(UINT64 disk_slot) {
@@ -169,5 +171,5 @@ VOID set_disk_slot(UINT64 disk_slot) {
 
     // Decrement the empty disk slot count without risking race conditions.
     LONG64 result = InterlockedDecrement64(&pf.empty_disk_slots);
-    ASSERT(result < PAGES_IN_PAGE_FILE && result >= 0);
+    ASSERT(result < vm.pages_in_page_file && result >= 0);
 }

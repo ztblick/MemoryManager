@@ -5,6 +5,13 @@
 
 ULONG64 trim_pages(VOID) {
 
+    // Before we do anything, let's see if there is any need to trim. If the modified list has
+    // sufficient pages, let's just wake the writer.
+    if (*stats.n_modified > MAX_WRITE_BATCH_SIZE) {
+        SetEvent(initiate_writing_event);
+        return 0;
+    }
+
     // We will keep track of the number of pages we have batched
     ULONG64 attempts = 0;
     ULONG64 trim_batch_size = 0;
@@ -52,8 +59,7 @@ ULONG64 trim_pages(VOID) {
     if (trim_batch_size == 0) {
         SetEvent(initiate_writing_event);
         return 0;
-    };
-
+    }
     // Unmap ALL pages in one batch!
     if (!MapUserPhysicalPagesScatter(trimmed_VAs, trim_batch_size, NULL)) DebugBreak();
 
@@ -76,10 +82,9 @@ ULONG64 trim_pages(VOID) {
         // Release the pte lock, which was acquired earlier when the trim batch was initially assembled.
         unlock_pte(pte);
     }
-    // Wake the writer!
-    SetEvent(initiate_writing_event);
 
     // Return our batch size, which is used by the statistics thread.
+    SetEvent(initiate_writing_event);
     return trim_batch_size;
 }
 
@@ -103,7 +108,7 @@ VOID trim_pages_thread(VOID) {
     // If the exit flag has been set, then it's time to go!
     while (TRUE) {
 
-        if (WaitForMultipleObjects(ARRAYSIZE(events), events, FALSE, INFINITE)
+        if (WaitForMultipleObjects(ARRAYSIZE(events), events, FALSE, trim_and_write_frequency)
             == EXIT_EVENT_INDEX) return;
 
 #if STATS_MODE

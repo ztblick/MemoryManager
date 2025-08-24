@@ -14,7 +14,7 @@ ULONG64 write_pages(VOID) {
     // The upper bound on the size of THIS particular batch. This will be set to the max, then (possibly)
     // brought lower by the disk slot allocation, then (possibly) brought lower by the number of pages
     // that can be removed from the modified list.
-    ULONG64 num_pages_in_write_batch = MAX_WRITE_BATCH_SIZE;
+    ULONG64 num_pages_in_write_batch = min(stats.writer_batch_target, MAX_WRITE_BATCH_SIZE);
 
     // If there are insufficient empty disk slots, let's hold off on writing
     if (pf.empty_disk_slots < MIN_WRITE_BATCH_SIZE) return 0;
@@ -27,7 +27,7 @@ ULONG64 write_pages(VOID) {
     if (approx_num_mod_pages < MIN_WRITE_BATCH_SIZE) return 0;
 
     // Update our target count -- no need to get too greedy
-    ULONG64 target_page_count = min(MAX_WRITE_BATCH_SIZE, approx_num_mod_pages);
+    ULONG64 target_page_count = min(num_pages_in_write_batch, approx_num_mod_pages);
 
     // Let's see if we need any slots at all:
     // If our stash is too small, we will get more.
