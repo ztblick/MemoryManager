@@ -19,6 +19,9 @@ void run_user_app_simulation(PVOID user_thread_info) {
     PTHREAD_INFO thread_info = user_thread_info;
     ULONG64* seed = &thread_info->random_seed;
 
+    // Create the arbitrary VA to simulate user memory accesses.
+    PULONG_PTR arbitrary_va = get_arbitrary_va(seed);
+
     // Now perform random accesses
 #if RUN_FOREVER
     while (TRUE) {
@@ -26,7 +29,9 @@ void run_user_app_simulation(PVOID user_thread_info) {
     for (int i = 0; i < vm.iterations; i += 1) {
 #endif
         // Randomly access different portions of the virtual address space.
-        PULONG_PTR arbitrary_va = get_arbitrary_va(seed);
+        arbitrary_va = (arbitrary_va + 1);
+        if (arbitrary_va > vm.application_va_base + vm.va_size_in_pointers)
+            arbitrary_va = vm.application_va_base;
 
         // Attempt to write the virtual address into memory page.
         do {
@@ -35,6 +40,9 @@ void run_user_app_simulation(PVOID user_thread_info) {
             // Try stamping the page.
             __try {
                 *arbitrary_va = (ULONG_PTR) arbitrary_va;
+#if AGING
+                // set_accessed_bit(arbitrary_va);
+#endif
             }
 
             // If we fault, we set this flag to go around again.
@@ -89,8 +97,11 @@ VOID main (int argc, char** argv) {
         vm.pages_in_page_file = strtol(argv[4], NULL, 10);
         printf("About to initiate test:\n");
         printf("Memory + Page file is 110%% the size of the VA space.\n");
-        printf("%d user threads\n%llu iterations each\n%llu MB of memory\n%llu MB in page file.\n",
-            vm.num_user_threads, vm.iterations, vm.allocated_frame_count * PAGE_SIZE / KB(1), vm.pages_in_page_file * PAGE_SIZE / KB(1));
+        printf("Physical to Virtual ratio: %.1f%%.\n", 100 * (double) vm.allocated_frame_count / (double) VA_SPAN(vm.allocated_frame_count, vm.pages_in_page_file));
+        printf("%d user threads\n%llu iterations each\n%llu MB of memory (%llu pages)\n%llu MB in page file (%llu pages).\n",
+            vm.num_user_threads, vm.iterations,
+            vm.allocated_frame_count * PAGE_SIZE / MB(1), vm.allocated_frame_count,
+            vm.pages_in_page_file * PAGE_SIZE / MB(1), vm.pages_in_page_file);
         printf("~~~~~~~~~~~~~~~~~~~~~\n");
     }
     else {

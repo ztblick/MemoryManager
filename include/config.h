@@ -8,6 +8,7 @@
 #include <Windows.h>
 
 #define STATS_MODE                  0
+#define AGING                       1
 
 // This is our overarching VM state struct, which will package together information
 // about the defining characteristics of each test, such as the number of physical pages

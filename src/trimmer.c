@@ -37,6 +37,13 @@ ULONG64 trim_pages(VOID) {
         // If the PTE is not valid, no need for us to try to lock it.
         if (!IS_PTE_VALID(pte)) continue;
 
+#if AGING
+        // If the PTE has been accessed, clear its bit and continue
+        if (IS_PTE_ACCESSED(pte)) {
+            clear_accessed_bit(pte);
+            continue;
+        }
+#endif
         // Try to acquire the PTE lock
         if (!try_lock_pte(pte)) continue;
 

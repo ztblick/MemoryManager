@@ -11,6 +11,7 @@
 #define PTE_VALID               1
 #define PTE_IN_TRANSITION       0
 #define PTE_ON_DISK             1
+#define PTE_ACCESSED            1
 
 #define PTE_STATUS_BIT_FOR_VALID    0       // This is used to prevent the PTE from having a 1
                                             // (representing on disk) when read back into valid format
@@ -21,6 +22,8 @@
 
 #define FRAME_NUMBER_BITS       40
 #define MAX_FRAME_NUMBER        ((1ULL << FRAME_NUMBER_BITS) - 1)
+
+#define ACCESSED_BIT_POSITION   4
 
 // This is the default value given to the frame_number field for a PTE that has no connected frame.
 #define NO_FRAME_ASSIGNED       0
@@ -69,6 +72,7 @@ typedef struct {
 #define IS_PTE_VALID(pte)       ((pte)->memory_format.valid == PTE_VALID)
 #define IS_PTE_TRANSITION(pte)  ((pte)->transition_format.valid == PTE_INVALID && (pte)->transition_format.status == PTE_IN_TRANSITION && (pte)->transition_format.frame_number != NO_FRAME_ASSIGNED)
 #define IS_PTE_ON_DISK(pte)     ((pte)->disk_format.valid == PTE_INVALID && (pte)->disk_format.status == PTE_ON_DISK)
+#define IS_PTE_ACCESSED(pte)    ((pte)->memory_format.accessed == PTE_ACCESSED)
 
 /*
  *  This represents the base of our page table. For now, it is simply
@@ -127,3 +131,13 @@ VOID unlock_pte(PPTE pte);
  *  Given a PTE, maps it (and only it) to its page.
  */
 VOID map_single_page_from_pte(PPTE pte);
+
+/*
+    Sets the accessed bit of the PTE of the given virtual address
+ */
+VOID set_accessed_bit(PULONG_PTR va);
+
+/*
+    Clears the accessed bit -- called by trimmer.
+ */
+VOID clear_accessed_bit(PPTE pte);

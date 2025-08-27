@@ -109,3 +109,18 @@ VOID map_single_page_from_pte(PPTE pte) {
     PULONG_PTR va = get_VA_from_PTE(pte);
     map_pages(1, va, &frame_pointer);
 }
+
+VOID set_accessed_bit(PULONG_PTR va) {
+    PPTE pte = get_PTE_from_VA(va);
+
+    // Set the accessed bit
+    _interlockedbittestandset64((LONG64 *) pte, ACCESSED_BIT_POSITION);
+    ASSERT(pte->memory_format.accessed == 1);
+}
+
+VOID clear_accessed_bit(PPTE pte) {
+    // Set the accessed bit
+    ASSERT(pte->memory_format.accessed == 1);
+    _interlockedbittestandreset64((LONG64 *) pte, ACCESSED_BIT_POSITION);
+    ASSERT(pte->memory_format.accessed == 0);
+}
