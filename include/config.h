@@ -65,12 +65,6 @@ typedef struct __stats {
 // Our global statistics variable
 extern STATS stats;
 
-// These are the number of threads running background tasks for the system -- scheduler, trimmer, writer
-#define NUM_SCHEDULING_THREADS          0
-#define NUM_AGING_THREADS               0
-#define NUM_TRIMMING_THREADS            1
-#define NUM_WRITING_THREADS             1
-
 // Default values for variables
 #define DEFAULT_NUM_USER_THREADS        8
 #define DEFAULT_ITERATIONS              (MB(1))

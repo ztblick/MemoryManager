@@ -70,7 +70,7 @@ typedef struct {
 
 typedef struct {
     batch_sample data[NUMBER_OF_SAMPLES];
-    SHORT head;
+    USHORT head;
 } sample_buffer;
 
 extern sample_buffer trim_samples;

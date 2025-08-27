@@ -9,7 +9,6 @@ ULONG64 trim_pages(VOID) {
     // sufficient pages, let's just wake the writer.
     if (*stats.n_modified > MAX_WRITE_BATCH_SIZE) {
         SetEvent(initiate_writing_event);
-        return 0;
     }
 
     // We will keep track of the number of pages we have batched

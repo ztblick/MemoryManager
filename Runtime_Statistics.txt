@@ -83,3 +83,4 @@ After removing and combining map pages calls:
 7 threads   2515 milliseconds.
 8 threads   2547 milliseconds.
 9 threads   2688 milliseconds.
+

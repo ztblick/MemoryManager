@@ -5,6 +5,7 @@ Current goal:
 NEXT SUB-GOALS:
 
 - More elegantly schedule trimming/writing batch sizes based on anticipated consumption
+CURRENT QUESTION: why is the performance slower now, even when the scheduler is turned off?
 
 Other things in the near future...
 
