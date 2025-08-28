@@ -11,4 +11,4 @@
 #define LOGGING_MODE                    0
 #define RUN_FOREVER                     0
 
-void run_user_app_simulation(PVOID user_thread_info);
+void run_user_app_simulation(PTHREAD_INFO user_thread_info);

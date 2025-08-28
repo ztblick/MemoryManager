@@ -5,6 +5,7 @@
 STATS stats = {0};
 VM vm = {0};
 PAGE_LIST_ARRAY free_lists = {0};
+double ** transition_probabilities = NULL;
 
 PTHREAD_INFO user_thread_info;
 
@@ -299,6 +300,9 @@ void initialize_threads(void) {
         QueryPerformanceCounter(&counter);
         ULONG64 seed = counter.QuadPart ^ ((ULONG64) i << 32) ^ (counter.QuadPart >> 16);
         user_thread_info[i].random_seed = seed;
+
+        // We will also set the initial state
+        user_thread_info[i].state = USER_STATE_INCREMENT;
     }
 
     // Create user threads, each of which are running the user app simulation.
@@ -360,6 +364,24 @@ void initialize_threads(void) {
                                DEFAULT_CREATION_FLAGS,
                                NULL);
 #endif
+
+    // Initialize transition probabilities
+    transition_probabilities = zero_malloc(sizeof(double *) * NUM_USER_STATES);
+    transition_probabilities[USER_STATE_INCREMENT] = zero_malloc(sizeof(double) * NUM_USER_STATES);
+    transition_probabilities[USER_STATE_DECREMENT] = zero_malloc(sizeof(double) * NUM_USER_STATES);
+    transition_probabilities[USER_STATE_RANDOM] = zero_malloc(sizeof(double) * NUM_USER_STATES);
+
+    transition_probabilities[USER_STATE_INCREMENT][USER_STATE_INCREMENT] = 0.85;
+    transition_probabilities[USER_STATE_INCREMENT][USER_STATE_DECREMENT] = 0.95;
+    transition_probabilities[USER_STATE_INCREMENT][USER_STATE_RANDOM] = 1.0;
+
+    transition_probabilities[USER_STATE_DECREMENT][USER_STATE_INCREMENT] = 0.10;
+    transition_probabilities[USER_STATE_DECREMENT][USER_STATE_DECREMENT] = 0.95;
+    transition_probabilities[USER_STATE_DECREMENT][USER_STATE_RANDOM] = 1.0;
+
+    transition_probabilities[USER_STATE_RANDOM][USER_STATE_INCREMENT] = 0.85;
+    transition_probabilities[USER_STATE_RANDOM][USER_STATE_DECREMENT] = 0.95;
+    transition_probabilities[USER_STATE_RANDOM][USER_STATE_RANDOM] = 1.0;
 }
 
 void initialize_events(void) {

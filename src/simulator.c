@@ -6,7 +6,7 @@
 
 #include <sys/stat.h>
 
-void run_user_app_simulation(PVOID user_thread_info) {
+void run_user_app_simulation(PTHREAD_INFO user_thread_info) {
 
     // Wait for system start event before beginning!
     WaitForSingleObject(system_start_event, INFINITE);
@@ -16,8 +16,7 @@ void run_user_app_simulation(PVOID user_thread_info) {
     BOOL fault_handler_accessed_correctly = TRUE;
 
     // Get a reference to the thread's randomness
-    PTHREAD_INFO thread_info = user_thread_info;
-    ULONG64* seed = &thread_info->random_seed;
+    ULONG64* seed = &user_thread_info->random_seed;
 
     // Create the arbitrary VA to simulate user memory accesses.
     PULONG_PTR arbitrary_va = get_arbitrary_va(seed);
@@ -28,10 +27,8 @@ void run_user_app_simulation(PVOID user_thread_info) {
 #else
     for (int i = 0; i < vm.iterations; i += 1) {
 #endif
-        // Randomly access different portions of the virtual address space.
-        arbitrary_va = (arbitrary_va + 1);
-        if (arbitrary_va > vm.application_va_base + vm.va_size_in_pointers)
-            arbitrary_va = vm.application_va_base;
+        // Access different portions of the virtual address space according to the state of the user thread.
+        arbitrary_va = get_next_va(arbitrary_va, user_thread_info);
 
         // Attempt to write the virtual address into memory page.
         do {
@@ -95,14 +92,14 @@ VOID main (int argc, char** argv) {
         vm.iterations = strtol(argv[2], NULL, 10);
         vm.allocated_frame_count = strtol(argv[3], NULL, 10);
         vm.pages_in_page_file = strtol(argv[4], NULL, 10);
-        printf("About to initiate test:\n");
-        printf("Memory + Page file is 110%% the size of the VA space.\n");
         printf("Physical to Virtual ratio: %.1f%%.\n", 100 * (double) vm.allocated_frame_count / (double) VA_SPAN(vm.allocated_frame_count, vm.pages_in_page_file));
+#if STATS_MODE
         printf("%d user threads\n%llu iterations each\n%llu MB of memory (%llu pages)\n%llu MB in page file (%llu pages).\n",
             vm.num_user_threads, vm.iterations,
             vm.allocated_frame_count * PAGE_SIZE / MB(1), vm.allocated_frame_count,
             vm.pages_in_page_file * PAGE_SIZE / MB(1), vm.pages_in_page_file);
         printf("~~~~~~~~~~~~~~~~~~~~~\n");
+#endif
     }
     else {
         printf("No arguments passed. Using defaults...\n");
@@ -127,8 +124,10 @@ VOID main (int argc, char** argv) {
 
     // Print statistics
     printf("Test successful. Time elapsed: " COLOR_GREEN "%.3f" COLOR_RESET " seconds.\n", runtime);
+#if STATS_MODE
     printf ("Each of %lu threads accessed %llu VAs.\n", vm.num_user_threads, vm.iterations);
     print_statistics();
+#endif
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
 
     // Free all memory and end the simulation.

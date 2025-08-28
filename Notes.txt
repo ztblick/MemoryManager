@@ -1,13 +1,15 @@
 
 Current goal:
-- Fine-tune the performance of my state machine!
+- Aging, scheduling, and non-random access simulation.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 NEXT SUB-GOALS:
 
-- More elegantly schedule trimming/writing batch sizes based on anticipated consumption
-CURRENT QUESTION: why is the performance slower now, even when the scheduler is turned off?
-
-Other things in the near future...
+- Create non-random user thread access.
+- Evaluate the quality of the program (on with different ratios of physical to virtual)
+  with aging and scheduling toggled on and off.
+- Run traces to fine-tune the performance of non-random access with scheduling and aging.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+SUBSEQUENT GOALS:
 
 - Batch prune from standby to free lists
 
@@ -26,8 +28,7 @@ THEN, any of the below:
 
 - Add read/write accesses. Check readwrite bit in trimmer -- move read-only directly to standby.
 
-- Add aging via accessed bit. Use this in the trimmer to trim the right candidates.
-    - Then, add in non-random user accessing. Read in from disk more generously.
+- Speculatively read in larger batches of pages from the disk.
 
 - De-fragment the bitmaps from time to time.
 

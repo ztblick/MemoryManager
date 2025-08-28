@@ -13,6 +13,11 @@
 #define AUTO_RESET                      FALSE
 #define MANUAL_RESET                    TRUE
 
+#define USER_STATE_INCREMENT           0
+#define USER_STATE_DECREMENT                 1
+#define USER_STATE_RANDOM               2
+#define NUM_USER_STATES                 3
+
 #define ACTIVE_EVENT_INDEX    0
 #define EXIT_EVENT_INDEX      1
 
@@ -25,6 +30,7 @@
 // Additionally, it will allow us to delay unmap calls, giving us the opportunity
 // to batch them.
 typedef struct _USER_THREAD_INFO {
+    USHORT state;                                                // Indicates how the user thread is accessing VAs.
     ULONG thread_id;
     ULONG kernel_va_index;
     PULONG_PTR kernel_va_spaces[NUM_KERNEL_READ_ADDRESSES];
@@ -47,7 +53,6 @@ extern HANDLE trimming_thread;
 extern HANDLE writing_thread;
 extern HANDLE debug_thread;
 
-
 // Thread IDs
 extern PULONG user_thread_ids;
 extern ULONG scheduling_thread_id;
@@ -60,6 +65,9 @@ extern ULONG64 trim_and_write_frequency;
 
 // The info struct for each user thread.
 extern PTHREAD_INFO user_thread_info;
+
+// The transition probabilities for the different states
+extern double ** transition_probabilities;
 
 #define NUMBER_OF_SAMPLES       512
 

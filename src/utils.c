@@ -84,3 +84,39 @@ PULONG_PTR get_arbitrary_va(ULONG64 *thread_random_seed) {
 
     return p + index;
 }
+
+
+PULONG_PTR get_next_va(PULONG_PTR previous_va, PTHREAD_INFO thread_info) {
+    USHORT state = thread_info->state;
+    PULONG_PTR new_va;
+
+    if (state == USER_STATE_INCREMENT) {
+        new_va = (previous_va + 1);
+        if (new_va > vm.application_va_base + vm.va_size_in_pointers)
+            new_va = vm.application_va_base;
+    }
+
+    else if (state == USER_STATE_DECREMENT) {
+        new_va = previous_va;
+        if (new_va == vm.application_va_base)
+            new_va = vm.application_va_base + vm.va_size_in_pointers;
+        new_va = new_va - 1;
+    }
+
+    // Otherwise, we are in our random state!
+    else new_va = get_arbitrary_va(&thread_info->random_seed);
+
+    // Before we return, we will move into a new state (possibly)
+    double p = (xorshift64(&thread_info->random_seed) >> 11) * (1.0 / 9007199254740992.0);
+    if (p < transition_probabilities[state][USER_STATE_INCREMENT])
+        state = USER_STATE_INCREMENT;
+    else if (p < transition_probabilities[state][USER_STATE_DECREMENT])
+        state = USER_STATE_DECREMENT;
+    else
+        state = USER_STATE_RANDOM;
+
+    // Update to the new state
+    thread_info->state = state;
+
+    return new_va;
+}
