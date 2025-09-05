@@ -115,12 +115,10 @@ VOID set_accessed_bit(PULONG_PTR va) {
 
     // Set the accessed bit
     _interlockedbittestandset64((LONG64 *) pte, ACCESSED_BIT_POSITION);
-    ASSERT(pte->memory_format.accessed == 1);
 }
 
 VOID clear_accessed_bit(PPTE pte) {
     // Set the accessed bit
-    ASSERT(pte->memory_format.accessed == 1);
-    _interlockedbittestandreset64((LONG64 *) pte, ACCESSED_BIT_POSITION);
-    ASSERT(pte->memory_format.accessed == 0);
+    USHORT original = _interlockedbittestandreset64((LONG64 *) pte, ACCESSED_BIT_POSITION);
+    ASSERT(original == 1);
 }

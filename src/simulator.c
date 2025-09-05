@@ -38,7 +38,7 @@ void run_user_app_simulation(PTHREAD_INFO user_thread_info) {
             __try {
                 *arbitrary_va = (ULONG_PTR) arbitrary_va;
 #if AGING
-                // set_accessed_bit(arbitrary_va);
+                set_accessed_bit(arbitrary_va);
 #endif
             }
 
@@ -77,16 +77,14 @@ void begin_system_test(void) {
 
     WaitForSingleObject(trimming_thread, INFINITE);
     WaitForSingleObject(writing_thread, INFINITE);
+#if SCHEDULING
     WaitForSingleObject(scheduling_thread, INFINITE);
+#endif
 }
 
 VOID main (int argc, char** argv) {
 
-#if RUN_FOREVER
-    num_user_threads = DEFAULT_USER_THREAD_COUNT;
-#else
     set_defaults();
-
     if (argc == 5) {
         vm.num_user_threads = strtol(argv[1], NULL, 10);  // Base 10
         vm.iterations = strtol(argv[2], NULL, 10);
@@ -102,9 +100,10 @@ VOID main (int argc, char** argv) {
 #endif
     }
     else {
-        printf("No arguments passed. Using defaults...\n");
+        printf("Usage: MemoryManager [# user threads] [iterations per thread] [pages of memory] [pages on disk]\n");
+        return;
     }
-#endif
+
     // Initialize all data structures, events, threads, and handles. Get physical pages from OS.
     initialize_system();
 

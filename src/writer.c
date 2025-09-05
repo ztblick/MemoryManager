@@ -8,13 +8,11 @@ ULONG64 write_pages(VOID) {
 
     // PFN for the current page being selected for disk write.
     PPFN pfn;
-    // The number of pages we have added to our batch
-    ULONG64 num_pages_batched = 0;
 
     // The upper bound on the size of THIS particular batch. This will be set to the max, then (possibly)
     // brought lower by the disk slot allocation, then (possibly) brought lower by the number of pages
     // that can be removed from the modified list.
-    ULONG64 num_pages_in_write_batch = min(stats.writer_batch_target, MAX_WRITE_BATCH_SIZE);
+    ULONG64 target_page_count = min(stats.writer_batch_target, MAX_WRITE_BATCH_SIZE);
 
     // If there are insufficient empty disk slots, let's hold off on writing
     if (pf.empty_disk_slots < MIN_WRITE_BATCH_SIZE) return 0;
@@ -23,11 +21,14 @@ ULONG64 write_pages(VOID) {
     // or fewer (from soft faults), but this gives us an estimate.
     ULONG64 approx_num_mod_pages = get_size(&modified_list);
 
-    // First, check to see if there are sufficient pages to write
-    if (approx_num_mod_pages < MIN_WRITE_BATCH_SIZE) return 0;
-
-    // Update our target count -- no need to get too greedy
-    ULONG64 target_page_count = min(num_pages_in_write_batch, approx_num_mod_pages);
+    // First, check to see if there are sufficient pages to write.
+    // If not, start the trimmer before exiting.
+    if (approx_num_mod_pages < MIN_WRITE_BATCH_SIZE) {
+        SetEvent(initiate_trimming_event);
+        return 0;
+    }
+    // Update our target count if we probably have fewer modified pages than our max.
+    target_page_count = min(target_page_count, approx_num_mod_pages);
 
     // Let's see if we need any slots at all:
     // If our stash is too small, we will get more.
@@ -40,37 +41,31 @@ ULONG64 write_pages(VOID) {
     if (pf.num_stashed_slots < MIN_WRITE_BATCH_SIZE) return 0;
 
     // Update our upper bound on pages in the batch
-    num_pages_in_write_batch = min(pf.num_stashed_slots, target_page_count);
+    target_page_count = min(pf.num_stashed_slots, target_page_count);
 
     // Initialize frame number array
     PPFN pages_to_write[MAX_WRITE_BATCH_SIZE];
 
-    // Get all pages to write
-    while (num_pages_batched < num_pages_in_write_batch) {
+    // Grab batches from the modified list until we reach capacity
+    // or until the list is empty
+    ULONG64 num_pages_in_write_batch = 0;
+    ULONG64 current_batch_size = 0;
+    USHORT misses = 0;
+    while (num_pages_in_write_batch < target_page_count &&
+            misses < BATCH_ATTEMPTS) {
 
-        // Here we will check the list size. This is approximate: the list size may
-        // change, but all we need is a snapshot. If there are no longer pages on the list,
-        // we will move on.
-        if (is_page_list_empty(&modified_list)) {
-            num_pages_in_write_batch = num_pages_batched;
-            break;
-        }
+        current_batch_size = remove_batch_from_list_head(
+                                                &modified_list,
+                                                pages_to_write,
+                                                target_page_count,
+                                                num_pages_in_write_batch);
 
-        // Get the PFN for the page we want to try to use
-        pfn = try_pop_from_list(&modified_list);
+        // If no pages were returned, we will note the miss.
+        // After enough failed attempts, we will just move on.
+        if (current_batch_size == 0) misses++;
 
-        // If we couldn't get a page, that's okay! We will try again later
-        if (!pfn) continue;
+        num_pages_in_write_batch += current_batch_size;
 
-        // Update PFN status
-        set_pfn_mid_write(pfn);
-
-        // Grab the frame number for mapping/unmapping
-        pages_to_write[num_pages_batched] = pfn;
-        num_pages_batched++;
-
-        // Release the PFN lock, now that we pulled it off the modified list.
-        unlock_pfn(pfn);
     }
 
     // If we couldn't get any pages, we will return.
@@ -90,6 +85,10 @@ ULONG64 write_pages(VOID) {
     ULONG64 pages_written = 0;
     ULONG64 slots_cleared = 0;
 
+    // We will make a temporary page list to help do a batch insert to the standby list.
+    PAGE_LIST temp_list;
+    initialize_page_list(&temp_list);
+
     for (ULONG64 i = 0; i < num_pages_in_write_batch; i++) {
 
         // Get the current page
@@ -102,7 +101,9 @@ ULONG64 write_pages(VOID) {
         char* page_file_location = get_page_file_offset(disk_slot);
 
         // Write the next page location in the kernal VA space
-        memcpy(page_file_location, vm.kernel_write_va + i * PAGE_SIZE / 8, PAGE_SIZE);
+        memcpy(page_file_location,
+            vm.kernel_write_va + i * PAGE_SIZE / 8,
+            PAGE_SIZE);
 
         // Lock the PFN again
         lock_pfn(pfn);
@@ -124,15 +125,29 @@ ULONG64 write_pages(VOID) {
             // Update PFN to be in standby state, add disk index
             set_pfn_standby(pfn, disk_slot);
 
-            // Add page to the standby list
-            insert_page_to_tail(&standby_list, pfn);
-            unlock_pfn(pfn);
-            increment_available_count();
+            // Add page to the temp list
+            insert_to_list_tail(&temp_list, pfn);
 
             // Update our count
             pages_written++;
         }
     }
+
+    // Add ALL pages to standby list by updating flinks and blinks of head/tail
+    // of page batch as well as head/tail of standby list
+    insert_list_to_tail_list(&standby_list, &temp_list);
+
+    // Unlock all pages in the batch!
+    pfn = temp_list.head->flink;
+    PPFN next;
+    for (int i = 0; i < pages_written; ++i) {
+        next = pfn->flink;
+        unlock_pfn(pfn);
+        pfn = next;
+    }
+
+    // Increase available count
+    increase_available_count(pages_written);
 
     // Un-map kernal VA
     unmap_pages(num_pages_in_write_batch, vm.kernel_write_va);

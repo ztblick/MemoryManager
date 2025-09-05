@@ -44,7 +44,6 @@ VOID add_consumption_data(double rate, ULONG64 pages_available) {
 
 VOID schedule_tasks(VOID) {
     DWORD status;
-    ULONG64 step = 0;
     LONGLONG previous_timestamp;
     LONGLONG current_timestamp = get_timestamp();
     ULONG64 previous_available_count;
@@ -62,9 +61,8 @@ VOID schedule_tasks(VOID) {
 
         // Print the statistics to the log, if necessary
 #if LOGGING_MODE
-        if (step % PRINT_FREQUENCY_IN_MILLISECONDS == 0) print_statistics();
+        print_statistics();
 #endif
-        step++;
 
         // Wait for a set amount of time before scheduling again.
         // Of course, if the system exit event is received, we will immediately break out of the thread.

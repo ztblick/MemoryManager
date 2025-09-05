@@ -133,8 +133,11 @@ VOID increment_list_size(PPAGE_LIST list) {
 }
 
 VOID decrement_list_size(PPAGE_LIST list) {
-
     InterlockedDecrement64(&list->list_size);
+}
+
+VOID decrease_list_size(PPAGE_LIST list, LONG64 amt) {
+    InterlockedAdd64(&list->list_size, 0 - amt);
 }
 
 VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn) {
@@ -185,8 +188,8 @@ VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn) {
 
 	    // Release locks
 	    unlock_list_shared(list);
-	    unlock_pfn(flink);
-	    if (flink != blink) unlock_pfn(blink);
+	    unlock_pfn(blink);                      // Since the writer goes forward from the head, let's unlock blinks FIRST
+	    if (flink != blink) unlock_pfn(flink);
 
 #if DEBUG
 	    validate_list(list);
@@ -343,6 +346,179 @@ PPFN try_pop_from_list(PPAGE_LIST list) {
     // Update metadata and return the locked, removed page
     decrement_list_size(list);
     return page;
+}
+
+ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
+                                    PPFN * page_array,
+                                    ULONG64 capacity,
+                                    ULONG64 count) {
+
+    ULONG wait_time = 1;
+
+    // My current page
+    PPFN pfn, list_head, batch_first, batch_last, list_leftover;
+
+    // The number of pages we have added to our batch
+    ULONG64 num_pages_batched = 0;
+
+    // Wait until the list can be locked shared and the head can be locked, too
+    while (TRUE) {
+        lock_list_shared(list);
+
+        list_head = list->head;
+
+        // If we can't lock the head, unlock, wait, and retry.
+        if (!try_lock_pfn(list_head)) {
+            unlock_list_shared(list);
+            wait(wait_time);
+            wait_time = max(wait_time << 1, MAX_WAIT_TIME_BEFORE_RETRY);
+            continue;
+        }
+        break;
+    }
+    // Now we know we have locked the list shared AND we have locked the head.
+
+
+    // Our current page to lock is, by default, the first page at the head of the list
+    batch_first = list_head->flink;
+    batch_last = batch_first;
+
+    // Special case: if there are no pages, unlock and return 0
+    if (batch_first == list_head) {
+        unlock_list_shared(list);
+        unlock_pfn(list_head);
+        return 0;
+    }
+
+    pfn = batch_first;
+
+    BOOL wrapped_around = FALSE;
+    BOOL cannot_acquire_lock = FALSE;
+
+    // While we want pages and there are pages available, we will continue to expand our batch
+    for ( ; num_pages_batched + count < capacity; num_pages_batched++) {
+
+        wrapped_around = FALSE;
+        cannot_acquire_lock = FALSE;
+
+        // If the next page is the head, we have reached the end and locked ALL the pages on the list.
+        if (pfn == list_head){
+            wrapped_around = TRUE;
+            break;
+        }
+        // OR, if we can't lock the next page, then we will take the batch we have,
+        // release locks on the current and previous page as well as the head and list,
+        // and return (letting a soft-faulter make progress).
+        if (!try_lock_pfn(pfn)) {
+            cannot_acquire_lock = TRUE;
+            break;
+        }
+
+        // We have locked the next page. Hooray! Let's move on to the next page.
+        batch_last = pfn;
+        pfn = pfn->flink;
+    }
+
+    // If no pages could be batched, we must have not been able to lock the first page
+    if (num_pages_batched == 0) {
+        ASSERT(cannot_acquire_lock && !wrapped_around)
+        unlock_list_shared(list);
+        unlock_pfn(list_head);
+        return 0;
+    }
+
+    // If ONE page was locked, we still won't return any
+    if (num_pages_batched == 1) {
+        unlock_list_shared(list);
+        unlock_pfn(list_head);
+        if (!cannot_acquire_lock) {
+            unlock_pfn(batch_last);
+        }
+        return 0;
+    }
+
+    // Now the fun case! We have pages to flush! We will remove them from the list, then add them to our array
+    // Update flinks/blinks to remove the batch from the list and add them to the temp list
+    list_head->flink = batch_last;
+    batch_last->blink = list_head;
+    unlock_list_shared(list);
+    unlock_pfn(list_head);
+    ASSERT (batch_last != list_head)
+    unlock_pfn(batch_last);
+
+    // Since we did not include batch_last, which was counted,
+    // we will need to decrement our count
+    num_pages_batched--;
+
+    // Move all pages to their mid-write state and put them in the array
+    pfn = batch_first;
+    for (ULONG64 i = 0; i < num_pages_batched; i++) {
+        page_array[i + count] = pfn;
+        set_pfn_mid_write(pfn);
+
+        // Move on to the next page, then unlock the current page
+        // for mid-write soft faulting
+        PPFN next = pfn->flink;
+        unlock_pfn(pfn);
+        pfn = next;
+    }
+
+    // Decrease the list size by the number of batched pages
+    decrease_list_size(list, num_pages_batched);
+
+    return num_pages_batched;
+}
+
+VOID insert_list_to_tail_list(PPAGE_LIST destination_list, PPAGE_LIST origin_list) {
+    PPFN first = origin_list->head->flink;
+    PPFN last = origin_list->head->blink;
+
+    PPFN head;
+    PPFN tail;
+
+    ULONG64 wait_time = 1;
+
+    // Acquire locks on the destination list, its head, and its final page
+    while (TRUE) {
+        lock_list_shared(destination_list);
+        head = destination_list->head;
+        if (!try_lock_pfn(head)) {
+            unlock_list_shared(destination_list);
+            wait(wait_time);
+            wait_time = max(wait_time << 1, MAX_WAIT_TIME_BEFORE_RETRY);
+            continue;
+        }
+
+        tail = head->blink;
+
+        // If the tail is the head -- i.e. there are NO pages on the list -- then we can
+        // continue without another page lock.
+        if (tail == head) break;
+
+        // Otherwise, we must lock the tail, too.
+        if (!try_lock_pfn(tail)) {
+            unlock_list_shared(destination_list);
+            unlock_pfn(head);
+            wait(wait_time);
+            wait_time = max(wait_time << 1, wait_time);
+            continue;
+        }
+
+        // Yay! We have locked the list, head, and tail
+        break;
+    }
+
+    // head .... tail <--> first .... last <--> head
+    tail->flink = first;
+    first->blink = tail;
+
+    last->flink = head;
+    head->blink = last;
+
+    // Now that everyone has been inserted, we can unlock everything
+    unlock_list_shared(destination_list);
+    unlock_pfn(head);
+    if (head != tail) unlock_pfn(tail);
 }
 
 VOID lock_list_shared(PPAGE_LIST list) {

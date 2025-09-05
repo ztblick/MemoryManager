@@ -44,6 +44,9 @@ VOID increment_available_count(VOID) {
     InterlockedIncrement64(&stats.n_available);
 }
 
+VOID increase_available_count(LONG64 amt) {
+    InterlockedAdd64(&stats.n_available, amt);
+}
 
 VOID decrement_available_count(VOID) {
     LONG64 new_count = InterlockedDecrement64(&stats.n_available);
@@ -110,7 +113,7 @@ PULONG_PTR get_next_va(PULONG_PTR previous_va, PTHREAD_INFO thread_info) {
     double p = (xorshift64(&thread_info->random_seed) >> 11) * (1.0 / 9007199254740992.0);
     if (p < transition_probabilities[state][USER_STATE_INCREMENT])
         state = USER_STATE_INCREMENT;
-    else if (p < transition_probabilities[state][USER_STATE_DECREMENT])
+    else if (p < transition_probabilities[state][USER_STATE_INCREMENT] + transition_probabilities[state][USER_STATE_DECREMENT])
         state = USER_STATE_DECREMENT;
     else
         state = USER_STATE_RANDOM;

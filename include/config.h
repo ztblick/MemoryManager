@@ -7,8 +7,12 @@
 #include <stdlib.h>
 #include <Windows.h>
 
-#define STATS_MODE                  0
-#define AGING                       1
+// These switches turn on particular configurations for the program.
+#define LOGGING_MODE                0       // Outputs statistics to the console
+#define RUN_FOREVER                 0       // Does not stop user threads
+#define STATS_MODE                  0       // Collects data on page consumption
+#define AGING                       1       // Initiates aging of PTEs when accessed / trimmed
+#define SCHEDULING                  0       // Adds a scheduling thread
 
 // This is our overarching VM state struct, which will package together information
 // about the defining characteristics of each test, such as the number of physical pages
@@ -76,7 +80,7 @@ extern STATS stats;
 
 // These will change as we decide how many pages to write, read, or trim at once.
 #define MAX_WRITE_BATCH_SIZE            4096
-#define MIN_WRITE_BATCH_SIZE            1
+#define MIN_WRITE_BATCH_SIZE            16
 #define MAX_READ_BATCH_SIZE             1
 #define MAX_TRIM_BATCH_SIZE             512
 #define MAX_FREE_BATCH_SIZE             1

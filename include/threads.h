@@ -13,17 +13,17 @@
 #define AUTO_RESET                      FALSE
 #define MANUAL_RESET                    TRUE
 
-#define USER_STATE_INCREMENT           0
-#define USER_STATE_DECREMENT                 1
+#define USER_STATE_INCREMENT            0
+#define USER_STATE_DECREMENT            1
 #define USER_STATE_RANDOM               2
 #define NUM_USER_STATES                 3
 
-#define ACTIVE_EVENT_INDEX    0
-#define EXIT_EVENT_INDEX      1
+#define ACTIVE_EVENT_INDEX              0
+#define EXIT_EVENT_INDEX                1
 
-#define NUM_KERNEL_READ_ADDRESSES   (16)
+#define NUM_KERNEL_READ_ADDRESSES       (16)
 
-#define DEFAULT_WRITE_FREQUENCY     10
+#define DEFAULT_WRITE_FREQUENCY         10
 
 // User thread struct. This will contain a set of kernel VA spaces. Each thread
 // will manage many, which will allow us to remove locks and contention on them.
@@ -67,7 +67,7 @@ extern ULONG64 trim_and_write_frequency;
 extern PTHREAD_INFO user_thread_info;
 
 // The transition probabilities for the different states
-extern double ** transition_probabilities;
+extern double transition_probabilities[NUM_USER_STATES][NUM_USER_STATES];
 
 #define NUMBER_OF_SAMPLES       512
 

@@ -5,7 +5,11 @@
 STATS stats = {0};
 VM vm = {0};
 PAGE_LIST_ARRAY free_lists = {0};
-double ** transition_probabilities = NULL;
+double transition_probabilities[NUM_USER_STATES][NUM_USER_STATES] = {
+    {0.85, 0.10, 0.05},  // from INCREMENT
+    {0.10, 0.85, 0.05},  // from DECREMENT
+    {0.85, 0.10, 0.05}   // from RANDOM
+};
 
 PTHREAD_INFO user_thread_info;
 
@@ -316,7 +320,7 @@ void initialize_threads(void) {
 
         ASSERT(user_threads[i]);
     }
-
+#if SCHEDULING
     // Create system scheduling thread
     scheduling_thread = CreateThread (DEFAULT_SECURITY,
                                DEFAULT_STACK_SIZE,
@@ -326,7 +330,7 @@ void initialize_threads(void) {
                                &scheduling_thread_id);
 
     ASSERT(scheduling_thread);
-
+#endif
     // Create system trimming thread
     trimming_thread = CreateThread (DEFAULT_SECURITY,
                                DEFAULT_STACK_SIZE,
@@ -364,24 +368,6 @@ void initialize_threads(void) {
                                DEFAULT_CREATION_FLAGS,
                                NULL);
 #endif
-
-    // Initialize transition probabilities
-    transition_probabilities = zero_malloc(sizeof(double *) * NUM_USER_STATES);
-    transition_probabilities[USER_STATE_INCREMENT] = zero_malloc(sizeof(double) * NUM_USER_STATES);
-    transition_probabilities[USER_STATE_DECREMENT] = zero_malloc(sizeof(double) * NUM_USER_STATES);
-    transition_probabilities[USER_STATE_RANDOM] = zero_malloc(sizeof(double) * NUM_USER_STATES);
-
-    transition_probabilities[USER_STATE_INCREMENT][USER_STATE_INCREMENT] = 0.85;
-    transition_probabilities[USER_STATE_INCREMENT][USER_STATE_DECREMENT] = 0.95;
-    transition_probabilities[USER_STATE_INCREMENT][USER_STATE_RANDOM] = 1.0;
-
-    transition_probabilities[USER_STATE_DECREMENT][USER_STATE_INCREMENT] = 0.10;
-    transition_probabilities[USER_STATE_DECREMENT][USER_STATE_DECREMENT] = 0.95;
-    transition_probabilities[USER_STATE_DECREMENT][USER_STATE_RANDOM] = 1.0;
-
-    transition_probabilities[USER_STATE_RANDOM][USER_STATE_INCREMENT] = 0.85;
-    transition_probabilities[USER_STATE_RANDOM][USER_STATE_DECREMENT] = 0.95;
-    transition_probabilities[USER_STATE_RANDOM][USER_STATE_RANDOM] = 1.0;
 }
 
 void initialize_events(void) {

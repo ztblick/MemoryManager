@@ -8,6 +8,8 @@
 
 #define MAX_DISK_SLOT_ATTEMPTS      (MAX_WRITE_BATCH_SIZE * 2)
 
+#define BATCH_ATTEMPTS  5
+
 /*
  *  This function is called by the CreateThread function in initializer.
  *  This function waits for the system start event, then waits for
