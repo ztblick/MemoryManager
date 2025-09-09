@@ -117,7 +117,6 @@ This will create a more space-efficient system. It will also give me the opportu
 trim or read pages associated with neighboring PTEs, which will be helpful when doing non-random
 accesses to the VA region.
 
-
 - <u>Free Page Caches for Each Thread:</u> This would also improve parallelism. To provide
   free pages for faulting threads, it would be advantageous to batch remove free pages and
   store them in a cache local to each thread. This would guarantee lock-free access for the

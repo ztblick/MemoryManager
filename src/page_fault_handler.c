@@ -278,7 +278,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, PTHREAD_INFO user_thread_info) {
         // A - a hardware failure. This is beyond the scope of this program.
         // B - the user provides an invalid VA (beyond the VA space allocated)
     // This handles situation B:
-    if (faulting_va < vm.application_va_base || faulting_va > vm.application_va_base + vm.va_size_in_pointers)
+    if (faulting_va < vm.application_va_base || faulting_va >= vm.application_va_base + vm.va_size_in_pointers)
         return FALSE;
 
     // This is the PTE of our faulting VA. We will need him. But we will lock him as little

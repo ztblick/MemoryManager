@@ -4,17 +4,12 @@ Current goal:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 NEXT SUB-GOALS:
 
-- Create non-random user thread access.
 - Evaluate the quality of the program (on with different ratios of physical to virtual)
   with aging and scheduling toggled on and off.
-- Run traces to fine-tune the performance of non-random access with scheduling and aging.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 SUBSEQUENT GOALS:
 
 - Batch prune from standby to free lists
-
-- Batch movement from modified to standby -- acquire locks once, then do a massive move. Set up flinks/blinks
-    ahead of time?
 
 - Lock contention. Move to PTE region locks, not individual PTE locks.
     - Try removing locks from as many places as possible.

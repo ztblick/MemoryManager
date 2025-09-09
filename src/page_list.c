@@ -136,8 +136,8 @@ VOID decrement_list_size(PPAGE_LIST list) {
     InterlockedDecrement64(&list->list_size);
 }
 
-VOID decrease_list_size(PPAGE_LIST list, LONG64 amt) {
-    InterlockedAdd64(&list->list_size, 0 - amt);
+VOID change_list_size(PPAGE_LIST list, LONG64 amt) {
+    InterlockedAdd64(&list->list_size, amt);
 }
 
 VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn) {
@@ -349,14 +349,14 @@ PPFN try_pop_from_list(PPAGE_LIST list) {
 }
 
 ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
-                                    PPFN * page_array,
+                                    PPFN* address_of_first_page,
                                     ULONG64 capacity,
                                     ULONG64 count) {
 
     ULONG wait_time = 1;
 
     // My current page
-    PPFN pfn, list_head, batch_first, batch_last, list_leftover;
+    PPFN pfn, list_head, batch_first, batch_last;
 
     // The number of pages we have added to our batch
     ULONG64 num_pages_batched = 0;
@@ -450,21 +450,11 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
     // we will need to decrement our count
     num_pages_batched--;
 
-    // Move all pages to their mid-write state and put them in the array
-    pfn = batch_first;
-    for (ULONG64 i = 0; i < num_pages_batched; i++) {
-        page_array[i + count] = pfn;
-        set_pfn_mid_write(pfn);
-
-        // Move on to the next page, then unlock the current page
-        // for mid-write soft faulting
-        PPFN next = pfn->flink;
-        unlock_pfn(pfn);
-        pfn = next;
-    }
-
     // Decrease the list size by the number of batched pages
-    decrease_list_size(list, num_pages_batched);
+    change_list_size(list, 0 - num_pages_batched);
+
+    // We will now save the address of the first page in our batch
+    *address_of_first_page = batch_first;
 
     return num_pages_batched;
 }

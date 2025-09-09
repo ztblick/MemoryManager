@@ -51,21 +51,34 @@ ULONG64 write_pages(VOID) {
     ULONG64 num_pages_in_write_batch = 0;
     ULONG64 current_batch_size = 0;
     USHORT misses = 0;
+    PPFN batch_first;
     while (num_pages_in_write_batch < target_page_count &&
             misses < BATCH_ATTEMPTS) {
 
         current_batch_size = remove_batch_from_list_head(
-                                                &modified_list,
-                                                pages_to_write,
-                                                target_page_count,
-                                                num_pages_in_write_batch);
+                                            &modified_list,
+                                            &batch_first,
+                                            target_page_count,
+                                            num_pages_in_write_batch);
+
+        // Move all pages to their mid-write state and put them in the array
+        pfn = batch_first;
+        for (ULONG64 i = 0; i < current_batch_size; i++) {
+            pages_to_write[i + num_pages_in_write_batch] = pfn;
+            set_pfn_mid_write(pfn);
+
+            // Move on to the next page, then unlock the current page
+            // for mid-write soft faulting
+            PPFN next = pfn->flink;
+            unlock_pfn(pfn);
+            pfn = next;
+        }
 
         // If no pages were returned, we will note the miss.
         // After enough failed attempts, we will just move on.
         if (current_batch_size == 0) misses++;
 
         num_pages_in_write_batch += current_batch_size;
-
     }
 
     // If we couldn't get any pages, we will return.
@@ -136,6 +149,7 @@ ULONG64 write_pages(VOID) {
     // Add ALL pages to standby list by updating flinks and blinks of head/tail
     // of page batch as well as head/tail of standby list
     insert_list_to_tail_list(&standby_list, &temp_list);
+    change_list_size(&standby_list, pages_written);
 
     // Unlock all pages in the batch!
     pfn = temp_list.head->flink;

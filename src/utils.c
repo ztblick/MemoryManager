@@ -95,7 +95,7 @@ PULONG_PTR get_next_va(PULONG_PTR previous_va, PTHREAD_INFO thread_info) {
 
     if (state == USER_STATE_INCREMENT) {
         new_va = (previous_va + 1);
-        if (new_va > vm.application_va_base + vm.va_size_in_pointers)
+        if (new_va >= vm.application_va_base + vm.va_size_in_pointers)
             new_va = vm.application_va_base;
     }
 

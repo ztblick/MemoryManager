@@ -98,7 +98,11 @@ VOID increment_list_size(PPAGE_LIST list);
  *  Decrements a list size, which is done when removing elements during a soft fault.
  */
 VOID decrement_list_size(PPAGE_LIST list);
-VOID decrease_list_size(PPAGE_LIST list, LONG64 amt);
+
+/*
+    Changes the list size by the given amount.
+ */
+VOID change_list_size(PPAGE_LIST list, LONG64 amt);
 
 /*
     Bumps up the free list total count. Done so with interlocked operations, as access can be
@@ -176,9 +180,9 @@ VOID validate_list(PPAGE_LIST list);
     Returns the total number of pages batched.
  */
 ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
-    PPFN * page_array,
-    ULONG64 capacity,
-    ULONG64 count);
+                                    PPFN *address_of_first_page,
+                                    ULONG64 capacity,
+                                    ULONG64 count);
 
 /*
     Inserts all pages from a given list to the tail of another.
