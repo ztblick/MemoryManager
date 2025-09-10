@@ -17,7 +17,7 @@
 
 // This will determine the number of times we will attempt to grab page locks
 // before grabbing the exclusive lock.
-#define MAX_HARD_ACCESS_ATTEMPTS		10
+#define MAX_HARD_ACCESS_ATTEMPTS		30
 #define MAX_SOFT_ACCESS_ATTEMPTS		30
 
 // Total size: 24 bytes + 40 bytes of padding

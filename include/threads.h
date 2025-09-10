@@ -25,6 +25,8 @@
 
 #define DEFAULT_WRITE_FREQUENCY         10
 
+#define FREE_PAGE_CACHE_SIZE            64
+
 // User thread struct. This will contain a set of kernel VA spaces. Each thread
 // will manage many, which will allow us to remove locks and contention on them.
 // Additionally, it will allow us to delay unmap calls, giving us the opportunity
@@ -35,6 +37,8 @@ typedef struct _USER_THREAD_INFO {
     ULONG kernel_va_index;
     PULONG_PTR kernel_va_spaces[NUM_KERNEL_READ_ADDRESSES];
     ULONG64 random_seed;
+    PVOID free_page_cache[FREE_PAGE_CACHE_SIZE];
+    USHORT free_page_count;
 } THREAD_INFO, *PTHREAD_INFO;
 
 // Events

@@ -158,7 +158,7 @@ VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn) {
 	// Attempt to grab both flink and blink locks
 	while (attempts < MAX_SOFT_ACCESS_ATTEMPTS) {
 		attempts++;
-	    wait_time = (wait_time << 1);
+	    wait_time = max(wait_time << 1, MAX_WAIT_TIME_BEFORE_RETRY);
 
 	    if (!try_lock_list_shared(list)) {
             wait(wait_time);
@@ -353,7 +353,9 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
                                     ULONG64 capacity,
                                     ULONG64 count) {
 
+    ULONG attempts = 0;
     ULONG wait_time = 1;
+    BOOL locked_shared = FALSE;
 
     // My current page
     PPFN pfn, list_head, batch_first, batch_last;
@@ -362,8 +364,14 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
     ULONG64 num_pages_batched = 0;
 
     // Wait until the list can be locked shared and the head can be locked, too
-    while (TRUE) {
-        lock_list_shared(list);
+    while (attempts < MAX_HARD_ACCESS_ATTEMPTS) {
+        attempts++;
+        wait_time = max(wait_time << 1, MAX_WAIT_TIME_BEFORE_RETRY);
+
+        if (!try_lock_list_shared(list)) {
+            wait(wait_time);
+            continue;
+        }
 
         list_head = list->head;
 
@@ -371,13 +379,19 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
         if (!try_lock_pfn(list_head)) {
             unlock_list_shared(list);
             wait(wait_time);
-            wait_time = max(wait_time << 1, MAX_WAIT_TIME_BEFORE_RETRY);
             continue;
         }
+
+        locked_shared = TRUE;
         break;
     }
-    // Now we know we have locked the list shared AND we have locked the head.
 
+    // If we were NOT able to lock shared, we will need to lock exclusive
+    if (!locked_shared) {
+        lock_list_exclusive(list);
+        lock_pfn(list->head);
+        list_head = list->head;
+    }
 
     // Our current page to lock is, by default, the first page at the head of the list
     batch_first = list_head->flink;
@@ -385,7 +399,8 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
 
     // Special case: if there are no pages, unlock and return 0
     if (batch_first == list_head) {
-        unlock_list_shared(list);
+        if (locked_shared) unlock_list_shared(list);
+        else unlock_list_exclusive(list);
         unlock_pfn(list_head);
         return 0;
     }
@@ -396,7 +411,7 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
     BOOL cannot_acquire_lock = FALSE;
 
     // While we want pages and there are pages available, we will continue to expand our batch
-    for ( ; num_pages_batched + count < capacity; num_pages_batched++) {
+    for ( ; num_pages_batched + count <= capacity; num_pages_batched++) {
 
         wrapped_around = FALSE;
         cannot_acquire_lock = FALSE;
@@ -422,14 +437,16 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
     // If no pages could be batched, we must have not been able to lock the first page
     if (num_pages_batched == 0) {
         ASSERT(cannot_acquire_lock && !wrapped_around)
-        unlock_list_shared(list);
+        if (locked_shared) unlock_list_shared(list);
+        else unlock_list_exclusive(list);
         unlock_pfn(list_head);
         return 0;
     }
 
     // If ONE page was locked, we still won't return any
     if (num_pages_batched == 1) {
-        unlock_list_shared(list);
+        if (locked_shared) unlock_list_shared(list);
+        else unlock_list_exclusive(list);
         unlock_pfn(list_head);
         if (!cannot_acquire_lock) {
             unlock_pfn(batch_last);
@@ -441,7 +458,8 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
     // Update flinks/blinks to remove the batch from the list and add them to the temp list
     list_head->flink = batch_last;
     batch_last->blink = list_head;
-    unlock_list_shared(list);
+    if (locked_shared) unlock_list_shared(list);
+    else unlock_list_exclusive(list);
     unlock_pfn(list_head);
     ASSERT (batch_last != list_head)
     unlock_pfn(batch_last);

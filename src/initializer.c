@@ -307,6 +307,27 @@ void initialize_threads(void) {
 
         // We will also set the initial state
         user_thread_info[i].state = USER_STATE_INCREMENT;
+
+        // And we will fill the initial free page caches of the threads, too
+        PPFN first_page;
+        ULONG64 num_pages = remove_batch_from_list_head(&free_lists.list_array[i],
+                                                            &first_page,
+                                                            FREE_PAGE_CACHE_SIZE,
+                                                            0);
+
+        // Decrement the total free count
+        free_lists.page_count -= (LONG64) num_pages;
+
+        // Add all removed pages to the free cache and unlock them
+        PPFN pfn = first_page;
+        PPFN next;
+        for (ULONG64 j = 0; j < num_pages; j++) {
+            user_thread_info[i].free_page_cache[j] = pfn;
+            next = pfn->flink;
+            unlock_pfn(pfn);
+            pfn = next;
+        }
+        user_thread_info[i].free_page_count = num_pages;
     }
 
     // Create user threads, each of which are running the user app simulation.

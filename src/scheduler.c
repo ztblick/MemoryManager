@@ -21,17 +21,18 @@ VOID print_statistics(VOID) {
     printf("FREE:\t\t%llu\t\t%.2f%%\n",
         *stats.n_free, 100.0 * (double) *stats.n_free / (double) allocated_frame_count);
     printf("ACTIVE:\t\t%llu\t\t%.2f%%\n",
-        active_page_count, 100.0 * active_page_count / allocated_frame_count);
+        active_page_count, 100.0 * (double) active_page_count / (double) allocated_frame_count);
     printf("MODIFIED:\t%llu\t\t%.2f%%\n",
-        *stats.n_modified, 100.0 * *stats.n_modified / allocated_frame_count);
+        *stats.n_modified, 100.0 * (double) *stats.n_modified / (double) allocated_frame_count);
     printf("STANDBY:\t%llu\t\t%.2f%%\n",
-        *stats.n_standby, 100.0 * *stats.n_standby / allocated_frame_count);
+        *stats.n_standby, 100.0 * (double) *stats.n_standby / (double) allocated_frame_count);
     printf("\nEMPTY DISK SLOTS:\t%lld\n", pf.empty_disk_slots);
     printf("\nHARD:\t\t%llu\t\t%.2f%%\n",
-        stats.n_hard, 100.0 * stats.n_hard / (stats.n_hard + stats.n_soft));
+        stats.n_hard, 100.0 * (double) stats.n_hard / (double) (stats.n_hard + stats.n_soft));
     printf("SOFT:\t\t%llu\t\t%.2f%%\n",
-        stats.n_soft, 100.0 * stats.n_soft / (stats.n_hard + stats.n_soft));
-    printf("\nTotal time user threads spent waiting: %.3f s\n", (double) stats.wait_time / stats.timer_frequency);
+        stats.n_soft, 100.0 * (double) stats.n_soft / (double) (stats.n_hard + stats.n_soft));
+    printf("\nTotal time user threads spent waiting: %.3f s\n",
+                    (double) stats.wait_time / (double) stats.timer_frequency);
     printf("\nTotal hard fault misses: %llu\n", stats.hard_faults_missed);
 }
 
@@ -86,7 +87,7 @@ VOID schedule_tasks(VOID) {
 
         // Make a projection for the state of our machine after writing pages to disk
         double expected_consumption_during_write = consumption_rate * WRITE_DURATION_IN_MILLISECONDS / 1000.0;
-        double expected_pages_after_write = current_available_count - expected_consumption_during_write;
+        double expected_pages_after_write = (double) current_available_count - expected_consumption_during_write;
 
         // If there is no need to write, don't write!
         if (expected_pages_after_write < AVAILABLE_PAGE_THRESHOLD) SetEvent(initiate_trimming_event);
@@ -94,7 +95,7 @@ VOID schedule_tasks(VOID) {
         // If there is a need, figure out how big the need is
         stats.writer_batch_target = *stats.n_modified;
         if (expected_pages_after_write > 0) {
-            stats.writer_batch_target = expected_consumption_during_write + ADDITIONAL_PAGE_BUFFER;
+            stats.writer_batch_target = (LONG64) expected_consumption_during_write + ADDITIONAL_PAGE_BUFFER;
         }
         SetEvent(initiate_writing_event);
     }
@@ -111,7 +112,7 @@ VOID print_consumption_data(VOID) {
         total_rate_sum += rate;
         largest_rate = max(rate, largest_rate);
     }
-    double average_rate = (double) total_rate_sum / count;
+    double average_rate = (double) total_rate_sum / (double) count;
 
     printf("Average rate: %.3f pages / s\n", average_rate);
     printf("Highest rate: %.3f pages / sec\n\n", largest_rate);

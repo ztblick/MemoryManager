@@ -82,6 +82,8 @@ ULONG64 trim_pages(VOID) {
         // Set PFN status as modified
         SET_PFN_STATUS(pfn, PFN_MODIFIED);
 
+        // TODO batch insert to modified list, acquiring locks only ONCE
+
         // Add this page to the modified list -- now the page is hot!
         insert_page_to_tail(&modified_list, pfn);
 

@@ -168,3 +168,43 @@ Test successful. Time elapsed: 5.105 seconds.
 
 
 Results: 5% improvement in 73% scenario, 20% improvement in 36% scenario!
+
+ADDING FREE PAGE CACHES AND BATCH REMOVALS FROM MODIFIED
+=== Test 1, Iteration 1 ===
+Physical to Virtual ratio: 97.7%.
+Test successful. Time elapsed: 0.756 seconds.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+=== Test 1, Iteration 2 ===
+Physical to Virtual ratio: 97.7%.
+Test successful. Time elapsed: 0.781 seconds.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+=== Test 1, Iteration 3 ===
+Physical to Virtual ratio: 97.7%.
+Test successful. Time elapsed: 0.765 seconds.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+=== Test 2, Iteration 1 ===
+Physical to Virtual ratio: 73.3%.
+Test successful. Time elapsed: 1.850 seconds.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+=== Test 2, Iteration 2 ===
+Physical to Virtual ratio: 73.3%.
+Test successful. Time elapsed: 1.752 seconds.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+=== Test 2, Iteration 3 ===
+Physical to Virtual ratio: 73.3%.
+Test successful. Time elapsed: 1.787 seconds.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+=== Test 3, Iteration 1 ===
+Physical to Virtual ratio: 36.6%.
+Test successful. Time elapsed: 4.468 seconds.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+=== Test 3, Iteration 2 ===
+Physical to Virtual ratio: 36.6%.
+Test successful. Time elapsed: 4.060 seconds.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+=== Test 3, Iteration 3 ===
+Physical to Virtual ratio: 36.6%.
+Test successful. Time elapsed: 3.871 seconds.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Improvement: ~37% improvement for 97% case, 14% for 73% case, 18% for 36% case!

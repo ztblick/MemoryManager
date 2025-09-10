@@ -151,7 +151,60 @@ BOOL resolve_soft_fault(PPTE pte) {
     return TRUE;
 }
 
-BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO user_thread_info) {
+BOOL acquire_free_page(PTHREAD_INFO thread_info, PPFN *available_page_address) {
+
+    // First, attempt to grab page from free cache first!
+    USHORT count = thread_info->free_page_count;
+    if (count > 0) {
+        count--;
+        *available_page_address = thread_info->free_page_cache[count];
+        thread_info->free_page_count = count;
+        lock_pfn(*available_page_address);
+        return TRUE;
+    }
+
+    // Then, attempt to grab a free page.
+    if (try_get_free_page(available_page_address, thread_info->thread_id)) return TRUE;
+
+    return FALSE;
+}
+
+// TODO change this to move from FREE list to cache
+BOOL move_batch_from_standby_to_cache(PTHREAD_INFO thread_info) {
+    PPFN pfn;
+
+    // Grab a batch of pages from the standby list
+    USHORT batch_size = remove_batch_from_list_head(&standby_list,
+                                                    &pfn,
+                                                    FREE_PAGE_CACHE_SIZE,
+                                                    0);
+    if (batch_size == 0) return FALSE;
+
+    // Copy the pages into the free page cache
+    // While doing so, we MUST map their old PTEs to the disk!
+    PPFN next;
+    for (USHORT i = 0; i < batch_size; ++i) {
+
+        // Map the previous page's owner to its disk slot! We are doing this WITHOUT the page table lock.
+        // This is okay, but we will now need to double-check the PTE on a simultaneous soft fault.
+        // If that PTE lock is acquired and the thread is waiting for the page lock, then the PTE will have changed
+        // while they were waiting.
+        PPTE old_pte = pfn->PTE;
+        map_pte_to_disk(old_pte, pfn->fields.disk_index);
+
+        // Now we can copy the page into the cache and release its lock
+        thread_info->free_page_cache[i] = pfn;
+        next = pfn->flink;
+        unlock_pfn(pfn);
+        pfn = next;
+    }
+
+    ASSERT(thread_info->free_page_count == 0);
+    thread_info->free_page_count = batch_size;
+    return TRUE;
+}
+
+BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO thread_info) {
 
     // This wil hold the physical frame number that we are mapping to the faulting VA.
     ULONG_PTR frame_number_to_map;
@@ -159,13 +212,11 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO user_thread_info) {
     // The PFN associated with the page that will be mapped to the faulting VA.
     PPFN available_pfn;
 
-    BOOL free_page_acquired = FALSE;
-    BOOL standby_page_acquired = FALSE;
-
-    // First, attempt to grab a free page.
-    free_page_acquired = try_get_free_page(&available_pfn, user_thread_info->thread_id);
+    // First, we will attempt to grab a free page from our cache or from a free list
+    BOOL free_page_acquired = acquire_free_page(thread_info, &available_pfn);
 
     // If no page is available on the free list, then we will repurpose one from the standby list
+    BOOL standby_page_acquired = FALSE;
     if (!free_page_acquired) {
 
         standby_page_acquired = try_acquire_page_from_list(&available_pfn, &standby_list);
@@ -186,13 +237,14 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO user_thread_info) {
     // the page fault lock again.
     if (!free_page_acquired && !standby_page_acquired) {
         SetEvent(initiate_trimming_event);
-        LARGE_INTEGER start;
-        QueryPerformanceCounter(&start);
+
+        LONGLONG start = get_timestamp();
         WaitForSingleObject(standby_pages_ready_event, INFINITE);
-        LARGE_INTEGER end;
-        QueryPerformanceCounter(&end);
-        InterlockedAdd64(&stats.wait_time, (end.QuadPart - start.QuadPart));
+
+        LONGLONG end = get_timestamp();
+        InterlockedAdd64(&stats.wait_time, (end - start));
         InterlockedIncrement64(&stats.hard_faults_missed);
+
         return FALSE;
     }
 
@@ -200,13 +252,13 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO user_thread_info) {
     // Let's now resolve the fault.
 
     // First, we will set OUR kernel read VA space.
-    PULONG_PTR kernel_read_va = user_thread_info->kernel_va_spaces[user_thread_info->kernel_va_index];
+    PULONG_PTR kernel_read_va = thread_info->kernel_va_spaces[thread_info->kernel_va_index];
 
     // Get the frame number
     frame_number_to_map = get_frame_from_PFN(available_pfn);
 
     // Since we are committing to using this read va, we will need to increase the count.
-    user_thread_info->kernel_va_index++;
+    thread_info->kernel_va_index++;
 
     // Now we will finally try to acquire the PTE lock
     // If we cannot get it, we will try again.
@@ -219,7 +271,7 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO user_thread_info) {
         if (pte_lock_acquired) unlock_pte(pte);
 
         // Add the page to the free list and update its status
-        add_page_to_free_lists(available_pfn, user_thread_info->thread_id);
+        add_page_to_free_lists(available_pfn, thread_info->thread_id);
         increment_available_count();
         set_PFN_free(available_pfn);
 

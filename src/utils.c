@@ -32,8 +32,6 @@ void map_both_va_to_same_page(PULONG_PTR va_one, PULONG_PTR va_two, ULONG64 fram
     }
 }
 
-
-
 void unmap_pages(ULONG64 num_pages, PULONG_PTR va) {
     if (MapUserPhysicalPages (va, num_pages, NULL) == FALSE) {
         fatal_error("Could not un-map old VA.");
@@ -60,7 +58,7 @@ LONGLONG get_timestamp(VOID) {
 }
 
 double get_time_difference(LONGLONG end, LONGLONG start) {
-    return (double) (end - start) / stats.timer_frequency;
+    return (double) (end - start) / (double) stats.timer_frequency;
 }
 
 uint64_t xorshift64(ULONG64 *seed) {
@@ -110,7 +108,7 @@ PULONG_PTR get_next_va(PULONG_PTR previous_va, PTHREAD_INFO thread_info) {
     else new_va = get_arbitrary_va(&thread_info->random_seed);
 
     // Before we return, we will move into a new state (possibly)
-    double p = (xorshift64(&thread_info->random_seed) >> 11) * (1.0 / 9007199254740992.0);
+    double p = (double) (xorshift64(&thread_info->random_seed) >> 11) * (1.0 / 9007199254740992.0);
     if (p < transition_probabilities[state][USER_STATE_INCREMENT])
         state = USER_STATE_INCREMENT;
     else if (p < transition_probabilities[state][USER_STATE_INCREMENT] + transition_probabilities[state][USER_STATE_DECREMENT])
