@@ -77,6 +77,10 @@ PULONG_PTR get_arbitrary_va(ULONG64 *thread_random_seed) {
 
     ULONG64 random_value = xorshift64(thread_random_seed);
 
+    // This is the old randomness calculation -- for comparing to
+    // old runtime analysis
+    // ULONG64 random_value = rand () * rand () * rand ();
+
     // Choose index safely (mod handles non power-of-two sizes)
     size_t index = random_value % vm.va_size_in_pointers;
 

@@ -311,9 +311,8 @@ void initialize_threads(void) {
         // And we will fill the initial free page caches of the threads, too
         PPFN first_page;
         ULONG64 num_pages = remove_batch_from_list_head(&free_lists.list_array[i],
-                                                            &first_page,
-                                                            FREE_PAGE_CACHE_SIZE,
-                                                            0);
+                                                        &first_page,
+                                                        FREE_PAGE_CACHE_SIZE);
 
         // Decrement the total free count
         free_lists.page_count -= (LONG64) num_pages;

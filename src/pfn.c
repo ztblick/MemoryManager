@@ -17,6 +17,10 @@ VOID create_zeroed_pfn(PPFN new_pfn) {
 
     WriteULong64NoFence(&new_pfn->raw_pfn_data, temp.raw_pfn_data);
     WriteULong64NoFence((DWORD64 *) &new_pfn->PTE, (DWORD64) NULL);
+
+#if DEBUG
+    InitializeCriticalSection(&new_pfn->crit_sec);
+#endif
 }
 
 ULONG_PTR get_frame_from_PFN(PPFN pfn) {
@@ -80,15 +84,50 @@ VOID set_pfn_standby(PPFN pfn, ULONG64 disk_index) {
 }
 
 VOID lock_pfn(PPFN pfn) {
+#if DEBUG
+    EnterCriticalSection(&pfn->crit_sec);
+
+    // Recursion count is stored in the RTL_CRITICAL_SECTION struct.
+    // Safe to cast since CRITICAL_SECTION is the public alias.
+    RTL_CRITICAL_SECTION *rtl_cs = &pfn->crit_sec;
+
+    // Assert that we never acquire recursively
+    ASSERT(rtl_cs->RecursionCount == 1);
+#else
     lock(&pfn->lock);
+#endif
 }
 
 BOOL try_lock_pfn(PPFN pfn) {
+#if DEBUG
+    BOOL success = TryEnterCriticalSection(&pfn->crit_sec);
+    if (success) {
+        // Recursion count is stored in the RTL_CRITICAL_SECTION struct.
+        // Safe to cast since CRITICAL_SECTION is the public alias.
+        RTL_CRITICAL_SECTION *rtl_cs = &pfn->crit_sec;
+
+        // Assert that we never acquire recursively
+        ASSERT(rtl_cs->RecursionCount == 1);
+    }
+    return success;
+#else
     return try_lock(&pfn->lock);
+#endif
 }
 
 VOID unlock_pfn(PPFN pfn) {
+#if DEBUG
+    // Recursion count is stored in the RTL_CRITICAL_SECTION struct.
+    // Safe to cast since CRITICAL_SECTION is the public alias.
+    RTL_CRITICAL_SECTION *rtl_cs = &pfn->crit_sec;
+
+    // Assert that we never acquire recursively
+    ASSERT(rtl_cs->RecursionCount == 1);
+
+    LeaveCriticalSection(&pfn->crit_sec);
+#else
     unlock(&pfn->lock);
+#endif
 }
 
 VOID set_pfn_mid_trim(PPFN pfn) {

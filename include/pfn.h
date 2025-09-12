@@ -66,6 +66,9 @@ struct __pfn {
         BYTE_LOCK lock;
     };
     char padding[32];                           // Unclear if sharing cache lines hurts of helps so far...
+#if DEBUG
+    CRITICAL_SECTION crit_sec;
+#endif
 };
 
 /*

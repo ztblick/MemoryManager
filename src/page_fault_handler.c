@@ -176,8 +176,7 @@ BOOL move_batch_from_standby_to_cache(PTHREAD_INFO thread_info) {
     // Grab a batch of pages from the standby list
     USHORT batch_size = remove_batch_from_list_head(&standby_list,
                                                     &pfn,
-                                                    FREE_PAGE_CACHE_SIZE,
-                                                    0);
+                                                    FREE_PAGE_CACHE_SIZE);
     if (batch_size == 0) return FALSE;
 
     // Copy the pages into the free page cache

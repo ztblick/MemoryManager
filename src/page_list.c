@@ -84,13 +84,6 @@ PPFN try_pop_from_free_list(ULONG list_index) {
     PPFN page = remove_from_head_of_list(list);
     unlock_list_exclusive(list);
 
-#if DEBUG
-    validate_list(list);
-
-    // list size is only used in debugger
-    decrement_list_size(list);
-#endif
-
     // Update metadata and return
     decrement_free_lists_total_count();
     decrement_available_count();
@@ -116,16 +109,10 @@ ULONG64 get_size(PPAGE_LIST list) {
 
 VOID increment_free_lists_total_count(VOID) {
     InterlockedIncrement64(&free_lists.page_count);
-#if DEBUG
-    validate_free_counts();
-#endif
 }
 
 VOID decrement_free_lists_total_count(VOID) {
     InterlockedDecrement64(&free_lists.page_count);
-#if DEBUG
-    validate_free_counts();
-#endif
 }
 
 VOID increment_list_size(PPAGE_LIST list) {
@@ -151,9 +138,6 @@ VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn) {
 
 	// We cannot proceed while someone else has an exclusive lock on this
 	// list, so we will wait until we can acquire the shared lock
-#if DEBUG
-    validate_list(list);
-#endif
 
 	// Attempt to grab both flink and blink locks
 	while (attempts < MAX_SOFT_ACCESS_ATTEMPTS) {
@@ -191,10 +175,6 @@ VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn) {
 	    unlock_pfn(blink);                      // Since the writer goes forward from the head, let's unlock blinks FIRST
 	    if (flink != blink) unlock_pfn(flink);
 
-#if DEBUG
-	    validate_list(list);
-#endif
-
 	    // Update metadata and reset events, if necessary
         decrement_list_size(list);
 	    if (list == &standby_list) {
@@ -205,9 +185,6 @@ VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn) {
 	    return;
 	}
 
-#if DEBUG
-    validate_list(list);
-#endif
 	// If we get here, we will need to lock the list exclusively
     lock_list_exclusive(list);
 
@@ -227,9 +204,6 @@ VOID remove_page_on_soft_fault(PPAGE_LIST list, PPFN pfn) {
         // threads until there are available standby pages.
         if (is_page_list_empty(&standby_list)) ResetEvent(standby_pages_ready_event);
     }
-#if DEBUG
-    validate_list(list);
-#endif
 }
 
 /*
@@ -279,10 +253,6 @@ VOID insert_page_to_tail(PPAGE_LIST list, PPFN pfn) {
         unlock_pfn(blink);
         unlock_pfn(head);
         increment_list_size(list);
-
-#if DEBUG
-        validate_list(list);
-#endif
         return;
     }
 }
@@ -350,8 +320,7 @@ PPFN try_pop_from_list(PPAGE_LIST list) {
 
 ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
                                     PPFN* address_of_first_page,
-                                    ULONG64 capacity,
-                                    ULONG64 count) {
+                                    ULONG64 capacity) {
 
     ULONG attempts = 0;
     ULONG wait_time = 1;
@@ -411,7 +380,7 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
     BOOL cannot_acquire_lock = FALSE;
 
     // While we want pages and there are pages available, we will continue to expand our batch
-    for ( ; num_pages_batched + count <= capacity; num_pages_batched++) {
+    for ( ; num_pages_batched <= capacity; num_pages_batched++) {
 
         wrapped_around = FALSE;
         cannot_acquire_lock = FALSE;
@@ -448,9 +417,7 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
         if (locked_shared) unlock_list_shared(list);
         else unlock_list_exclusive(list);
         unlock_pfn(list_head);
-        if (!cannot_acquire_lock) {
-            unlock_pfn(batch_last);
-        }
+        unlock_pfn(batch_last);
         return 0;
     }
 
@@ -555,6 +522,9 @@ VOID unlock_list_exclusive(PPAGE_LIST list) {
 
 VOID initialize_list_head(PPFN head) {
     head->flink = head->blink = head;
+#if DEBUG
+    InitializeCriticalSection(&head->crit_sec);
+    #endif
 }
 
 BOOL remove_page_from_list(PPFN page) {

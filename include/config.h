@@ -13,6 +13,7 @@
 #define STATS_MODE                  0       // Collects data on page consumption
 #define AGING                       1       // Initiates aging of PTEs when accessed / trimmed
 #define SCHEDULING                  0       // Adds a scheduling thread
+#define USER_SIMULATION             1       // Changes how memory is accessed (if 0, entirely random)
 
 // This is our overarching VM state struct, which will package together information
 // about the defining characteristics of each test, such as the number of physical pages

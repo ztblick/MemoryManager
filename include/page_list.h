@@ -181,8 +181,7 @@ VOID validate_list(PPAGE_LIST list);
  */
 ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
                                     PPFN *address_of_first_page,
-                                    ULONG64 capacity,
-                                    ULONG64 count);
+                                    ULONG64 capacity);
 
 /*
     Inserts all pages from a given list to the tail of another.

@@ -28,7 +28,11 @@ void run_user_app_simulation(PTHREAD_INFO user_thread_info) {
     for (int i = 0; i < vm.iterations; i += 1) {
 #endif
         // Access different portions of the virtual address space according to the state of the user thread.
+#if USER_SIMULATION
         arbitrary_va = get_next_va(arbitrary_va, user_thread_info);
+#else
+        arbitrary_va = get_arbitrary_va(&user_thread_info->random_seed);
+#endif
 
         // Attempt to write the virtual address into memory page.
         do {

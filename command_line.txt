@@ -3,3 +3,8 @@ MemoryManager 8 8000000 524288 65536
 MemoryManager 8 8000000 524288 262144
 
 MemoryManager 8 8000000 524288 1048576
+
+
+Old tests:
+
+MemoryManager 8 1000000 262144 131072

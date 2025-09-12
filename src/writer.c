@@ -56,10 +56,9 @@ ULONG64 write_pages(VOID) {
             misses < BATCH_ATTEMPTS) {
 
         current_batch_size = remove_batch_from_list_head(
-                                            &modified_list,
-                                            &batch_first,
-                                            target_page_count,
-                                            num_pages_in_write_batch);
+            &modified_list,
+            &batch_first,
+            target_page_count - num_pages_in_write_batch);
 
         // Move all pages to their mid-write state and put them in the array
         pfn = batch_first;

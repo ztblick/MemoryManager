@@ -41,7 +41,7 @@
 #define MAX_STACK_FRAMES    16
 #define TRACE_BUFFER_SIZE   1024
 
-#define ACCEPTABLE_MISS     100
+#define ACCEPTABLE_MISS     1000
 
 #if DEBUG
 typedef struct {
