@@ -9,21 +9,23 @@ NEXT SUB-GOALS:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 SUBSEQUENT GOALS:
 
-- Batch prune from standby to free lists
+- Update READ_ME to reflect recent changes: free page caches, batch removals, user access simulation
 
-- Lock contention. Move to PTE region locks, not individual PTE locks.
-    - Try removing locks from as many places as possible.
+- Batch prune from standby to free lists.
+
+- Update batch trims to use new batched removals with fewer list lock attempts.
+
+- Speculative batched reads from disk.
+
+- PTE region locks, not individual PTE locks.
 
 - Modify statistics counts to be more clear, correct, and efficient
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 THEN, any of the below:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 - Cache-optimize structs to reduce contention.
-    - Free page caches in each thread!
 
 - Add read/write accesses. Check readwrite bit in trimmer -- move read-only directly to standby.
-
-- Speculatively read in larger batches of pages from the disk.
 
 - De-fragment the bitmaps from time to time.
 

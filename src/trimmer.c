@@ -50,9 +50,15 @@ ULONG64 trim_pages(VOID) {
         // Read in the the PFN.
         pfn = get_PFN_from_PTE(pte);
 
+        // Lock the pfn (provides protection against soft-faulting mid trim later on)
+        lock_pfn(pfn);
+
         // Now that you have both locks, transition both data structures into the
         // proper transition, mid-trim states.
         set_PTE_to_transition(pte);
+
+        // Unlock the PTE -- we don't need it anymore
+        unlock_pte(pte);
 
         // Great! We have a page. Let's add it to our array.
         trimmed_pages[trim_batch_size] = pfn;
@@ -72,23 +78,34 @@ ULONG64 trim_pages(VOID) {
     // Update our starting point for the next run
     pte_to_trim = pte;
 
+    // We will make a temporary page list to help do a batch insert to the modified list.
+    PAGE_LIST temp_list;
+    initialize_page_list(&temp_list);
+
     // Now, let's add all of our trimmed pages to the modified list
     for (ULONG i = 0; i < trim_batch_size; i++) {
 
         // Grab the PFN and take a snapshot of its PTE
         pfn = trimmed_pages[i];
-        pte = pfn->PTE;
 
         // Set PFN status as modified
         SET_PFN_STATUS(pfn, PFN_MODIFIED);
 
-        // TODO batch insert to modified list, acquiring locks only ONCE
+        // Add page to the temp list
+        insert_to_list_tail(&temp_list, pfn);
+    }
 
-        // Add this page to the modified list -- now the page is hot!
-        insert_page_to_tail(&modified_list, pfn);
+    // Add all pages to the modified list
+    insert_list_to_tail_list(&modified_list, &temp_list);
+    change_list_size(&modified_list, (LONG64) trim_batch_size);
 
-        // Release the pte lock, which was acquired earlier when the trim batch was initially assembled.
-        unlock_pte(pte);
+    // Unlock all pages in the batch!
+    pfn = temp_list.head->flink;
+    PPFN next;
+    for (int i = 0; i < trim_batch_size; ++i) {
+        next = pfn->flink;
+        unlock_pfn(pfn);
+        pfn = next;
     }
 
     // Return our batch size, which is used by the statistics thread.
