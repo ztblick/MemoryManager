@@ -345,7 +345,7 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
     BOOL locked_shared = FALSE;
 
     // My current page
-    PPFN pfn, list_head, batch_first, batch_last;
+    PPFN pfn, list_head = list->head, batch_first, batch_last;
 
     // The number of pages we have added to our batch
     LONG64 num_pages_batched = 0;

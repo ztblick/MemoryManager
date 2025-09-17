@@ -27,7 +27,7 @@ BOOL try_acquire_page_from_list(PPFN* available_page_address, PPAGE_LIST list) {
         wait(wait_time);
     }
 
-    // If we got here, we must have failed to get a page. Oh well!
+    // If we got here, we must have failed to get a page. We will try to get it next time.
     return FALSE;
 }
 
@@ -175,15 +175,13 @@ BOOL acquire_free_page(PTHREAD_INFO thread_info, PPFN *available_page_address) {
     return TRUE;
 }
 
-// TODO change this to move from FREE list to cache
-// TODO try again to grab batch for cache while resolving hard fault -- just don't get too greedy
 BOOL move_batch_from_standby_to_cache(PTHREAD_INFO thread_info) {
     PPFN pfn;
 
     // Grab a batch of pages from the standby list
     USHORT batch_size = remove_batch_from_list_head(&standby_list,
                                                     &pfn,
-                                                    FREE_PAGE_CACHE_SIZE);
+                                                    FREE_PAGE_CACHE_SIZE / 4);
     if (batch_size == 0) return FALSE;
 
     // Copy the pages into the free page cache
@@ -219,29 +217,23 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO thread_info) {
     PPFN available_pfn;
 
     // First, we will attempt to grab a free page from our cache or from a free list
-    BOOL free_page_acquired = acquire_free_page(thread_info, &available_pfn);
+    BOOL free_page_acquired;
+    while (TRUE) {
+        free_page_acquired = acquire_free_page(thread_info, &available_pfn);
+        if (free_page_acquired) break;
 
-    // If no page is available on the free list, then we will repurpose one from the standby list
-    BOOL standby_page_acquired = FALSE;
-    if (!free_page_acquired) {
-
-        standby_page_acquired = try_acquire_page_from_list(&available_pfn, &standby_list);
-
-        if (standby_page_acquired) {
-            // Map the previous page's owner to its disk slot! We are doing this WITHOUT the page table lock.
-            // This is okay, but we will now need to double-check the PTE on a simultaneous soft fault.
-            // If that PTE lock is acquired and the thread is waiting for the page lock, then the PTE will have changed
-            // while they were waiting.
-            PPTE old_pte = available_pfn->PTE;
-            map_pte_to_disk(old_pte, available_pfn->fields.disk_index);
-        }
+        // We will now try to move a batch of pages from standby to the cache.
+        // If we are able to do so, we will loop around again and grab a page from the cache!
+        // If we are NOT able to get a page, we will break and set an event for the trimmer.
+        BOOL standby_page_acquired = move_batch_from_standby_to_cache(thread_info);
+        if (!standby_page_acquired) break;
     }
 
     // If no pages are available, release locks and wait for pages available event.
     // We will MANUALLY initiate trimming here, although we were hoping to avoid it.
     // Once the event is triggered, return to the beginning of the loop, then wait for
     // the page fault lock again.
-    if (!free_page_acquired && !standby_page_acquired) {
+    if (!free_page_acquired) {
         SetEvent(initiate_trimming_event);
 
         LONGLONG start = get_timestamp();
