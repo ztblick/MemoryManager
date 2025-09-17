@@ -33,6 +33,7 @@ void map_both_va_to_same_page(PULONG_PTR va_one, PULONG_PTR va_two, ULONG64 fram
  */
 VOID increment_available_count(VOID);
 VOID increase_available_count(LONG64 amt);
+VOID decrease_available_count(LONG64 amt);
 
 /*
  *  Drops the count of available pages. Initiates the trimmer, if necessary.

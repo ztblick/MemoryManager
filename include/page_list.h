@@ -49,14 +49,14 @@ VOID add_page_to_free_lists(PPFN page, ULONG first_index);
 /*
  *  This attempts to grab a free page from the array of free lists.
  */
-BOOL try_get_free_page(PPFN *address_to_save, ULONG first_index);
+BOOL try_get_free_pages(PTHREAD_INFO thread_info);
 
 /*
  *  Attempts to lock a particular free list. If it can be locked, and there is at least one
  *  page on the list, it pops that page and returns it. Otherwise, it releases locks and
  *  returns null. Note: since the page is free, it does NOT need to be locked.
  */
-PPFN try_pop_from_free_list(ULONG list_index);
+BOOL try_refill_cache_from_free_list(ULONG list_index, PTHREAD_INFO thread_info);
 
 /*
  *  Initialize a page list. This creates the critical section, initializes the list head,
@@ -110,6 +110,8 @@ VOID change_list_size(PPAGE_LIST list, LONG64 amt);
  */
 VOID increment_free_lists_total_count(VOID);
 VOID decrement_free_lists_total_count(VOID);
+VOID decrease_free_lists_total_count(LONG64 amt);
+VOID increase_free_lists_total_count(LONG64 amt);
 
 /*
  *  This pops an entry from the head of the list. It assumes nothing -- the programmer
@@ -176,11 +178,22 @@ VOID validate_list(PPAGE_LIST list);
 
 /*
     Removes a batch of pages from the head of the given list. Adds them into the
-    given list pages. Pages are UNLOCKED.
+    given list pages. Pages are LOCKED.
     Returns the total number of pages batched.
  */
 ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
                                     PPFN *address_of_first_page,
+                                    ULONG64 capacity);
+
+/*
+    Removes a batch of pages from the head of the given list. Adds them into the
+    given list pages. Pages are UNLOCKED.
+    Returns the total number of pages batched.
+    ASSUMES the list is ALREADY locked exclusive.
+ */
+
+ULONG64 remove_batch_from_list_head_exclusive(PPAGE_LIST list,
+                                    PPFN* address_of_first_page,
                                     ULONG64 capacity);
 
 /*

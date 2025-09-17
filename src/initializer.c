@@ -310,7 +310,7 @@ void initialize_threads(void) {
 
         // And we will fill the initial free page caches of the threads, too
         PPFN first_page;
-        ULONG64 num_pages = remove_batch_from_list_head(&free_lists.list_array[i],
+        ULONG64 num_pages = remove_batch_from_list_head_exclusive(&free_lists.list_array[i],
                                                         &first_page,
                                                         FREE_PAGE_CACHE_SIZE);
 
@@ -323,7 +323,6 @@ void initialize_threads(void) {
         for (ULONG64 j = 0; j < num_pages; j++) {
             user_thread_info[i].free_page_cache[j] = pfn;
             next = pfn->flink;
-            unlock_pfn(pfn);
             pfn = next;
         }
         user_thread_info[i].free_page_count = num_pages;

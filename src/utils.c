@@ -46,6 +46,17 @@ VOID increase_available_count(LONG64 amt) {
     InterlockedAdd64(&stats.n_available, amt);
 }
 
+VOID decrease_available_count(LONG64 amt) {
+    LONG64 old_value = stats.n_available;
+    InterlockedAdd64(&stats.n_available, -amt);
+
+    // If we have crossed our trimming threshold, start trimming!
+    if (old_value > START_TRIMMING_THRESHOLD &&
+        old_value - amt <= START_TRIMMING_THRESHOLD) {
+        SetEvent(initiate_trimming_event);
+    }
+}
+
 VOID decrement_available_count(VOID) {
     LONG64 new_count = InterlockedDecrement64(&stats.n_available);
     if (new_count == START_TRIMMING_THRESHOLD) SetEvent(initiate_trimming_event);

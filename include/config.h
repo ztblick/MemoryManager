@@ -83,7 +83,7 @@ extern STATS stats;
 #define MAX_WRITE_BATCH_SIZE            4096
 #define MIN_WRITE_BATCH_SIZE            16
 #define MAX_READ_BATCH_SIZE             1
-#define MAX_TRIM_BATCH_SIZE             512
+#define MAX_TRIM_BATCH_SIZE             2048
 #define MAX_FREE_BATCH_SIZE             1
 
 // Default pages in memory and page file, which are used to calculate VA span

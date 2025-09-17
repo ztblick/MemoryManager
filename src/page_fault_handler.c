@@ -151,25 +151,32 @@ BOOL resolve_soft_fault(PPTE pte) {
     return TRUE;
 }
 
+/*
+    Attempts to LOCK and return a free page. Re-fills the cache if possible.
+    If no free pages are to be found, returns false.
+ */
 BOOL acquire_free_page(PTHREAD_INFO thread_info, PPFN *available_page_address) {
 
-    // First, attempt to grab page from free cache first!
+    // First, check if the cache is empty. If it is, we will try to get free pages
+    // to re-fill it
     USHORT count = thread_info->free_page_count;
-    if (count > 0) {
-        count--;
-        *available_page_address = thread_info->free_page_cache[count];
-        thread_info->free_page_count = count;
-        lock_pfn(*available_page_address);
-        return TRUE;
+    if (count == 0) {
+
+        // Here, we try to re-fill the cache. If this fails, we will return FALSE.
+        if (!try_get_free_pages(thread_info)) return FALSE;
     }
 
-    // Then, attempt to grab a free page.
-    if (try_get_free_page(available_page_address, thread_info->thread_id)) return TRUE;
-
-    return FALSE;
+    // Now that we know we have pages in the cache, we will pop one off to resolve our fault.
+    count = thread_info->free_page_count;
+    count--;
+    *available_page_address = thread_info->free_page_cache[count];
+    thread_info->free_page_count = count;
+    lock_pfn(*available_page_address);
+    return TRUE;
 }
 
 // TODO change this to move from FREE list to cache
+// TODO try again to grab batch for cache while resolving hard fault -- just don't get too greedy
 BOOL move_batch_from_standby_to_cache(PTHREAD_INFO thread_info) {
     PPFN pfn;
 
@@ -345,6 +352,7 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, PTHREAD_INFO user_thread_info) {
         // Here are the kernel VA spaces for our reads and our index keeping track of which
         // ones have been mapped so far.
         // First: if we need to unmap ALL the kernel read VAs, we will do so in one big batch
+        // TODO: turn into function, move to more strategic locations so we're not over-calling
         if (user_thread_info->kernel_va_index == NUM_KERNEL_READ_ADDRESSES) {
             if (!MapUserPhysicalPagesScatter(user_thread_info->kernel_va_spaces,
                 NUM_KERNEL_READ_ADDRESSES, NULL)) DebugBreak();

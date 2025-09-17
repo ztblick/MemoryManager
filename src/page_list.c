@@ -39,25 +39,20 @@ VOID add_page_to_free_lists(PPFN page, ULONG first_index) {
     }
 }
 
+// Re-fills the thread's free page cache, if possible.
 // First index is set by the thread ID -- we will mod it by our number of lists to guarantee it is in bounds.
-BOOL try_get_free_page(PPFN *address_to_save, ULONG first_index) {
+BOOL try_get_free_pages(PTHREAD_INFO thread_info) {
 
     // First, just see if there are ANY free pages.
     if (free_lists.page_count == 0) return FALSE;
 
     ULONG attempts = 0;
     ULONG count = free_lists.number_of_lists;
-    ULONG index = first_index % count;
-    PPFN page;
+    ULONG index = thread_info->thread_id % count;
 
     while (attempts < count) {
 
-        page = try_pop_from_free_list(index);
-        if (page != NULL) {
-            *address_to_save = page;
-            lock_pfn(page);
-            return TRUE;
-        }
+        if (try_refill_cache_from_free_list(index, thread_info)) return TRUE;
 
         // Increment attempts and wrap index (if necessary)
         index++;
@@ -67,27 +62,42 @@ BOOL try_get_free_page(PPFN *address_to_save, ULONG first_index) {
     return FALSE;
 }
 
-PPFN try_pop_from_free_list(ULONG list_index) {
+BOOL try_refill_cache_from_free_list(ULONG list_index, PTHREAD_INFO thread_info) {
 
     ASSERT (list_index < free_lists.number_of_lists);
     PPAGE_LIST list = &free_lists.list_array[list_index];
 
     // Check for pages, and then try for lock
-    if (is_page_list_empty(list)) return NULL;
-    if (!try_lock_list_exclusive(list)) return NULL;
+    if (is_page_list_empty(list)) return FALSE;
+    if (!try_lock_list_exclusive(list)) return FALSE;
     if (is_page_list_empty(list)) {
         unlock_list_exclusive(list);
-        return NULL;
+        return FALSE;
     }
 
-    // With the lock acquired, we can remove our entry
-    PPFN page = remove_from_head_of_list(list);
+    // Grab a batch of pages from the free list
+    PPFN first_page;
+    USHORT batch_size = remove_batch_from_list_head_exclusive(list,
+                                                    &first_page,
+                                                    FREE_PAGE_CACHE_SIZE);
     unlock_list_exclusive(list);
+    if (batch_size == 0) return FALSE;
+
+    // Now that we have a batch of pages, let's add it to our cache
+    // Add all removed pages to the free cache and unlock them
+    PPFN pfn = first_page;
+    PPFN next;
+    for (ULONG64 i = 0; i < batch_size; i++) {
+        thread_info->free_page_cache[i] = pfn;
+        next = pfn->flink;
+        pfn = next;
+    }
+    thread_info->free_page_count = batch_size;
 
     // Update metadata and return
-    decrement_free_lists_total_count();
-    decrement_available_count();
-    return page;
+    decrease_free_lists_total_count(batch_size);
+    decrease_available_count(batch_size);
+    return TRUE;
 }
 
 VOID initialize_page_list(PPAGE_LIST list) {
@@ -111,8 +121,16 @@ VOID increment_free_lists_total_count(VOID) {
     InterlockedIncrement64(&free_lists.page_count);
 }
 
+VOID decrease_free_lists_total_count(LONG64 amt) {
+    InterlockedAdd64(&free_lists.page_count, -amt);
+}
+
 VOID decrement_free_lists_total_count(VOID) {
     InterlockedDecrement64(&free_lists.page_count);
+}
+
+VOID increase_free_lists_total_count(LONG64 amt) {
+    InterlockedAdd64(&free_lists.page_count, amt);
 }
 
 VOID increment_list_size(PPAGE_LIST list) {
@@ -330,7 +348,7 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
     PPFN pfn, list_head, batch_first, batch_last;
 
     // The number of pages we have added to our batch
-    ULONG64 num_pages_batched = 0;
+    LONG64 num_pages_batched = 0;
 
     // Wait until the list can be locked shared and the head can be locked, too
     while (attempts < MAX_HARD_ACCESS_ATTEMPTS) {
@@ -436,7 +454,59 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
     num_pages_batched--;
 
     // Decrease the list size by the number of batched pages
-    change_list_size(list, 0 - num_pages_batched);
+    change_list_size(list, -num_pages_batched);
+
+    // We will now save the address of the first page in our batch
+    *address_of_first_page = batch_first;
+
+    return num_pages_batched;
+}
+
+// Assumes the list is already locked exclusive. Does not unlock the list.
+ULONG64 remove_batch_from_list_head_exclusive(PPAGE_LIST list,
+                                    PPFN* address_of_first_page,
+                                    ULONG64 capacity) {
+
+    // PFN variables for list removal
+    PPFN list_head = list->head,
+        batch_first = list_head->flink,
+        batch_last = batch_first,
+        pfn = batch_first;
+
+    // The number of pages we have added to our batch
+    LONG64 num_pages_batched = 0;
+
+    // Special case: if there are no pages, unlock and return 0
+    if (batch_first == list_head) return 0;
+
+    // While we want pages and there are pages available, we will continue to expand our batch
+    for ( ; num_pages_batched <= capacity; num_pages_batched++) {
+
+        // If the next page is the head, we have reached the end and locked ALL the pages on the list.
+        if (pfn == list_head) break;
+
+        // We have locked the next page. Hooray! Let's move on to the next page.
+        batch_last = pfn;
+        pfn = pfn->flink;
+    }
+
+    // If no pages could be batched, we must have not been able to lock the first page
+    if (num_pages_batched == 0) return 0;
+
+    // If ONE page was locked, we still won't return any
+    if (num_pages_batched == 1) return 0;
+
+    // Now the fun case! We have pages to flush! We will remove them from the list, then add them to our array
+    // Update flinks/blinks to remove the batch from the list and add them to the temp list
+    list_head->flink = batch_last;
+    batch_last->blink = list_head;
+
+    // Since we did not include batch_last, which was counted,
+    // we will need to decrement our count
+    num_pages_batched--;
+
+    // Decrease the list size by the number of batched pages
+    change_list_size(list, -num_pages_batched);
 
     // We will now save the address of the first page in our batch
     *address_of_first_page = batch_first;
