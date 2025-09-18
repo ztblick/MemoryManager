@@ -192,6 +192,7 @@ void initialize_page_lists(void) {
     ULONG count = vm.num_free_lists;
     free_lists.number_of_lists = count;
     free_lists.page_count = 0;
+    free_lists.free_list_locks = 0;
     free_lists.list_array = zero_malloc(sizeof(PAGE_LIST) * count);
     for (int i = 0; i < count; i++) {
         initialize_page_list(&free_lists.list_array[i]);

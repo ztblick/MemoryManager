@@ -8,6 +8,8 @@
 
 #define MAX_PAGES_TO_MAP  2
 
+#define PAGE_JUMP_PROBABILITY 0.125
+
 /*
  *  Malloc the given amount of space, then zero the memory.
  */
@@ -61,3 +63,8 @@ PULONG_PTR get_arbitrary_va(ULONG64 *thread_random_seed);
     Gets the next VA from the user state. Updates the user state as necessary.
  */
 PULONG_PTR get_next_va(PULONG_PTR previous_va, PTHREAD_INFO thread_info);
+
+/*
+    Function used to simulate randomness.
+ */
+ULONG64 xorshift64(ULONG64 *seed);

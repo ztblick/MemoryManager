@@ -4,6 +4,9 @@ Current goal:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 NEXT SUB-GOALS:
 
+- Modify user consumption simulation to require 200 MB/s of throughput. Keep up with this!
+    - Once I can comfortably keep pages available for this rate of consumption, we can aim higher.
+
 - Evaluate the quality of the program (on with different ratios of physical to virtual)
   with aging and scheduling toggled on and off.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -12,8 +15,6 @@ SUBSEQUENT GOALS:
 - Update READ_ME to reflect recent changes: free page caches, batch removals, user access simulation
 
 - Batch prune from standby to free lists.
-
-- Update batch trims to use new batched removals with fewer list lock attempts.
 
 - Speculative batched reads from disk.
 

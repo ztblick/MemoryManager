@@ -10,9 +10,9 @@
 // These switches turn on particular configurations for the program.
 #define LOGGING_MODE                0       // Outputs statistics to the console
 #define RUN_FOREVER                 0       // Does not stop user threads
-#define STATS_MODE                  0       // Collects data on page consumption
+#define STATS_MODE                  1       // Collects data on page consumption
 #define AGING                       1       // Initiates aging of PTEs when accessed / trimmed
-#define SCHEDULING                  0       // Adds a scheduling thread
+#define SCHEDULING                  1       // Adds a scheduling thread
 #define USER_SIMULATION             1       // Changes how memory is accessed (if 0, entirely random)
 
 // This is our overarching VM state struct, which will package together information
@@ -66,6 +66,7 @@ typedef struct __stats {
     volatile LONG64 wait_time;
     volatile LONG64 hard_faults_missed;
     LONGLONG timer_frequency;
+    int scheduled_trims;
 } STATS, *PSTATS;
 
 // Our global statistics variable
@@ -77,7 +78,7 @@ extern STATS stats;
 #define DEFAULT_FREE_LIST_COUNT         16
 
 // We will begin trimming and writing when our standby + free page count falls below this threshold.
-#define START_TRIMMING_THRESHOLD        (10000)
+#define START_TRIMMING_THRESHOLD        (1024)
 
 // These will change as we decide how many pages to write, read, or trim at once.
 #define MAX_WRITE_BATCH_SIZE            4096

@@ -5,6 +5,15 @@ MemoryManager 8 8000000 524288 262144
 MemoryManager 8 8000000 524288 1048576
 
 
-Old tests:
+Old test:
 
 MemoryManager 8 1000000 262144 131072
+
+
+
+Reasonable comsumption rate tests:
+
+
+MemoryManager 8 40000000 524288 65536
+MemoryManager 8 40000000 524288 262144
+MemoryManager 8 40000000 524288 1048576

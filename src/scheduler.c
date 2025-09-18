@@ -47,8 +47,8 @@ VOID schedule_tasks(VOID) {
     DWORD status;
     LONGLONG previous_timestamp;
     LONGLONG current_timestamp = get_timestamp();
-    ULONG64 previous_available_count;
-    ULONG64 current_available_count = stats.n_available;
+    ULONG64 previous_hard_fault_count = 0;
+    ULONG64 current_hard_fault_count = 0;
     double consumption_rate;
     memset(&consumption_rates, 0, sizeof(consumption_data) * NUMBER_OF_SAMPLES);
 
@@ -58,7 +58,7 @@ VOID schedule_tasks(VOID) {
 
         // Update statistics for next iteration
         previous_timestamp = current_timestamp;
-        previous_available_count = current_available_count;
+        previous_hard_fault_count = current_hard_fault_count;
 
         // Print the statistics to the log, if necessary
 #if LOGGING_MODE
@@ -75,23 +75,25 @@ VOID schedule_tasks(VOID) {
         // Get data for this iteration
         current_timestamp = get_timestamp();
         double elapsed = get_time_difference(current_timestamp, previous_timestamp);
-        current_available_count = stats.n_available;
+        current_hard_fault_count = stats.n_hard;
 
         // Get the consumption rate of available pages
-        consumption_rate = ((double) previous_available_count - (double) current_available_count) / elapsed;
-        if (consumption_rate < 0) continue;
+        if (current_hard_fault_count == previous_hard_fault_count) continue;
+        consumption_rate = (double) (current_hard_fault_count - previous_hard_fault_count) / elapsed;
 
 #if STATS_MODE
-        add_consumption_data(consumption_rate, current_available_count);
+        add_consumption_data(consumption_rate, current_hard_fault_count);
 #endif
 
         // Make a projection for the state of our machine after writing pages to disk
         double expected_consumption_during_write = consumption_rate * WRITE_DURATION_IN_MILLISECONDS / 1000.0;
-        double expected_pages_after_write = (double) current_available_count - expected_consumption_during_write;
+        double expected_pages_after_write = (double) stats.n_available - expected_consumption_during_write;
 
         // If there is no need to write, don't write!
-        if (expected_pages_after_write < AVAILABLE_PAGE_THRESHOLD) SetEvent(initiate_trimming_event);
-
+        if (expected_pages_after_write < AVAILABLE_PAGE_THRESHOLD) {
+            stats.scheduled_trims++;
+            SetEvent(initiate_trimming_event);
+        }
         // If there is a need, figure out how big the need is
         stats.writer_batch_target = *stats.n_modified;
         if (expected_pages_after_write > 0) {
@@ -111,11 +113,15 @@ VOID print_consumption_data(VOID) {
         ULONG64 rate = consumption_rates.data[i].consumption_rate;
         total_rate_sum += rate;
         largest_rate = max(rate, largest_rate);
+
+        printf("Consumption rate for timestep %d: %llu MB / s\n", i,
+                rate * (1000 / SCHEDULER_DELAY_IN_MILLISECONDS) * PAGE_SIZE / MB(1));
     }
     double average_rate = (double) total_rate_sum / (double) count;
 
     printf("Average rate: %.3f pages / s\n", average_rate);
     printf("Highest rate: %.3f pages / sec\n\n", largest_rate);
+    printf("Scheduled trims: %d\n\n", stats.scheduled_trims);
     printf("~~~~~~~~~~~~~~~~~~~~~\n");
 
 }

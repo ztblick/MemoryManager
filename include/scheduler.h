@@ -14,7 +14,7 @@
 #include "disk.h"
 #include "threads.h"
 
-#define SCHEDULER_DELAY_IN_MILLISECONDS         1000
+#define SCHEDULER_DELAY_IN_MILLISECONDS         500
 
 #define NUMBER_OF_CONSUMPTION_SAMPLES       512
 

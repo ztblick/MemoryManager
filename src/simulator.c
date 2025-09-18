@@ -6,6 +6,15 @@
 
 #include <sys/stat.h>
 
+void do_work_to_slow_consumption(void) {
+    int WORK_TIME = 10;
+    ULONG64 data = 19941994;
+    for (int j = 0; j < WORK_TIME; ++j) {
+        YieldProcessor();
+        xorshift64(&data);
+    }
+}
+
 void run_user_app_simulation(PTHREAD_INFO user_thread_info) {
 
     // Wait for system start event before beginning!
@@ -44,6 +53,9 @@ void run_user_app_simulation(PTHREAD_INFO user_thread_info) {
 #if AGING
                 set_accessed_bit(arbitrary_va);
 #endif
+                // Simulating "doing something" before accessing next VA
+                do_work_to_slow_consumption();
+
             }
 
             // If we fault, we set this flag to go around again.

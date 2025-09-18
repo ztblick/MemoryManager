@@ -32,6 +32,7 @@ typedef struct __page_list_array {
     ULONG number_of_lists;
     volatile LONG64 page_count;
     PAGE_LIST *list_array;
+    LONG64 free_list_locks;
 } PAGE_LIST_ARRAY, *PPAGE_LIST_ARRAY;
 
 extern PAGE_LIST_ARRAY free_lists;
@@ -150,6 +151,12 @@ PPFN try_pop_from_list(PPAGE_LIST list);
 VOID lock_list_shared(PPAGE_LIST list);
 VOID unlock_list_shared(PPAGE_LIST list);
 BOOL try_lock_list_shared(PPAGE_LIST list);
+
+/*
+    Locks for free lists
+ */
+VOID unlock_free_list(ULONG64 index);
+BOOL try_lock_free_list(ULONG64 index);
 
 /*
  *  Waits until it can acquire the lock on a given page list!

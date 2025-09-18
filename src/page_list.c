@@ -4,7 +4,6 @@
 
 #include "../include/page_list.h"
 
-PAGE_LIST_ARRAY free_lists;
 PAGE_LIST zero_list;
 PAGE_LIST modified_list;
 PAGE_LIST standby_list;
@@ -19,22 +18,20 @@ VOID add_page_to_free_lists(PPFN page, ULONG first_index) {
 
         // Scan through free lists, finding one you can lock
         // once locked, add the page to the tail
-        list = &free_lists.list_array[index];
-
-        if (!try_lock_list_exclusive(list)) {
+        if (!try_lock_free_list(index)) {
             index = (index + 1) % count;
             continue;
         }
 
+        list = &free_lists.list_array[index];
         insert_to_list_tail(list, page);
-        unlock_list_exclusive(list);
+        unlock_free_list(index);
 
         // Update metadata and return
 #if DEBUG
         increment_list_size(list);
 #endif
         increment_free_lists_total_count();
-
         return;
     }
 }
@@ -69,9 +66,9 @@ BOOL try_refill_cache_from_free_list(ULONG list_index, PTHREAD_INFO thread_info)
 
     // Check for pages, and then try for lock
     if (is_page_list_empty(list)) return FALSE;
-    if (!try_lock_list_exclusive(list)) return FALSE;
+    if (!try_lock_free_list(list_index)) return FALSE;
     if (is_page_list_empty(list)) {
-        unlock_list_exclusive(list);
+        unlock_free_list(list_index);
         return FALSE;
     }
 
@@ -80,7 +77,7 @@ BOOL try_refill_cache_from_free_list(ULONG list_index, PTHREAD_INFO thread_info)
     USHORT batch_size = remove_batch_from_list_head_exclusive(list,
                                                     &first_page,
                                                     FREE_PAGE_CACHE_SIZE);
-    unlock_list_exclusive(list);
+    unlock_free_list(list_index);
     if (batch_size == 0) return FALSE;
 
     // Now that we have a batch of pages, let's add it to our cache
@@ -629,6 +626,17 @@ VOID insert_to_list_tail(PPAGE_LIST list, PPFN page) {
     page->blink = blink;
     blink->flink = page;
     head->blink = page;
+}
+
+BOOL try_lock_free_list(ULONG64 index) {
+    if (InterlockedBitTestAndSet64(&free_lists.free_list_locks, index) == 1)
+        return FALSE;
+    return TRUE;
+}
+
+VOID unlock_free_list(ULONG64 index) {
+    BOOL result = InterlockedBitTestAndReset64(&free_lists.free_list_locks, index);
+    ASSERT(result == TRUE);
 }
 
 #if DEBUG

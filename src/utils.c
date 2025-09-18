@@ -72,7 +72,7 @@ double get_time_difference(LONGLONG end, LONGLONG start) {
     return (double) (end - start) / (double) stats.timer_frequency;
 }
 
-uint64_t xorshift64(ULONG64 *seed) {
+ULONG64 xorshift64(ULONG64 *seed) {
     uint64_t x = *seed;
     x ^= x >> 12;
     x ^= x << 25;
@@ -86,12 +86,11 @@ PULONG_PTR get_arbitrary_va(ULONG64 *thread_random_seed) {
     // Begin at the start of our VA region.
     PULONG_PTR p = vm.application_va_base;
 
+#if USER_SIMULATION
     ULONG64 random_value = xorshift64(thread_random_seed);
-
-    // This is the old randomness calculation -- for comparing to
-    // old runtime analysis
-    // ULONG64 random_value = rand () * rand () * rand ();
-
+#else
+    ULONG64 random_value = rand () * rand () * rand ();
+#endif
     // Choose index safely (mod handles non power-of-two sizes)
     size_t index = random_value % vm.va_size_in_pointers;
 
@@ -103,36 +102,21 @@ PULONG_PTR get_arbitrary_va(ULONG64 *thread_random_seed) {
 
 
 PULONG_PTR get_next_va(PULONG_PTR previous_va, PTHREAD_INFO thread_info) {
-    USHORT state = thread_info->state;
-    PULONG_PTR new_va;
 
-    if (state == USER_STATE_INCREMENT) {
-        new_va = (previous_va + 1);
-        if (new_va >= vm.application_va_base + vm.va_size_in_pointers)
-            new_va = vm.application_va_base;
-    }
+    // Generate the next VA
+    PULONG_PTR new_va = (previous_va + 1);
+    if (new_va >= vm.application_va_base + vm.va_size_in_pointers)
+        new_va = vm.application_va_base;
 
-    else if (state == USER_STATE_DECREMENT) {
-        new_va = previous_va;
-        if (new_va == vm.application_va_base)
-            new_va = vm.application_va_base + vm.va_size_in_pointers;
-        new_va = new_va - 1;
-    }
+    // If we are still within a given page, return this VA and continue on.
+    if ((ULONG64) new_va % PAGE_SIZE != 0) return new_va;
 
-    // Otherwise, we are in our random state!
-    else new_va = get_arbitrary_va(&thread_info->random_seed);
+    // Otherwise, we will move on to the next page with a certain probability p
+    // And we will jump to a random page with a probability (1-p)
 
-    // Before we return, we will move into a new state (possibly)
     double p = (double) (xorshift64(&thread_info->random_seed) >> 11) * (1.0 / 9007199254740992.0);
-    if (p < transition_probabilities[state][USER_STATE_INCREMENT])
-        state = USER_STATE_INCREMENT;
-    else if (p < transition_probabilities[state][USER_STATE_INCREMENT] + transition_probabilities[state][USER_STATE_DECREMENT])
-        state = USER_STATE_DECREMENT;
-    else
-        state = USER_STATE_RANDOM;
-
-    // Update to the new state
-    thread_info->state = state;
+    if (p < PAGE_JUMP_PROBABILITY)
+        new_va = get_arbitrary_va(&thread_info->random_seed);
 
     return new_va;
 }
