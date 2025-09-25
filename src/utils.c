@@ -38,28 +38,26 @@ void unmap_pages(ULONG64 num_pages, PULONG_PTR va) {
     }
 }
 
+VOID change_volatile_data(volatile LONG64 *pdata_to_change, LONG64 delta) {
+    if (delta == 1) InterlockedIncrement64(pdata_to_change);
+    else if (delta == -1) InterlockedDecrement64(pdata_to_change);
+    else InterlockedAdd64(pdata_to_change, delta);
+}
+
 VOID increment_available_count(VOID) {
-    InterlockedIncrement64(&stats.n_available);
-}
-
-VOID increase_available_count(LONG64 amt) {
-    InterlockedAdd64(&stats.n_available, amt);
-}
-
-VOID decrease_available_count(LONG64 amt) {
-    LONG64 old_value = stats.n_available;
-    InterlockedAdd64(&stats.n_available, -amt);
-
-    // If we have crossed our trimming threshold, start trimming!
-    if (old_value > START_TRIMMING_THRESHOLD &&
-        old_value - amt <= START_TRIMMING_THRESHOLD) {
-        SetEvent(initiate_trimming_event);
-    }
+    change_volatile_data(&stats.n_available, 1);
 }
 
 VOID decrement_available_count(VOID) {
-    LONG64 new_count = InterlockedDecrement64(&stats.n_available);
-    if (new_count == START_TRIMMING_THRESHOLD) SetEvent(initiate_trimming_event);
+    change_volatile_data(&stats.n_available, -1);
+}
+
+VOID increase_available_count(LONG64 amt) {
+    change_volatile_data(&stats.n_available, amt);
+}
+
+VOID decrease_available_count(LONG64 amt) {
+    change_volatile_data(&stats.n_available, -amt);
 }
 
 LONGLONG get_timestamp(VOID) {
@@ -101,7 +99,7 @@ PULONG_PTR get_arbitrary_va(ULONG64 *thread_random_seed) {
 }
 
 
-PULONG_PTR get_next_va(PULONG_PTR previous_va, PTHREAD_INFO thread_info) {
+PULONG_PTR get_next_va(PULONG_PTR previous_va, PUSER_THREAD_INFO thread_info) {
 
     // Generate the next VA
     PULONG_PTR new_va = (previous_va + 1);

@@ -18,11 +18,11 @@
 #include "disk.h"
 #include "threads.h"
 #include "trimmer.h"
-#include "writer.h"
 #include "page_fault_handler.h"
 #include "ager.h"
 #include "scheduler.h"
 #include "simulator.h"
+#include "writer.h"
 
 /*
  *  Initialize all global data structures. Called at startup.

@@ -10,10 +10,20 @@
 // These switches turn on particular configurations for the program.
 #define LOGGING_MODE                0       // Outputs statistics to the console
 #define RUN_FOREVER                 0       // Does not stop user threads
-#define STATS_MODE                  1       // Collects data on page consumption
+#define STATS_MODE                  0       // Collects data on page consumption
 #define AGING                       1       // Initiates aging of PTEs when accessed / trimmed
 #define SCHEDULING                  1       // Adds a scheduling thread
 #define USER_SIMULATION             1       // Changes how memory is accessed (if 0, entirely random)
+#define DO_WORK_TO_SLOW_CONSUMPTION 0       // Adds additional work after successful access to VA
+
+#define NUM_WORKER_THREADS          5       // Writing, trimming, pruning, aging, scheduling
+
+// Default runtimes to guide batch sizes and event signalling.
+#define DEFAULT_WRITE_DURATION                      0.01
+#define DEFAULT_TRIM_DURATION                       0.01
+#define AVAILABLE_PAGE_THRESHOLD                    4096
+#define ADDITIONAL_PAGE_BUFFER                      128
+#define DEFAULT_PAGE_CONSUMPTION_RATE               (1.0 * MB(300) / PAGE_SIZE)
 
 // This is our overarching VM state struct, which will package together information
 // about the defining characteristics of each test, such as the number of physical pages
@@ -55,8 +65,7 @@ extern VM vm;
 
 // Statistics struct
 typedef struct __stats {
-    LONG64 writer_batch_target;
-    LONG64 trimmer_batch_target;
+    double page_consumption_per_second;
     volatile LONG64 n_available;
     volatile LONG64 *n_free;
     volatile LONG64 *n_modified;
@@ -66,7 +75,7 @@ typedef struct __stats {
     volatile LONG64 wait_time;
     volatile LONG64 hard_faults_missed;
     LONGLONG timer_frequency;
-    int scheduled_trims;
+    double worker_runtimes[NUM_WORKER_THREADS];
 } STATS, *PSTATS;
 
 // Our global statistics variable
@@ -78,11 +87,11 @@ extern STATS stats;
 #define DEFAULT_FREE_LIST_COUNT         16
 
 // We will begin trimming and writing when our standby + free page count falls below this threshold.
-#define START_TRIMMING_THRESHOLD        (1024)
+#define LOW_PAGE_THRESHOLD              (512)
 
 // These will change as we decide how many pages to write, read, or trim at once.
 #define MAX_WRITE_BATCH_SIZE            4096
-#define MIN_WRITE_BATCH_SIZE            16
+#define MIN_WRITE_BATCH_SIZE            1
 #define MAX_READ_BATCH_SIZE             1
 #define MAX_TRIM_BATCH_SIZE             2048
 #define MAX_FREE_BATCH_SIZE             1

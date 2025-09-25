@@ -38,7 +38,7 @@ VOID add_page_to_free_lists(PPFN page, ULONG first_index) {
 
 // Re-fills the thread's free page cache, if possible.
 // First index is set by the thread ID -- we will mod it by our number of lists to guarantee it is in bounds.
-BOOL try_get_free_pages(PTHREAD_INFO thread_info) {
+BOOL try_get_free_pages(PUSER_THREAD_INFO thread_info) {
 
     // First, just see if there are ANY free pages.
     if (free_lists.page_count == 0) return FALSE;
@@ -59,7 +59,7 @@ BOOL try_get_free_pages(PTHREAD_INFO thread_info) {
     return FALSE;
 }
 
-BOOL try_refill_cache_from_free_list(ULONG list_index, PTHREAD_INFO thread_info) {
+BOOL try_refill_cache_from_free_list(ULONG list_index, PUSER_THREAD_INFO thread_info) {
 
     ASSERT (list_index < free_lists.number_of_lists);
     PPAGE_LIST list = &free_lists.list_array[list_index];
@@ -85,6 +85,9 @@ BOOL try_refill_cache_from_free_list(ULONG list_index, PTHREAD_INFO thread_info)
     PPFN pfn = first_page;
     PPFN next;
     for (ULONG64 i = 0; i < batch_size; i++) {
+#if DEBUG
+        validate_pfn(pfn);
+#endif
         thread_info->free_page_cache[i] = pfn;
         next = pfn->flink;
         pfn = next;
@@ -300,6 +303,10 @@ PPFN try_pop_from_list(PPAGE_LIST list) {
         return NULL;
     }
 
+#if DEBUG
+    validate_pfn(page);
+#endif
+
     // Special case: if the flink's flink is the head, we can remove this page -- the LAST page
     PPFN flink = page->flink;
     if (flink == head) {
@@ -320,6 +327,10 @@ PPFN try_pop_from_list(PPAGE_LIST list) {
         unlock_pfn(page);
         return NULL;
     }
+
+#if DEBUG
+    validate_pfn(flink);
+#endif
 
     // If we got here -- we were able to acquire all three locks!
     // Remove the page, update and unlock the head/flink, and unlock the list
@@ -412,6 +423,10 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
             cannot_acquire_lock = TRUE;
             break;
         }
+
+#if DEBUG
+        validate_pfn(pfn);
+#endif
 
         // We have locked the next page. Hooray! Let's move on to the next page.
         batch_last = pfn;
@@ -515,6 +530,11 @@ VOID insert_list_to_tail_list(PPAGE_LIST destination_list, PPAGE_LIST origin_lis
     PPFN first = origin_list->head->flink;
     PPFN last = origin_list->head->blink;
 
+#if DEBUG
+    validate_pfn(first);
+    validate_pfn(last);
+#endif
+
     PPFN head;
     PPFN tail;
 
@@ -545,6 +565,10 @@ VOID insert_list_to_tail_list(PPAGE_LIST destination_list, PPAGE_LIST origin_lis
             wait_time = max(wait_time << 1, wait_time);
             continue;
         }
+
+#if DEBUG
+        validate_pfn(tail);
+#endif
 
         // Yay! We have locked the list, head, and tail
         break;

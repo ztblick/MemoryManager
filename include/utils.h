@@ -62,7 +62,7 @@ PULONG_PTR get_arbitrary_va(ULONG64 *thread_random_seed);
 /*
     Gets the next VA from the user state. Updates the user state as necessary.
  */
-PULONG_PTR get_next_va(PULONG_PTR previous_va, PTHREAD_INFO thread_info);
+PULONG_PTR get_next_va(PULONG_PTR previous_va, PUSER_THREAD_INFO thread_info);
 
 /*
     Function used to simulate randomness.

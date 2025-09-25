@@ -4,10 +4,6 @@
 
 #include "../include/scheduler.h"
 
-#define WRITE_DURATION_IN_MILLISECONDS      10
-#define AVAILABLE_PAGE_THRESHOLD            4096
-#define ADDITIONAL_PAGE_BUFFER              128
-
 consumption_buffer consumption_rates;
 
 VOID print_statistics(VOID) {
@@ -77,29 +73,18 @@ VOID schedule_tasks(VOID) {
         double elapsed = get_time_difference(current_timestamp, previous_timestamp);
         current_hard_fault_count = stats.n_hard;
 
-        // Get the consumption rate of available pages
-        if (current_hard_fault_count == previous_hard_fault_count) continue;
-        consumption_rate = (double) (current_hard_fault_count - previous_hard_fault_count) / elapsed;
+        // ************************************************
+        // * Log the consumption rate.
+        // * Consumption rate is measured in faults / sec *
+        // ************************************************
+        consumption_rate = stats.page_consumption_per_second;
+        if (current_hard_fault_count > previous_hard_fault_count)
+            consumption_rate = (double) (current_hard_fault_count - previous_hard_fault_count) / elapsed;
+        stats.page_consumption_per_second = consumption_rate;
 
 #if STATS_MODE
         add_consumption_data(consumption_rate, current_hard_fault_count);
 #endif
-
-        // Make a projection for the state of our machine after writing pages to disk
-        double expected_consumption_during_write = consumption_rate * WRITE_DURATION_IN_MILLISECONDS / 1000.0;
-        double expected_pages_after_write = (double) stats.n_available - expected_consumption_during_write;
-
-        // If there is no need to write, don't write!
-        if (expected_pages_after_write < AVAILABLE_PAGE_THRESHOLD) {
-            stats.scheduled_trims++;
-            SetEvent(initiate_trimming_event);
-        }
-        // If there is a need, figure out how big the need is
-        stats.writer_batch_target = *stats.n_modified;
-        if (expected_pages_after_write > 0) {
-            stats.writer_batch_target = (LONG64) expected_consumption_during_write + ADDITIONAL_PAGE_BUFFER;
-        }
-        SetEvent(initiate_writing_event);
     }
 }
 
@@ -114,14 +99,14 @@ VOID print_consumption_data(VOID) {
         total_rate_sum += rate;
         largest_rate = max(rate, largest_rate);
 
-        printf("Consumption rate for timestep %d: %llu MB / s\n", i,
-                rate * (1000 / SCHEDULER_DELAY_IN_MILLISECONDS) * PAGE_SIZE / MB(1));
+        printf("Consumption rate for timestep %d:\t%llu MB/s\n", i,
+                rate * PAGE_SIZE / MB(1));
     }
     double average_rate = (double) total_rate_sum / (double) count;
 
-    printf("Average rate: %.3f pages / s\n", average_rate);
-    printf("Highest rate: %.3f pages / sec\n\n", largest_rate);
-    printf("Scheduled trims: %d\n\n", stats.scheduled_trims);
+    printf("~~~~~~~~~~~~~~~~~~~~~\n");
+    printf("\nAverage rate: %.3f MB/s\n", average_rate * PAGE_SIZE / MB(1));
+    printf("Highest rate: %.3f MB/s\n", largest_rate * PAGE_SIZE / MB(1));
     printf("~~~~~~~~~~~~~~~~~~~~~\n");
 
 }

@@ -6,6 +6,11 @@
 
 PPFN PFN_array;
 
+VOID validate_pfn(PPFN pfn) {
+    ASSERT(pfn >= PFN_array);
+    ASSERT (pfn <= PFN_array + vm.max_frame_number);
+}
+
 VOID create_zeroed_pfn(PPFN new_pfn) {
 
     // Here, we will create a temporary PFN. We will read its data into
@@ -24,7 +29,7 @@ VOID create_zeroed_pfn(PPFN new_pfn) {
 }
 
 ULONG_PTR get_frame_from_PFN(PPFN pfn) {
-    ASSERT (pfn >= PFN_array && pfn <= PFN_array + vm.max_frame_number);
+    validate_pfn(pfn);
     return pfn - PFN_array;
 }
 
@@ -123,7 +128,6 @@ VOID unlock_pfn(PPFN pfn) {
 
     // Assert that we never acquire recursively
     ASSERT(rtl_cs->RecursionCount == 1);
-
     LeaveCriticalSection(&pfn->crit_sec);
 #else
     unlock(&pfn->lock);

@@ -6,6 +6,13 @@
 
 #include "config.h"
 
+// Thread IDs
+#define TRIMMING_THREAD_ID      0
+#define WRITING_THREAD_ID       1
+#define PRUNING_THREAD_ID       2
+#define SCHEDULING_THREAD_ID    3
+#define AGING_THREAD_ID         4
+
 // Thread information
 #define DEFAULT_SECURITY                ((LPSECURITY_ATTRIBUTES) NULL)
 #define DEFAULT_STACK_SIZE              0
@@ -13,33 +20,30 @@
 #define AUTO_RESET                      FALSE
 #define MANUAL_RESET                    TRUE
 
-#define USER_STATE_INCREMENT            0
-#define USER_STATE_DECREMENT            1
-#define USER_STATE_RANDOM               2
-#define NUM_USER_STATES                 3
-
 #define ACTIVE_EVENT_INDEX              0
 #define EXIT_EVENT_INDEX                1
 
 #define NUM_KERNEL_READ_ADDRESSES       (16)
 
-#define DEFAULT_WRITE_FREQUENCY         10
-
+// The size of each user thread's free page cache
 #define FREE_PAGE_CACHE_SIZE            64
+
+// Our smoothing factor, which helps us generate the exponential moving weighted average
+// for the thread runtimes (supporting scheduling)
+#define EWMA_SMOOTHING_FACTOR           0.5
 
 // User thread struct. This will contain a set of kernel VA spaces. Each thread
 // will manage many, which will allow us to remove locks and contention on them.
 // Additionally, it will allow us to delay unmap calls, giving us the opportunity
 // to batch them.
 typedef struct _USER_THREAD_INFO {
-    USHORT state;                                                // Indicates how the user thread is accessing VAs.
     ULONG thread_id;
     ULONG kernel_va_index;
     PULONG_PTR kernel_va_spaces[NUM_KERNEL_READ_ADDRESSES];
     ULONG64 random_seed;
     PVOID free_page_cache[FREE_PAGE_CACHE_SIZE];
     USHORT free_page_count;
-} THREAD_INFO, *PTHREAD_INFO;
+} USER_THREAD_INFO, *PUSER_THREAD_INFO;
 
 // Events
 extern HANDLE system_start_event;
@@ -59,19 +63,10 @@ extern HANDLE debug_thread;
 
 // Thread IDs
 extern PULONG user_thread_ids;
-extern ULONG scheduling_thread_id;
-extern ULONG aging_thread_id;
-extern ULONG trimming_thread_id;
-extern ULONG writing_thread_id;
-
-// The frequency for the writing thread
-extern ULONG64 trim_and_write_frequency;
+extern PULONG worker_thread_ids;
 
 // The info struct for each user thread.
-extern PTHREAD_INFO user_thread_info;
-
-// The transition probabilities for the different states
-extern double transition_probabilities[NUM_USER_STATES][NUM_USER_STATES];
+extern PUSER_THREAD_INFO user_thread_info;
 
 #define NUMBER_OF_SAMPLES       512
 
@@ -105,3 +100,9 @@ VOID push_to_samples(batch_sample *sample, ULONG thread_id);
  *  Prints out data on statistics
  */
 VOID analyze_and_print_statistics(ULONG thread_id);
+
+/*
+    Updates the estimated job time using the most-recent job time.
+    Calculates the estimate using weighted moving averages (EWMA).
+ */
+VOID update_estimated_job_time(USHORT thread_id, double);

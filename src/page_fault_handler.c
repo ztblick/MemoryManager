@@ -1,34 +1,11 @@
 
 #include "../include/page_fault_handler.h"
 
+#include <sys/stat.h>
+
 // Masks off the last bits to round the VA up to the previous page boundary.
 PULONG_PTR get_beginning_of_VA_region(PULONG_PTR va) {
     return (PULONG_PTR) ((ULONG_PTR) va & ~(PAGE_SIZE - 1));
-}
-
-BOOL try_acquire_page_from_list(PPFN* available_page_address, PPAGE_LIST list) {
-
-    // We will attempt our shared lock approach:
-    ULONG attempts = 0;
-    ULONG wait_time = 1;
-
-    while (attempts < MAX_HARD_ACCESS_ATTEMPTS) {
-        if (is_page_list_empty(list)) return FALSE;
-
-        attempts++;
-        wait_time = (wait_time << 1);
-
-        *available_page_address = try_pop_from_list(list);
-        if (*available_page_address != NULL) {
-            decrement_available_count();
-            if (is_page_list_empty(&standby_list)) ResetEvent(standby_pages_ready_event);
-            return TRUE;
-        }
-        wait(wait_time);
-    }
-
-    // If we got here, we must have failed to get a page. We will try to get it next time.
-    return FALSE;
 }
 
 /*
@@ -82,6 +59,10 @@ BOOL resolve_soft_fault(PPTE pte) {
     // Now we will lock the pfn
     lock_pfn(available_pfn);
 
+#if DEBUG
+    validate_pfn(available_pfn);
+#endif
+
     // Since we were waiting for the page, it is possible that it was associated
     // with a hard fault. It may have been given away from the standby list.
     // We will check its PTE to be sure:
@@ -120,6 +101,11 @@ BOOL resolve_soft_fault(PPTE pte) {
         // Since it is not in the disk slot yet, there is no need to update its disk metadata.
         if (IS_PFN_MODIFIED(available_pfn)) {
             list_to_decrement = &modified_list;
+
+            // Check to see if the modified list needs to be refilled
+            signal_event_if_list_is_about_to_run_low(   list_to_decrement,
+                                                        initiate_trimming_event,
+                                                        TRIMMING_THREAD_ID);
         }
 
         else {
@@ -129,6 +115,11 @@ BOOL resolve_soft_fault(PPTE pte) {
             // We can do this lockless because we hold the PTE and PFN locks.
             clear_disk_slot(available_pfn->fields.disk_index);
             list_to_decrement = &standby_list;
+
+            // Check to see if the standby list needs to be refilled
+            signal_event_if_list_is_about_to_run_low(   list_to_decrement,
+                                                        initiate_writing_event,
+                                                        WRITING_THREAD_ID);
         }
 
         // Remove the page from its list (standby or modified)
@@ -155,7 +146,7 @@ BOOL resolve_soft_fault(PPTE pte) {
     Attempts to LOCK and return a free page. Re-fills the cache if possible.
     If no free pages are to be found, returns false.
  */
-BOOL acquire_free_page(PTHREAD_INFO thread_info, PPFN *available_page_address) {
+BOOL acquire_free_page(PUSER_THREAD_INFO thread_info, PPFN *available_page_address) {
 
     // First, check if the cache is empty. If it is, we will try to get free pages
     // to re-fill it
@@ -175,19 +166,29 @@ BOOL acquire_free_page(PTHREAD_INFO thread_info, PPFN *available_page_address) {
     return TRUE;
 }
 
-BOOL move_batch_from_standby_to_cache(PTHREAD_INFO thread_info) {
+BOOL move_batch_from_standby_to_cache(PUSER_THREAD_INFO thread_info) {
     PPFN pfn;
 
     // Grab a batch of pages from the standby list
     USHORT batch_size = remove_batch_from_list_head(&standby_list,
                                                     &pfn,
                                                     FREE_PAGE_CACHE_SIZE / 4);
+
+    // Using recent consumption, decide if we need to signal the writer to bring in more standby pages!
+    signal_event_if_list_is_about_to_run_low(   &standby_list,
+                                                initiate_writing_event,
+                                                WRITING_THREAD_ID);
+
     if (batch_size == 0) return FALSE;
 
     // Copy the pages into the free page cache
     // While doing so, we MUST map their old PTEs to the disk!
     PPFN next;
     for (USHORT i = 0; i < batch_size; ++i) {
+
+#if DEBUG
+        validate_pfn(pfn);
+#endif
 
         // Map the previous page's owner to its disk slot! We are doing this WITHOUT the page table lock.
         // This is okay, but we will now need to double-check the PTE on a simultaneous soft fault.
@@ -208,7 +209,22 @@ BOOL move_batch_from_standby_to_cache(PTHREAD_INFO thread_info) {
     return TRUE;
 }
 
-BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO thread_info) {
+VOID signal_event_if_list_is_about_to_run_low(PPAGE_LIST list,
+                                              HANDLE event_to_set,
+                                              USHORT thread_id) {
+
+    // Find the amount of pages expected to be consumed while the event is executed
+    double time_to_perform_event = stats.worker_runtimes[thread_id];
+    double consumption_rate = stats.page_consumption_per_second;
+    LONG64 pages_consumed_during_event = (LONG64) (consumption_rate * time_to_perform_event);
+    LONG64 current_list_size = list->list_size;
+
+    // If the list is expected to run low, we will initiate our event now to counteract it
+    if (current_list_size - pages_consumed_during_event < LOW_PAGE_THRESHOLD)
+        SetEvent(event_to_set);
+}
+
+BOOL resolve_hard_fault(PPTE pte, PUSER_THREAD_INFO thread_info) {
 
     // This wil hold the physical frame number that we are mapping to the faulting VA.
     ULONG_PTR frame_number_to_map;
@@ -226,7 +242,12 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO thread_info) {
         // If we are able to do so, we will loop around again and grab a page from the cache!
         // If we are NOT able to get a page, we will break and set an event for the trimmer.
         BOOL standby_page_acquired = move_batch_from_standby_to_cache(thread_info);
-        if (!standby_page_acquired) break;
+        if (!standby_page_acquired) {
+            // If no pages can be grabbed from the standby list, we will reset its event
+            // so we will wait (and effectively track latency).
+            ResetEvent(standby_pages_ready_event);
+            break;
+        }
     }
 
     // If no pages are available, release locks and wait for pages available event.
@@ -322,7 +343,7 @@ BOOL resolve_hard_fault(PPTE pte, PTHREAD_INFO thread_info) {
 }
 
 
-BOOL page_fault_handler(PULONG_PTR faulting_va, PTHREAD_INFO user_thread_info) {
+BOOL page_fault_handler(PULONG_PTR faulting_va, PUSER_THREAD_INFO user_thread_info) {
 
     // When should the fault handler be allowed to fail? There are only two situations:
         // A - a hardware failure. This is beyond the scope of this program.

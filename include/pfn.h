@@ -138,3 +138,6 @@ BOOL try_lock_pfn(PPFN pfn);
  *  Releases the lock on a PFN.
  */
 VOID unlock_pfn(PPFN pfn);
+
+// Validates PFNs for debugging.
+VOID validate_pfn(PPFN pfn);

@@ -3,13 +3,13 @@
 //
 #include "../include/trimmer.h"
 
-ULONG64 trim_pages(VOID) {
-
-    // Before we do anything, let's see if there is any need to trim. If the modified list has
-    // sufficient pages, let's just wake the writer.
-    if (*stats.n_modified > MAX_WRITE_BATCH_SIZE) {
+void check_to_start_writer(void) {
+    if (*stats.n_standby < LOW_PAGE_THRESHOLD / 8) {
         SetEvent(initiate_writing_event);
     }
+}
+
+ULONG64 trim_pages(VOID) {
 
     // We will keep track of the number of pages we have batched
     ULONG64 attempts = 0;
@@ -50,8 +50,11 @@ ULONG64 trim_pages(VOID) {
         // Read in the the PFN.
         pfn = get_PFN_from_PTE(pte);
 
-        // Lock the pfn (provides protection against soft-faulting mid trim later on)
+        // Lock the pfn (provides protection against soft-faulting mid-trim later on)
         lock_pfn(pfn);
+#if DEBUG
+        validate_pfn(pfn);
+#endif
 
         // Now that you have both locks, transition both data structures into the
         // proper transition, mid-trim states.
@@ -66,12 +69,12 @@ ULONG64 trim_pages(VOID) {
         trim_batch_size++;
     }
 
-    // If we couldn't trim anyone, return -- but still wake the writer! There may be plenty of modified
-    // pages yet to be written!
+    // If we couldn't trim anyone, return
     if (trim_batch_size == 0) {
-        SetEvent(initiate_writing_event);
+        check_to_start_writer();
         return 0;
     }
+
     // Unmap ALL pages in one batch!
     if (!MapUserPhysicalPagesScatter(trimmed_VAs, trim_batch_size, NULL)) DebugBreak();
 
@@ -108,15 +111,15 @@ ULONG64 trim_pages(VOID) {
         pfn = next;
     }
 
+    // Before we return, let's see if we desperately need to write.
+    // If the standby list is dangerously low on pages, let's do a write
+    check_to_start_writer();
+
     // Return our batch size, which is used by the statistics thread.
-    SetEvent(initiate_writing_event);
     return trim_batch_size;
 }
 
 VOID trim_pages_thread(VOID) {
-
-    // Active page count will keep track of our active pages.
-    ULONG64 active_page_count;
 
     // Create our handles for the wait for multiple objects call in the loop.
     // We wait to trim or to exit.
@@ -133,18 +136,24 @@ VOID trim_pages_thread(VOID) {
     // If the exit flag has been set, then it's time to go!
     while (TRUE) {
 
-        if (WaitForMultipleObjects(ARRAYSIZE(events), events, FALSE, trim_and_write_frequency)
+        if (WaitForMultipleObjects(ARRAYSIZE(events), events, FALSE, INFINITE)
             == EXIT_EVENT_INDEX) return;
 
-#if STATS_MODE
+        // Since we are about to trim, we will reset our event
+        ResetEvent(initiate_trimming_event);
+
         LONGLONG start = get_timestamp();
-#endif
+
         // Once woken, begin trimming a batch of pages. Then go back to sleep.
         ULONG64 batch_size = trim_pages();
-#if STATS_MODE
+
+        // Record the runtime and update the future runtime estimate
         LONGLONG end = get_timestamp();
         double difference = get_time_difference(end, start);
-        record_batch_size_and_time(difference, batch_size, trimming_thread_id);
+        update_estimated_job_time(TRIMMING_THREAD_ID, difference);
+
+        #if STATS_MODE
+        record_batch_size_and_time(difference, batch_size, TRIMMING_THREAD_ID);
 #endif
     }
 }

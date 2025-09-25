@@ -22,13 +22,16 @@ HANDLE debug_thread;
 
 // Thread IDs
 PULONG user_thread_ids;
-ULONG scheduling_thread_id = 0;
-ULONG aging_thread_id = 1;
-ULONG trimming_thread_id = 2;
-ULONG writing_thread_id = 3;
+PULONG worker_thread_ids;
+ULONG aging_thread_id = 3;
+ULONG scheduling_thread_id = 4;
 
-// The amount of wait time between writes
-ULONG64 trim_and_write_frequency = DEFAULT_WRITE_FREQUENCY;
+VOID update_estimated_job_time(USHORT thread_id, double most_recent_job_time) {
+    double previous_estimate = stats.worker_runtimes[thread_id];
+    double new_estimate = (1 - EWMA_SMOOTHING_FACTOR) * previous_estimate +
+                            EWMA_SMOOTHING_FACTOR * most_recent_job_time;
+    stats.worker_runtimes[thread_id] = new_estimate;
+}
 
 #if STATS_MODE
 sample_buffer trim_samples;
@@ -47,7 +50,7 @@ VOID record_batch_size_and_time(double time_in_fractional_seconds,
 
 VOID push_to_samples(batch_sample *sample, ULONG thread_id) {
     sample_buffer *buffer = &trim_samples;
-    if (thread_id == writing_thread_id) buffer = &write_samples;
+    if (thread_id == WRITING_THREAD_ID) buffer = &write_samples;
 
     SHORT i = buffer->head % NUMBER_OF_SAMPLES;
 
@@ -59,7 +62,7 @@ VOID push_to_samples(batch_sample *sample, ULONG thread_id) {
 VOID analyze_and_print_statistics(ULONG thread_id) {
 
     sample_buffer *buffer = &trim_samples;
-    if (thread_id == writing_thread_id) {
+    if (thread_id == WRITING_THREAD_ID) {
         buffer = &write_samples;
         printf("Write sample data!\n");
     }

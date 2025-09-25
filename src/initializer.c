@@ -5,13 +5,8 @@
 STATS stats = {0};
 VM vm = {0};
 PAGE_LIST_ARRAY free_lists = {0};
-double transition_probabilities[NUM_USER_STATES][NUM_USER_STATES] = {
-    {0.85, 0.10, 0.05},  // from INCREMENT
-    {0.10, 0.85, 0.05},  // from DECREMENT
-    {0.85, 0.10, 0.05}   // from RANDOM
-};
 
-PTHREAD_INFO user_thread_info;
+PUSER_THREAD_INFO user_thread_info;
 
 BOOL GetPrivilege (VOID) {
     struct {
@@ -96,7 +91,7 @@ BOOL GetPrivilege (VOID) {
 
 VOID set_max_frame_number(VOID) {
     ULONG64 max_frame_number = 0;
-    ULONG64 min_frame_number = ULONG_MAX;
+    ULONG64 min_frame_number = ULLONG_MAX;
     for (int i = 0; i < vm.allocated_frame_count; i++) {
         max_frame_number = max(max_frame_number, vm.allocated_frame_numbers[i]);
         min_frame_number = min(min_frame_number, vm.allocated_frame_numbers[i]);
@@ -121,9 +116,11 @@ void initialize_statistics(void) {
     QueryPerformanceFrequency(&lpFrequency);
     stats.timer_frequency = lpFrequency.QuadPart;
 
-    // Initialize targets for batch sizes
-    stats.trimmer_batch_target = MAX_TRIM_BATCH_SIZE;
-    stats.writer_batch_target = MAX_WRITE_BATCH_SIZE;
+    // Initialize consumption rate
+    stats.page_consumption_per_second = DEFAULT_PAGE_CONSUMPTION_RATE;
+    stats.worker_runtimes[TRIMMING_THREAD_ID] = DEFAULT_TRIM_DURATION;
+    stats.worker_runtimes[WRITING_THREAD_ID] = DEFAULT_WRITE_DURATION;
+    stats.worker_runtimes[PRUNING_THREAD_ID] = 0;
 }
 
 HANDLE CreateSharedMemorySection (VOID) {
@@ -282,10 +279,16 @@ void initialize_threads(void) {
     // Initialize array of user thread handles and IDs
     user_threads = (PHANDLE) zero_malloc(num_user_threads * sizeof(HANDLE));
     user_thread_ids = (PULONG) zero_malloc(num_user_threads * sizeof(ULONG));
+    worker_thread_ids = (PULONG) zero_malloc(NUM_WORKER_THREADS * sizeof(ULONG));
+    worker_thread_ids[TRIMMING_THREAD_ID] = TRIMMING_THREAD_ID;
+    worker_thread_ids[WRITING_THREAD_ID] = WRITING_THREAD_ID;
+    worker_thread_ids[PRUNING_THREAD_ID] = PRUNING_THREAD_ID;
+    worker_thread_ids[AGING_THREAD_ID] = AGING_THREAD_ID;
+    worker_thread_ids[SCHEDULING_THREAD_ID] = SCHEDULING_THREAD_ID;
 
-    // Create structs to pass to user threads, including each thread's kernel
+    // Create structs to pass to threads, including each thread's kernel
     // read spaces, which are divided into 16 individual read spaces.
-    user_thread_info = (PTHREAD_INFO) zero_malloc(num_user_threads * sizeof(THREAD_INFO));
+    user_thread_info = (PUSER_THREAD_INFO) zero_malloc(num_user_threads * sizeof(USER_THREAD_INFO));
 
     // Initialize the kernel VA spaces for each thread
     for (ULONG i = 0; i < num_user_threads; i++) {
@@ -305,9 +308,6 @@ void initialize_threads(void) {
         QueryPerformanceCounter(&counter);
         ULONG64 seed = counter.QuadPart ^ ((ULONG64) i << 32) ^ (counter.QuadPart >> 16);
         user_thread_info[i].random_seed = seed;
-
-        // We will also set the initial state
-        user_thread_info[i].state = USER_STATE_INCREMENT;
 
         // And we will fill the initial free page caches of the threads, too
         PPFN first_page;
@@ -341,13 +341,14 @@ void initialize_threads(void) {
         ASSERT(user_threads[i]);
     }
 #if SCHEDULING
+    ULONG_PTR scheduling_id = SCHEDULING_THREAD_ID;
     // Create system scheduling thread
     scheduling_thread = CreateThread (DEFAULT_SECURITY,
                                DEFAULT_STACK_SIZE,
                                (LPTHREAD_START_ROUTINE) schedule_tasks,
                                NULL,
                                DEFAULT_CREATION_FLAGS,
-                               &scheduling_thread_id);
+                               &worker_thread_ids[SCHEDULING_THREAD_ID]);
 
     ASSERT(scheduling_thread);
 #endif
@@ -357,7 +358,7 @@ void initialize_threads(void) {
                                (LPTHREAD_START_ROUTINE) trim_pages_thread,
                                NULL,
                                DEFAULT_CREATION_FLAGS,
-                               &trimming_thread_id);
+                               &worker_thread_ids[TRIMMING_THREAD_ID]);
 
     ASSERT(trimming_thread);
 
@@ -367,7 +368,7 @@ void initialize_threads(void) {
                                (LPTHREAD_START_ROUTINE) write_pages_thread,
                                NULL,
                                DEFAULT_CREATION_FLAGS,
-                               &writing_thread_id);
+                               &worker_thread_ids[WRITING_THREAD_ID]);
 
     ASSERT(writing_thread);
 
@@ -397,7 +398,7 @@ void initialize_events(void) {
     initiate_aging_event = CreateEvent(NULL, AUTO_RESET, FALSE, NULL);
     NULL_CHECK(initiate_aging_event, "Could not intialize aging event.");
 
-    initiate_trimming_event = CreateEvent(NULL, AUTO_RESET, FALSE, NULL);
+    initiate_trimming_event = CreateEvent(NULL, MANUAL_RESET, FALSE, NULL);
     NULL_CHECK(initiate_trimming_event, "Could not initialize trimming event.");
 
     initiate_writing_event = CreateEvent(NULL, AUTO_RESET, FALSE, NULL);

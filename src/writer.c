@@ -12,21 +12,15 @@ ULONG64 write_pages(VOID) {
     // The upper bound on the size of THIS particular batch. This will be set to the max, then (possibly)
     // brought lower by the disk slot allocation, then (possibly) brought lower by the number of pages
     // that can be removed from the modified list.
-    ULONG64 target_page_count = min(stats.writer_batch_target, MAX_WRITE_BATCH_SIZE);
-
-    // If there are insufficient empty disk slots, let's hold off on writing
-    if (pf.empty_disk_slots < MIN_WRITE_BATCH_SIZE) return 0;
+    ULONG64 target_page_count = MAX_WRITE_BATCH_SIZE;
 
     // Let's get a sense of how many modified pages we can reasonably expect. There may be more (from trimming)
     // or fewer (from soft faults), but this gives us an estimate.
     ULONG64 approx_num_mod_pages = get_size(&modified_list);
 
-    // First, check to see if there are sufficient pages to write.
-    // If not, start the trimmer before exiting.
-    if (approx_num_mod_pages < MIN_WRITE_BATCH_SIZE) {
-        SetEvent(initiate_trimming_event);
-        return 0;
-    }
+    // If there are insufficient empty disk slots, let's hold off on writing
+    if (pf.empty_disk_slots < MIN_WRITE_BATCH_SIZE) return 0;
+
     // Update our target count if we probably have fewer modified pages than our max.
     target_page_count = min(target_page_count, approx_num_mod_pages);
 
@@ -94,7 +88,7 @@ ULONG64 write_pages(VOID) {
     map_pages(num_pages_in_write_batch, vm.kernel_write_va, frame_numbers_to_map);
 
     // Flag to indicate that SOME pages were successfully written
-    ULONG64 pages_written = 0;
+    LONG64 pages_written = 0;
     ULONG64 slots_cleared = 0;
 
     // We will make a temporary page list to help do a batch insert to the standby list.
@@ -119,6 +113,9 @@ ULONG64 write_pages(VOID) {
 
         // Lock the PFN again
         lock_pfn(pfn);
+#if DEBUG
+        validate_pfn(pfn);
+#endif
 
         // If we had a soft fault on the page mid-write, we will need to undo this disk write.
         // We will do so by clearing the disk slot and not modifying the PFN's status.
@@ -145,6 +142,12 @@ ULONG64 write_pages(VOID) {
         }
     }
 
+    // Un-map kernal VA
+    unmap_pages(num_pages_in_write_batch, vm.kernel_write_va);
+
+    // If no pages were written, exit
+    if (pages_written == 0) return 0;
+
     // Add ALL pages to standby list by updating flinks and blinks of head/tail
     // of page batch as well as head/tail of standby list
     insert_list_to_tail_list(&standby_list, &temp_list);
@@ -162,16 +165,13 @@ ULONG64 write_pages(VOID) {
     // Increase available count
     increase_available_count(pages_written);
 
-    // Un-map kernal VA
-    unmap_pages(num_pages_in_write_batch, vm.kernel_write_va);
-
     // Broadcast to waiting user threads that there are standby pages ready.
     if (pages_written > 0) SetEvent(standby_pages_ready_event);
 
     return pages_written;
 }
 
-VOID write_pages_thread(VOID) {
+VOID write_pages_thread(void) {
 
     // Wait for system start event before entering waiting state!
     WaitForSingleObject(system_start_event, INFINITE);
@@ -187,15 +187,24 @@ VOID write_pages_thread(VOID) {
         if (WaitForMultipleObjects(ARRAYSIZE(events), events, FALSE, INFINITE)
             == EXIT_EVENT_INDEX) return;
 
-#if STATS_MODE
         LONGLONG start_time = get_timestamp();
-#endif
+
+        // Before removing pages from the modified list, we should check to see if
+        // the trimmer needs to start up again to replenish what we are going to take.
+        signal_event_if_list_is_about_to_run_low(   &modified_list,
+                                                    initiate_trimming_event,
+                                                    TRIMMING_THREAD_ID);
+
         // Once woken, begin writing a batch of pages. Then go back to sleep.
         ULONG64 batch_size = write_pages();
-#if STATS_MODE
+
+        // Record the runtime to update future estimates
         LONGLONG end_time = get_timestamp();
         double difference = get_time_difference(end_time, start_time);
-        record_batch_size_and_time(difference, batch_size, writing_thread_id);
+        update_estimated_job_time(WRITING_THREAD_ID, difference);
+
+#if STATS_MODE
+        record_batch_size_and_time(difference, batch_size, WRITING_THREAD_ID);
 #endif
     }
 }

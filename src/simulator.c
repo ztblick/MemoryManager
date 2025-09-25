@@ -15,7 +15,7 @@ void do_work_to_slow_consumption(void) {
     }
 }
 
-void run_user_app_simulation(PTHREAD_INFO user_thread_info) {
+void run_user_app_simulation(PUSER_THREAD_INFO user_thread_info) {
 
     // Wait for system start event before beginning!
     WaitForSingleObject(system_start_event, INFINITE);
@@ -54,8 +54,9 @@ void run_user_app_simulation(PTHREAD_INFO user_thread_info) {
                 set_accessed_bit(arbitrary_va);
 #endif
                 // Simulating "doing something" before accessing next VA
+#if DO_WORK_TO_SLOW_CONSUMPTION
                 do_work_to_slow_consumption();
-
+#endif
             }
 
             // If we fault, we set this flag to go around again.
@@ -83,8 +84,8 @@ void begin_system_test(void) {
     WaitForMultipleObjects(vm.num_user_threads, user_threads, TRUE, INFINITE);
 
 #if STATS_MODE
-    analyze_and_print_statistics(trimming_thread_id);
-    analyze_and_print_statistics(writing_thread_id);
+    analyze_and_print_statistics(TRIMMING_THREAD_ID);
+    analyze_and_print_statistics(WRITING_THREAD_ID);
     print_consumption_data();
 #endif
 
@@ -145,6 +146,9 @@ VOID main (int argc, char** argv) {
 #endif
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
 
+#if 0
+    ASSERT(FALSE);
+#endif
     // Free all memory and end the simulation.
     free_all_data_and_shut_down();
 }

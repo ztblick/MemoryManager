@@ -50,14 +50,14 @@ VOID add_page_to_free_lists(PPFN page, ULONG first_index);
 /*
  *  This attempts to grab a free page from the array of free lists.
  */
-BOOL try_get_free_pages(PTHREAD_INFO thread_info);
+BOOL try_get_free_pages(PUSER_THREAD_INFO thread_info);
 
 /*
  *  Attempts to lock a particular free list. If it can be locked, and there is at least one
  *  page on the list, it pops that page and returns it. Otherwise, it releases locks and
  *  returns null. Note: since the page is free, it does NOT need to be locked.
  */
-BOOL try_refill_cache_from_free_list(ULONG list_index, PTHREAD_INFO thread_info);
+BOOL try_refill_cache_from_free_list(ULONG list_index, PUSER_THREAD_INFO thread_info);
 
 /*
  *  Initialize a page list. This creates the critical section, initializes the list head,
