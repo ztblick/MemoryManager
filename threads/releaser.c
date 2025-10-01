@@ -2,7 +2,7 @@
 // Created by zachb on 7/24/2025.
 //
 
-#include "../include/releaser.h"
+#include "releaser.h"
 
 void free_lock(PCRITICAL_SECTION lock) {
     DeleteCriticalSection(lock);
@@ -56,9 +56,7 @@ void free_VA_space_data(void) {
     VirtualFree(vm.kernel_write_va, 0, MEM_RELEASE);
 
     for (ULONG i = 0; i < vm.num_user_threads; i++) {
-        for (int j = 0; j < NUM_KERNEL_READ_ADDRESSES; j++) {
-            VirtualFree(user_thread_info[i].kernel_va_spaces[j],0, MEM_RELEASE);
-        }
+        VirtualFree(user_thread_info[i].kernel_va_space,0, MEM_RELEASE);
     }
 }
 

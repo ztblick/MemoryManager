@@ -2,9 +2,7 @@
 // Created by ztblick on 5/5/2025.
 //
 
-#include "../include/simulator.h"
-
-#include <sys/stat.h>
+#include "simulator.h"
 
 void do_work_to_slow_consumption(void) {
     int WORK_TIME = 10;

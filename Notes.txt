@@ -3,14 +3,21 @@ Current goal:
 - 1 GB / sec throughput with 0 latency
 
 - Realistic simulation of a memory manager:
-    - Aging
-    - Consumption-based batching
-    - Speculative reads
+    - Aging (NOT STARTED)
+    - Consumption-based batching (DONE)
+    - Speculative reads (NOT STARTED)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 NEXT SUB-GOALS:
 
-- TODO add a global field used to indicate if certain threads are ALREADY running
-     - this could prevent user threads from setting the write event multiple times...
+- Batch prune from standby to free lists (TODAY!)
+
+- Fix batch removals to tolerate single-page removals (TODAY!)
+
+- Add a global field used to indicate if certain threads are ALREADY running
+    - this could prevent user threads from setting the write event multiple times...
+
+- Add a field to the thread structs indicating which locks it already holds
+    - When holding a lock, periodically check to see if someone is waiting on it.
 
 - Find a more efficient way to set accessed bits
 
@@ -19,21 +26,20 @@ NEXT SUB-GOALS:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 SUBSEQUENT GOALS:
 
-- Update READ_ME to reflect recent changes: free page caches, batch removals, user access simulation
+- Modify directory structure to be more modular and easier to navigate
 
-- Fix batch removals to tolerate single-page removals
-
-- Batch prune from standby to free lists.
+- Update READ_ME to reflect recent changes:
+    free page caches, batch removals, user access simulation, consumption-based signaling, pruning thread
 
 - PTE region locks, not individual PTE locks.
-
-- Speculative batched reads from disk.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 THEN, any of the below:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 - Cache-optimize structs to reduce contention.
 
 - Add read/write accesses. Check readwrite bit in trimmer -- move read-only directly to standby.
+
+- For page file: actually read from/write to a file instead of a global variable.
 
 - De-fragment the bitmaps from time to time.
 

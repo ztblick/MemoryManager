@@ -1,7 +1,7 @@
 //
 // Created by zblickensderfer on 5/6/2025.
 //
-#include "../include/trimmer.h"
+#include "trimmer.h"
 
 void check_to_start_writer(void) {
     if (*stats.n_standby < LOW_PAGE_THRESHOLD / 8) {

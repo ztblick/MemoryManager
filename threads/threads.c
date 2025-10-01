@@ -2,7 +2,7 @@
 // Created by zachb on 8/7/2025.
 //
 
-#include "../include/threads.h"
+#include "threads.h"
 
 // Events
 HANDLE system_start_event;

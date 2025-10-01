@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "config.h"
+#include "../utils/config.h"
 
 // Thread IDs
 #define TRIMMING_THREAD_ID      0
@@ -39,7 +39,7 @@
 typedef struct _USER_THREAD_INFO {
     ULONG thread_id;
     ULONG kernel_va_index;
-    PULONG_PTR kernel_va_spaces[NUM_KERNEL_READ_ADDRESSES];
+    PULONG_PTR kernel_va_space;
     ULONG64 random_seed;
     PVOID free_page_cache[FREE_PAGE_CACHE_SIZE];
     USHORT free_page_count;

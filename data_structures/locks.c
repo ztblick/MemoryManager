@@ -2,7 +2,7 @@
 // Created by zachb on 7/25/2025.
 //
 
-#include "../include/locks.h"
+#include "locks.h"
 
 VOID initialize_byte_lock(PBYTE_LOCK lock) {
     lock->semaphore = UNLOCKED;

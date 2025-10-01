@@ -2,7 +2,7 @@
 // Created by zblickensderfer on 5/5/2025.
 //
 
-#include "../include/writer.h"
+#include "writer.h"
 
 ULONG64 write_pages(VOID) {
 

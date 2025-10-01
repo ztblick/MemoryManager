@@ -11,16 +11,16 @@
 #pragma comment(lib, "advapi32.lib")
 #pragma comment(lib, "onecore.lib")
 
-#include "config.h"
-#include "pfn.h"
-#include "pte.h"
-#include "page_list.h"
-#include "disk.h"
+#include "../utils/config.h"
+#include "../data_structures/pfn.h"
+#include "../data_structures/pte.h"
+#include "../data_structures/page_list.h"
+#include "../data_structures/disk.h"
 #include "threads.h"
-#include "trimmer.h"
+#include "../threads/trimmer.h"
 #include "page_fault_handler.h"
 #include "ager.h"
-#include "scheduler.h"
+#include "../threads/scheduler.h"
 #include "simulator.h"
 #include "writer.h"
 

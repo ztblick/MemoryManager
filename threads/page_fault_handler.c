@@ -1,5 +1,5 @@
 
-#include "../include/page_fault_handler.h"
+#include "page_fault_handler.h"
 
 #include <sys/stat.h>
 
@@ -224,6 +224,32 @@ VOID signal_event_if_list_is_about_to_run_low(PPAGE_LIST list,
         SetEvent(event_to_set);
 }
 
+/*
+    Unmaps all the thread's kernal VAs if they have all been used.
+    If they haven't all been used -- it does nothing.
+ */
+void unmap_and_reset_all_kernal_va_for_this_thread(PUSER_THREAD_INFO user_thread_info) {
+    if (user_thread_info->kernel_va_index != NUM_KERNEL_READ_ADDRESSES) return;
+
+    // Gather the VAs to unmap
+    PULONG_PTR base_kernal_va = user_thread_info->kernel_va_space;
+    PULONG_PTR VAs_to_unmap[NUM_KERNEL_READ_ADDRESSES];
+    for (int i = 0; i < NUM_KERNEL_READ_ADDRESSES; ++i) {
+        VAs_to_unmap[i] = base_kernal_va + i * PAGE_SIZE / 8;
+    }
+
+    // Do the batch unmap
+    BOOL success = MapUserPhysicalPagesScatter(VAs_to_unmap,
+                                    NUM_KERNEL_READ_ADDRESSES,
+                                                NULL);
+
+    // Check that the unmap succeeded
+    ASSERT(success);
+
+    // Reset the index to zero
+    user_thread_info->kernel_va_index = 0;
+}
+
 BOOL resolve_hard_fault(PPTE pte, PUSER_THREAD_INFO thread_info) {
 
     // This wil hold the physical frame number that we are mapping to the faulting VA.
@@ -266,18 +292,15 @@ BOOL resolve_hard_fault(PPTE pte, PUSER_THREAD_INFO thread_info) {
 
         return FALSE;
     }
-
     // At this point, we KNOW we have an available page. It is locked.
     // Let's now resolve the fault.
 
-    // First, we will set OUR kernel read VA space.
-    PULONG_PTR kernel_read_va = thread_info->kernel_va_spaces[thread_info->kernel_va_index];
+    // Now we will set OUR kernel read VA space.
+    ASSERT(thread_info->kernel_va_index < NUM_KERNEL_READ_ADDRESSES);                       // TODO figure out why this is firing...!
+    PULONG_PTR kernel_read_va = thread_info->kernel_va_space + thread_info->kernel_va_index * PAGE_SIZE / 8;
 
     // Get the frame number
     frame_number_to_map = get_frame_from_PFN(available_pfn);
-
-    // Since we are committing to using this read va, we will need to increase the count.
-    thread_info->kernel_va_index++;
 
     // Now we will finally try to acquire the PTE lock
     // If we cannot get it, we will try again.
@@ -302,6 +325,9 @@ BOOL resolve_hard_fault(PPTE pte, PUSER_THREAD_INFO thread_info) {
     // Since we have the PTE and page locks, we can now safely map the page.
     // We map the available frame to the kernel VA AND the faulting VA at the same time (for efficiency)
     map_both_va_to_same_page(kernel_read_va, get_VA_from_PTE(pte), frame_number_to_map);
+
+    // Since we are committing to using this read va, we will need to increase the count.
+    thread_info->kernel_va_index++;
 
     // Now that we have the page in memory, let's check if we need to do a disk read.
     // If PTE is zeroed, do not do the disk read. But if the PTE is on the disk, read its contents back!
@@ -339,9 +365,12 @@ BOOL resolve_hard_fault(PPTE pte, PUSER_THREAD_INFO thread_info) {
 
     // Update statistics
     InterlockedIncrement64(&stats.n_hard);
+
+    // If we need to unmap ALL the kernel read VAs, we will do so in one big batch
+    unmap_and_reset_all_kernal_va_for_this_thread(thread_info);
+
     return TRUE;
 }
-
 
 BOOL page_fault_handler(PULONG_PTR faulting_va, PUSER_THREAD_INFO user_thread_info) {
 
@@ -361,16 +390,6 @@ BOOL page_fault_handler(PULONG_PTR faulting_va, PUSER_THREAD_INFO user_thread_in
     // for the pages_available event to be set by the writer.
     // In that circumstance, this thread will wake up, and then wait grab the lock again.
     while (!IS_PTE_VALID(pte)) {
-
-        // Here are the kernel VA spaces for our reads and our index keeping track of which
-        // ones have been mapped so far.
-        // First: if we need to unmap ALL the kernel read VAs, we will do so in one big batch
-        // TODO: turn into function, move to more strategic locations so we're not over-calling
-        if (user_thread_info->kernel_va_index == NUM_KERNEL_READ_ADDRESSES) {
-            if (!MapUserPhysicalPagesScatter(user_thread_info->kernel_va_spaces,
-                NUM_KERNEL_READ_ADDRESSES, NULL)) DebugBreak();
-            user_thread_info->kernel_va_index = 0;
-        }
 
         //~~~~~~~~~~~~~~~~~~~~~~~//
         // SOFT FAULT RESOLUTION //

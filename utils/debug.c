@@ -2,8 +2,8 @@
 // Created by zblickensderfer on 5/6/2025.
 //
 
-#include "../include/debug.h"
-#include "../include/page_list.h"
+#include "debug.h"
+#include "../data_structures/page_list.h"
 
 
 // Taken from Landon's repository.

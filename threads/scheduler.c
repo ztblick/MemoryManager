@@ -2,7 +2,7 @@
 // Created by zblickensderfer on 5/6/2025.
 //
 
-#include "../include/scheduler.h"
+#include "scheduler.h"
 
 consumption_buffer consumption_rates;
 

@@ -11,7 +11,7 @@
 */
 
 #pragma once
-#include "disk.h"
+#include "../data_structures/disk.h"
 #include "threads.h"
 
 #define SCHEDULER_DELAY_IN_MILLISECONDS         500

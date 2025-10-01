@@ -4,8 +4,8 @@
 
 #pragma once
 #include "initializer.h"
-#include "pte.h"
-#include "pfn.h"
+#include "../data_structures/pte.h"
+#include "../data_structures/pfn.h"
 
 /*
  *  Resolve a page fault by mapping a page to the faulting VA, if possible. Not guaranteed, though.

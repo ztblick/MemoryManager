@@ -1,5 +1,5 @@
 
-#include "../include/initializer.h"
+#include "initializer.h"
 
 // Initializing global structs
 STATS stats = {0};
@@ -292,15 +292,13 @@ void initialize_threads(void) {
 
     // Initialize the kernel VA spaces for each thread
     for (ULONG i = 0; i < num_user_threads; i++) {
-        for (int j = 0; j < NUM_KERNEL_READ_ADDRESSES; j++) {
-            user_thread_info[i].kernel_va_spaces[j] = VirtualAlloc2 (NULL,
-                            NULL,
-                          PAGE_SIZE,
-                          MEM_RESERVE | MEM_PHYSICAL,
-                          PAGE_READWRITE,
-                          &vm.virtual_alloc_shared_parameter,
-                          1);
-        }
+        user_thread_info[i].kernel_va_space = VirtualAlloc2 (NULL,
+                                                    NULL,
+                                                            PAGE_SIZE * NUM_KERNEL_READ_ADDRESSES,
+                                                    MEM_RESERVE | MEM_PHYSICAL,
+                                                    PAGE_READWRITE,
+                                                                &vm.virtual_alloc_shared_parameter,
+                                                    1);
 
         // While we're here, update the thread IDs and seed the random number
         user_thread_info[i].thread_id = i;
@@ -310,8 +308,12 @@ void initialize_threads(void) {
         user_thread_info[i].random_seed = seed;
 
         // And we will fill the initial free page caches of the threads, too
+        // We will find the correct free list by wrapping around (since the number of
+        // user threads will likely be greater than the number of free lists).
         PPFN first_page;
-        ULONG64 num_pages = remove_batch_from_list_head_exclusive(&free_lists.list_array[i],
+        ULONG index = i % free_lists.number_of_lists;
+        PPAGE_LIST free_list = &free_lists.list_array[index];
+        ULONG64 num_pages = remove_batch_from_list_head_exclusive(free_list,
                                                         &first_page,
                                                         FREE_PAGE_CACHE_SIZE);
 

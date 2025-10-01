@@ -2,7 +2,7 @@
 // Created by zachb on 8/6/2025.
 //
 
-#include "../include/utils.h"
+#include "utils.h"
 
 PVOID zero_malloc(size_t bytes_to_allocate) {
     PULONG_PTR destination = malloc(bytes_to_allocate);

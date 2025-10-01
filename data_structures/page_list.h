@@ -1,7 +1,7 @@
 #pragma once
 
-#include "pfn.h"
-#include "debug.h"
+#include "../data_structures/pfn.h"
+#include "../utils/debug.h"
 
 /*
  * A page list is the head of a doubly-linked list of pages.

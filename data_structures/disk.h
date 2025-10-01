@@ -4,7 +4,7 @@
 
 #pragma once
 #include <Windows.h>
-#include "utils.h"
+#include "../utils/utils.h"
 
 #define DISK_SLOT_IN_USE                1
 #define DISK_SLOT_EMPTY                 0

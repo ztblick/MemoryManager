@@ -2,7 +2,7 @@
 // Created by zachb on 7/30/2025.
 //
 
-#include "../include/disk.h"
+#include "disk.h"
 
 PAGE_FILE_STRUCT pf = {0};
 

@@ -2,7 +2,7 @@
 // Created by ztblick on 6/5/2025.
 //
 
-#include "../include/page_list.h"
+#include "page_list.h"
 
 PAGE_LIST zero_list;
 PAGE_LIST modified_list;

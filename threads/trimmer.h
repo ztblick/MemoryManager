@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include "pfn.h"
-#include "page_list.h"
+#include "../data_structures/pfn.h"
+#include "../data_structures/page_list.h"
 #include "threads.h"
 
 #define MAX_TRIM_ATTEMPTS       MAX_TRIM_BATCH_SIZE * 4

@@ -4,7 +4,7 @@
 
 #pragma once
 #include "initializer.h"
-#include "disk.h"
+#include "../data_structures/disk.h"
 
 #define MAX_DISK_SLOT_ATTEMPTS      (MAX_WRITE_BATCH_SIZE * 2)
 

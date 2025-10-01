@@ -3,7 +3,7 @@
 //
 
 #pragma once
-#include "threads.h"
+#include "../threads/threads.h"
 #include <winternl.h>  // for RtlCaptureStackBackTrace
 #pragma comment(lib, "ntdll.lib")
 

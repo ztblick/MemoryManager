@@ -3,8 +3,8 @@
 //
 #pragma once
 
-#include "disk.h"
-#include "pfn.h"
+#include "../data_structures/disk.h"
+#include "../data_structures/pfn.h"
 #include "threads.h"
 
 #pragma once

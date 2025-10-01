@@ -2,7 +2,7 @@
 // Created by zblickensderfer on 5/6/2025.
 //
 
-#include "../include/pte.h"
+#include "pte.h"
 
 PPTE PTE_base = {0};
 
