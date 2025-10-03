@@ -9,6 +9,7 @@ HANDLE system_start_event;
 HANDLE initiate_aging_event;
 HANDLE initiate_trimming_event;
 HANDLE initiate_writing_event;
+HANDLE initiate_pruning_event;
 HANDLE standby_pages_ready_event;
 HANDLE system_exit_event;
 
@@ -18,6 +19,7 @@ HANDLE scheduling_thread;
 HANDLE aging_thread;
 HANDLE trimming_thread;
 HANDLE writing_thread;
+HANDLE pruning_thread;
 HANDLE debug_thread;
 
 // Thread IDs

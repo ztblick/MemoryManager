@@ -10,9 +10,10 @@
 // These switches turn on particular configurations for the program.
 #define LOGGING_MODE                0       // Outputs statistics to the console
 #define RUN_FOREVER                 0       // Does not stop user threads
-#define STATS_MODE                  0       // Collects data on page consumption
+#define STATS_MODE                  1       // Collects data on page consumption
 #define AGING                       1       // Initiates aging of PTEs when accessed / trimmed
 #define SCHEDULING                  1       // Adds a scheduling thread
+#define PRUNING                     1       // Turns on the pruning thread
 #define USER_SIMULATION             1       // Changes how memory is accessed (if 0, entirely random)
 #define DO_WORK_TO_SLOW_CONSUMPTION 0       // Adds additional work after successful access to VA
 
@@ -21,6 +22,7 @@
 // Default runtimes to guide batch sizes and event signalling.
 #define DEFAULT_WRITE_DURATION                      0.01
 #define DEFAULT_TRIM_DURATION                       0.01
+#define DEFAULT_PRUNE_DURATION                      0.01
 #define AVAILABLE_PAGE_THRESHOLD                    4096
 #define ADDITIONAL_PAGE_BUFFER                      128
 #define DEFAULT_PAGE_CONSUMPTION_RATE               (1.0 * MB(300) / PAGE_SIZE)
@@ -31,7 +33,6 @@
 typedef struct __vm_state {
     // This is the number of threads that run the simulating thread -- which become fault-handling threads.
     ULONG num_user_threads;
-    ULONG num_free_lists;
 
     // Command line arguments set these values, initially
     LONG64 pages_in_page_file;
@@ -58,6 +59,8 @@ typedef struct __vm_state {
     // Parameter to provide VirtualAlloc2 with the ability to create a VA space
     // that supports multiple VAs to map to the same shared page.
     MEM_EXTENDED_PARAMETER virtual_alloc_shared_parameter;
+
+    ULONG64 prune_count;
 } VM, *PVM;
 
 // Our global vm variable
@@ -84,10 +87,11 @@ extern STATS stats;
 // Default values for variables
 #define DEFAULT_NUM_USER_THREADS        8
 #define DEFAULT_ITERATIONS              (MB(1))
-#define DEFAULT_FREE_LIST_COUNT         16
+#define FREE_LIST_COUNT                 16
 
 // We will begin trimming and writing when our standby + free page count falls below this threshold.
-#define LOW_PAGE_THRESHOLD              (512)
+#define LOW_PAGE_THRESHOLD              512
+#define PRUNING_THRESHOLD               128
 
 // These will change as we decide how many pages to write, read, or trim at once.
 #define MAX_WRITE_BATCH_SIZE            4096
@@ -95,6 +99,7 @@ extern STATS stats;
 #define MAX_READ_BATCH_SIZE             1
 #define MAX_TRIM_BATCH_SIZE             2048
 #define MAX_FREE_BATCH_SIZE             1
+#define MAX_PRUNE_BATCH_SIZE            256
 
 // Default pages in memory and page file, which are used to calculate VA span
 #define DEFAULT_NUMBER_OF_PHYSICAL_PAGES        (KB(256))

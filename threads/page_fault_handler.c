@@ -105,7 +105,8 @@ BOOL resolve_soft_fault(PPTE pte) {
             // Check to see if the modified list needs to be refilled
             signal_event_if_list_is_about_to_run_low(   list_to_decrement,
                                                         initiate_trimming_event,
-                                                        TRIMMING_THREAD_ID);
+                                                        TRIMMING_THREAD_ID,
+                                                        LOW_PAGE_THRESHOLD);
         }
 
         else {
@@ -119,7 +120,8 @@ BOOL resolve_soft_fault(PPTE pte) {
             // Check to see if the standby list needs to be refilled
             signal_event_if_list_is_about_to_run_low(   list_to_decrement,
                                                         initiate_writing_event,
-                                                        WRITING_THREAD_ID);
+                                                        WRITING_THREAD_ID,
+                                                        LOW_PAGE_THRESHOLD);
         }
 
         // Remove the page from its list (standby or modified)
@@ -177,7 +179,8 @@ BOOL move_batch_from_standby_to_cache(PUSER_THREAD_INFO thread_info) {
     // Using recent consumption, decide if we need to signal the writer to bring in more standby pages!
     signal_event_if_list_is_about_to_run_low(   &standby_list,
                                                 initiate_writing_event,
-                                                WRITING_THREAD_ID);
+                                                WRITING_THREAD_ID,
+                                                LOW_PAGE_THRESHOLD);
 
     if (batch_size == 0) return FALSE;
 
@@ -207,21 +210,6 @@ BOOL move_batch_from_standby_to_cache(PUSER_THREAD_INFO thread_info) {
     ASSERT(thread_info->free_page_count == 0);
     thread_info->free_page_count = batch_size;
     return TRUE;
-}
-
-VOID signal_event_if_list_is_about_to_run_low(PPAGE_LIST list,
-                                              HANDLE event_to_set,
-                                              USHORT thread_id) {
-
-    // Find the amount of pages expected to be consumed while the event is executed
-    double time_to_perform_event = stats.worker_runtimes[thread_id];
-    double consumption_rate = stats.page_consumption_per_second;
-    LONG64 pages_consumed_during_event = (LONG64) (consumption_rate * time_to_perform_event);
-    LONG64 current_list_size = list->list_size;
-
-    // If the list is expected to run low, we will initiate our event now to counteract it
-    if (current_list_size - pages_consumed_during_event < LOW_PAGE_THRESHOLD)
-        SetEvent(event_to_set);
 }
 
 /*
@@ -296,7 +284,7 @@ BOOL resolve_hard_fault(PPTE pte, PUSER_THREAD_INFO thread_info) {
     // Let's now resolve the fault.
 
     // Now we will set OUR kernel read VA space.
-    ASSERT(thread_info->kernel_va_index < NUM_KERNEL_READ_ADDRESSES);                       // TODO figure out why this is firing...!
+    ASSERT(thread_info->kernel_va_index < NUM_KERNEL_READ_ADDRESSES);
     PULONG_PTR kernel_read_va = thread_info->kernel_va_space + thread_info->kernel_va_index * PAGE_SIZE / 8;
 
     // Get the frame number
@@ -313,7 +301,7 @@ BOOL resolve_hard_fault(PPTE pte, PUSER_THREAD_INFO thread_info) {
         if (pte_lock_acquired) unlock_pte(pte);
 
         // Add the page to the free list and update its status
-        add_page_to_free_lists(available_pfn, thread_info->thread_id);
+        add_page_to_cache_or_free_list(available_pfn, thread_info->thread_id, thread_info);
         increment_available_count();
         set_PFN_free(available_pfn);
 

@@ -8,8 +8,41 @@ PAGE_LIST zero_list;
 PAGE_LIST modified_list;
 PAGE_LIST standby_list;
 
-VOID add_page_to_free_lists(PPFN page, ULONG first_index) {
+BOOL check_if_list_is_about_to_run_low(PPAGE_LIST list,
+                                              HANDLE event_to_set,
+                                              USHORT thread_id,
+                                              LONG64 low_page_threshold) {
 
+    // Find the amount of pages expected to be consumed while the event is executed
+    double time_to_perform_event = stats.worker_runtimes[thread_id];
+    double consumption_rate = stats.page_consumption_per_second;
+    LONG64 pages_consumed_during_event = (LONG64) (consumption_rate * time_to_perform_event);
+    LONG64 current_list_size = list->list_size;
+
+    // If the list is expected to run low, return true!
+    return (current_list_size - pages_consumed_during_event < low_page_threshold);
+}
+
+VOID signal_event_if_list_is_about_to_run_low(PPAGE_LIST list,
+                                              HANDLE event_to_set,
+                                              USHORT thread_id,
+                                              LONG64 low_page_threshold) {
+
+    // If the list is expected to run low, we will initiate our event now to counteract it
+    BOOL low = check_if_list_is_about_to_run_low(list, event_to_set, thread_id, low_page_threshold);
+    if (low) SetEvent(event_to_set);
+}
+
+VOID add_page_to_cache_or_free_list(PPFN page, ULONG first_index, PUSER_THREAD_INFO thread_info) {
+
+    // First, try to add this page to your free page cache
+    USHORT cache_count = thread_info->free_page_count;
+    if (cache_count < FREE_PAGE_CACHE_SIZE) {
+        thread_info->free_page_cache[cache_count] = page;
+        thread_info->free_page_count = cache_count + 1;
+    }
+
+    // If you cannot -- then add it to a free list
     ULONG count = free_lists.number_of_lists;
     ULONG index = first_index % count;
     PPAGE_LIST list;
@@ -59,6 +92,10 @@ BOOL try_get_free_pages(PUSER_THREAD_INFO thread_info) {
     return FALSE;
 }
 
+void set_free_list_bit(ULONG index) {
+    InterlockedBitTestAndSet64(&free_lists.low_list_bitmap, index);
+}
+
 BOOL try_refill_cache_from_free_list(ULONG list_index, PUSER_THREAD_INFO thread_info) {
 
     ASSERT (list_index < free_lists.number_of_lists);
@@ -79,6 +116,20 @@ BOOL try_refill_cache_from_free_list(ULONG list_index, PUSER_THREAD_INFO thread_
                                                     FREE_PAGE_CACHE_SIZE);
     unlock_free_list(list_index);
     if (batch_size == 0) return FALSE;
+
+#if PRUNING
+    // Check to see if the standby list needs to be refilled
+    BOOL free_list_low = check_if_list_is_about_to_run_low(   list,
+                                                initiate_pruning_event,
+                                                PRUNING_THREAD_ID,
+                                                PRUNING_THRESHOLD);
+    // Take note of the free list that is low
+    if (free_list_low) {
+        set_free_list_bit(list_index);
+        // Wake the pruner!
+        SetEvent(initiate_pruning_event);
+    }
+#endif
 
     // Now that we have a batch of pages, let's add it to our cache
     // Add all removed pages to the free cache and unlock them

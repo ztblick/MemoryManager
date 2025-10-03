@@ -29,6 +29,7 @@ typedef struct __page_list {
 } PAGE_LIST, *PPAGE_LIST;
 
 typedef struct __page_list_array {
+    volatile LONG64 low_list_bitmap;
     ULONG number_of_lists;
     volatile LONG64 page_count;
     PAGE_LIST *list_array;
@@ -43,9 +44,17 @@ extern PAGE_LIST modified_list;
 extern PAGE_LIST standby_list;
 
 /*
+    Checks the given list. If it will fall below a set threshold in the given window of time,
+    initiate the given event. Checks global statistics on page consumption and thread runtimes.
+ */
+VOID signal_event_if_list_is_about_to_run_low(PPAGE_LIST list,
+                                              HANDLE event_to_set,
+                                              USHORT thread_id, LONG64 low_page_threshold);
+
+/*
  *  Pushes a page onto a free list.
  */
-VOID add_page_to_free_lists(PPFN page, ULONG first_index);
+VOID add_page_to_cache_or_free_list(PPFN page, ULONG first_index, PUSER_THREAD_INFO thread_info);
 
 /*
  *  This attempts to grab a free page from the array of free lists.
@@ -187,6 +196,7 @@ VOID validate_list(PPAGE_LIST list);
     Removes a batch of pages from the head of the given list. Adds them into the
     given list pages. Pages are LOCKED.
     Returns the total number of pages batched.
+    Changes the size of the list to reflect the change.
  */
 ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
                                     PPFN *address_of_first_page,

@@ -34,11 +34,3 @@ VOID clear_disk_slot(ULONG64 disk_slot);
  *  Sets the given slot to occupied in the page file metadata.
  */
 VOID set_disk_slot(UINT64 disk_slot);
-
-/*
-        Checks the given list. If it will fall below a set threshold in the given window of time,
-        initiate the given event. Checks global statistics on page consumption and thread runtimes.
- */
-VOID signal_event_if_list_is_about_to_run_low(PPAGE_LIST list,
-                                              HANDLE event_to_set,
-                                              USHORT thread_id);

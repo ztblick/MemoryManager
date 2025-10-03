@@ -120,7 +120,7 @@ void initialize_statistics(void) {
     stats.page_consumption_per_second = DEFAULT_PAGE_CONSUMPTION_RATE;
     stats.worker_runtimes[TRIMMING_THREAD_ID] = DEFAULT_TRIM_DURATION;
     stats.worker_runtimes[WRITING_THREAD_ID] = DEFAULT_WRITE_DURATION;
-    stats.worker_runtimes[PRUNING_THREAD_ID] = 0;
+    stats.worker_runtimes[PRUNING_THREAD_ID] = DEFAULT_PRUNE_DURATION;
 }
 
 HANDLE CreateSharedMemorySection (VOID) {
@@ -186,12 +186,11 @@ void initialize_page_lists(void) {
     initialize_page_list(&standby_list);
 
     // Initialize group of free lists
-    ULONG count = vm.num_free_lists;
-    free_lists.number_of_lists = count;
+    free_lists.number_of_lists = FREE_LIST_COUNT;
     free_lists.page_count = 0;
     free_lists.free_list_locks = 0;
-    free_lists.list_array = zero_malloc(sizeof(PAGE_LIST) * count);
-    for (int i = 0; i < count; i++) {
+    free_lists.list_array = zero_malloc(sizeof(PAGE_LIST) * FREE_LIST_COUNT);
+    for (int i = 0; i < FREE_LIST_COUNT; i++) {
         initialize_page_list(&free_lists.list_array[i]);
     }
 }
@@ -343,7 +342,6 @@ void initialize_threads(void) {
         ASSERT(user_threads[i]);
     }
 #if SCHEDULING
-    ULONG_PTR scheduling_id = SCHEDULING_THREAD_ID;
     // Create system scheduling thread
     scheduling_thread = CreateThread (DEFAULT_SECURITY,
                                DEFAULT_STACK_SIZE,
@@ -374,7 +372,16 @@ void initialize_threads(void) {
 
     ASSERT(writing_thread);
 
-
+#if PRUNING
+    // Create worker thread to prune pages from standby to free lists
+    pruning_thread = CreateThread (DEFAULT_SECURITY,
+                    DEFAULT_STACK_SIZE,
+        (LPTHREAD_START_ROUTINE) prune_pages_thread,
+                                NULL,
+                    DEFAULT_CREATION_FLAGS,
+                                &worker_thread_ids[PRUNING_THREAD_ID]);
+    ASSERT(pruning_thread);
+#endif
     // Initialize trimmer and writer sampling
 #if STATS_MODE
     trim_samples.head = 0;
@@ -406,6 +413,9 @@ void initialize_events(void) {
     initiate_writing_event = CreateEvent(NULL, AUTO_RESET, FALSE, NULL);
     NULL_CHECK(initiate_writing_event, "Could not initialize writing event.");
 
+    initiate_pruning_event = CreateEvent(NULL, AUTO_RESET, FALSE, NULL);
+    NULL_CHECK(initiate_pruning_event, "Could not initialize writing event.");
+
     standby_pages_ready_event = CreateEvent(NULL, MANUAL_RESET, FALSE, NULL);
     NULL_CHECK(standby_pages_ready_event, "Could not intialize standby pages ready event.");
 
@@ -423,7 +433,6 @@ void set_defaults(void) {
     // Declare and initialize various global variables
     vm.num_user_threads = DEFAULT_NUM_USER_THREADS;
     vm.iterations = DEFAULT_ITERATIONS;
-    vm.num_free_lists = DEFAULT_FREE_LIST_COUNT;
     vm.allocated_frame_count = DEFAULT_NUMBER_OF_PHYSICAL_PAGES;
     vm.pages_in_page_file = DEFAULT_PAGES_IN_PAGE_FILE;
 }

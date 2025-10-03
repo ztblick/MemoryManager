@@ -17,12 +17,13 @@
 #include "../data_structures/page_list.h"
 #include "../data_structures/disk.h"
 #include "threads.h"
-#include "../threads/trimmer.h"
+#include "trimmer.h"
 #include "page_fault_handler.h"
 #include "ager.h"
-#include "../threads/scheduler.h"
+#include "scheduler.h"
 #include "simulator.h"
 #include "writer.h"
+#include "pruner.h"
 
 /*
  *  Initialize all global data structures. Called at startup.

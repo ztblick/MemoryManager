@@ -50,6 +50,7 @@ extern HANDLE system_start_event;
 extern HANDLE initiate_aging_event;
 extern HANDLE initiate_trimming_event;
 extern HANDLE initiate_writing_event;
+extern HANDLE initiate_pruning_event;
 extern HANDLE standby_pages_ready_event;
 extern HANDLE system_exit_event;
 
@@ -59,6 +60,7 @@ extern HANDLE scheduling_thread;
 extern HANDLE aging_thread;
 extern HANDLE trimming_thread;
 extern HANDLE writing_thread;
+extern HANDLE pruning_thread;
 extern HANDLE debug_thread;
 
 // Thread IDs

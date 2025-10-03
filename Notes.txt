@@ -6,6 +6,19 @@ Current goal:
     - Aging (NOT STARTED)
     - Consumption-based batching (DONE)
     - Speculative reads (NOT STARTED)
+
+
+Current observations:
+- We over-prune. Tremendously. We only want to prune when there are still free pages (so we don't get in the way
+    of operations on the standby list). And we don't want to prune too soon. When we over-prune, we end up with wayyyyy
+    too many free pages, which leads to too few active pages (and unnecessary faults).
+
+- There never seem to be enough standby or modified pages to allow for soft-faulting. This indicates that we are
+    over-trimming and over-writing. That said, we have zero latency, so this doesn't seem to be a big problem
+    now. But if we were actually writing to and from a disk, the times would be much slower, which increases
+    the importance of soft faults. So, later on, when we add an actual disk, we will want to fine-tune the
+    trimmer/writer threads to run with less aggression.
+
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 NEXT SUB-GOALS:
 

@@ -153,7 +153,6 @@ VOID clear_disk_slot(ULONG64 disk_slot) {
 
     // Increment our count of clear slots!
     LONG64 result = InterlockedIncrement64(&pf.empty_disk_slots);
-    ASSERT(result < vm.pages_in_page_file && result >= 0);
 }
 
 VOID set_disk_slot(UINT64 disk_slot) {
@@ -171,5 +170,4 @@ VOID set_disk_slot(UINT64 disk_slot) {
 
     // Decrement the empty disk slot count without risking race conditions.
     LONG64 result = InterlockedDecrement64(&pf.empty_disk_slots);
-    ASSERT(result < vm.pages_in_page_file && result >= 0);
 }

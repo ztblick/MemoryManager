@@ -193,7 +193,8 @@ VOID write_pages_thread(void) {
         // the trimmer needs to start up again to replenish what we are going to take.
         signal_event_if_list_is_about_to_run_low(   &modified_list,
                                                     initiate_trimming_event,
-                                                    TRIMMING_THREAD_ID);
+                                                    TRIMMING_THREAD_ID,
+                                                    LOW_PAGE_THRESHOLD);
 
         // Once woken, begin writing a batch of pages. Then go back to sleep.
         ULONG64 batch_size = write_pages();
