@@ -13,7 +13,7 @@
 #define STATS_MODE                  1       // Collects data on page consumption
 #define AGING                       1       // Initiates aging of PTEs when accessed / trimmed
 #define SCHEDULING                  1       // Adds a scheduling thread
-#define PRUNING                     1       // Turns on the pruning thread
+#define PRUNING                     0       // Turns on the pruning thread
 #define USER_SIMULATION             1       // Changes how memory is accessed (if 0, entirely random)
 #define DO_WORK_TO_SLOW_CONSUMPTION 0       // Adds additional work after successful access to VA
 

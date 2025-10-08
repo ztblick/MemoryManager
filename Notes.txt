@@ -19,10 +19,20 @@ Current observations:
     the importance of soft faults. So, later on, when we add an actual disk, we will want to fine-tune the
     trimmer/writer threads to run with less aggression.
 
+- New bug: One of the free list arrays has negative size -- -39487, in this case! This implies that we were
+            able to continuously remove pages from a list we were not supposed to remove from.
+
+- New bug: for some reason, we have an active, accessed PTE that has a locked page associated with it.
+           This stops the trimmer in its tracks. Why would a page associated with an active PTE be locked?
+           It must have still been locked when added to a free list, which means it was not properly unlocked
+           when moved off the standby list. Culprit: user thread (possible) or pruner (more likely).
+
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 NEXT SUB-GOALS:
 
-- Batch prune from standby to free lists (TODAY!)
+- Scrap pruner: instead, have user threads signal each other ("I am about to grab some standby pages, guys!").
+                How many? Not too many. A reasonable batch (16-64 pages, I imagine). Add them to an empty free list.
+                The next guy should do the same, but he should wait until the previous guy is done.
 
 - Fix batch removals to tolerate single-page removals (TODAY!)
 

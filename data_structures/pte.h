@@ -28,6 +28,8 @@
 // This is the default value given to the frame_number field for a PTE that has no connected frame.
 #define NO_FRAME_ASSIGNED       0
 
+#define ZERO_PTE                0ULL
+
 typedef struct {
     UINT64 valid : 1;                       // Valid bit -- 1 indicating PTE is valid
     UINT64 status : 1;                      // 1 bit to encode transition (0) or on disk (1)
@@ -68,7 +70,7 @@ typedef struct {
     BYTE_LOCK lock;
 } PTE, *PPTE;
 
-#define IS_PTE_ZEROED(pte)      ((pte)->memory_format.valid == PTE_INVALID && (pte)->memory_format.frame_number == NO_FRAME_ASSIGNED)
+#define IS_PTE_ZEROED(pte)      ((pte)->entire_pte == ZERO_PTE)
 #define IS_PTE_VALID(pte)       ((pte)->memory_format.valid == PTE_VALID)
 #define IS_PTE_TRANSITION(pte)  ((pte)->transition_format.valid == PTE_INVALID && (pte)->transition_format.status == PTE_IN_TRANSITION && (pte)->transition_format.frame_number != NO_FRAME_ASSIGNED)
 #define IS_PTE_ON_DISK(pte)     ((pte)->disk_format.valid == PTE_INVALID && (pte)->disk_format.status == PTE_ON_DISK)

@@ -110,11 +110,26 @@ VOID map_single_page_from_pte(PPTE pte) {
     map_pages(1, va, &frame_pointer);
 }
 
+/*
+    Sets the accessed bit for any VALID PTE. If the PTE is NOT memory valid,
+    its accessed bit is NOT set.
+ */
 VOID set_accessed_bit(PULONG_PTR va) {
-    PPTE pte = get_PTE_from_VA(va);
 
-    // Set the accessed bit
-    _interlockedbittestandset64((LONG64 *) pte, ACCESSED_BIT_POSITION);
+    // Get a snapshot of the PTE of the VA
+    PPTE pte = get_PTE_from_VA(va);
+    PTE snapshot = *pte;
+
+    // If the PTE is no longer valid, do not set its access bit
+    if (!IS_PTE_VALID(&snapshot)) return;
+
+    // Set the access bit atomically. If the PTE is made invalid along the way,
+    // abort the process and return.
+    PTE accessed = snapshot;
+    accessed.memory_format.accessed = PTE_ACCESSED;
+    InterlockedCompareExchange64((volatile LONG64 *) pte,
+                        (LONG64) &accessed,
+                        (LONG64) &snapshot);
 }
 
 VOID clear_accessed_bit(PPTE pte) {

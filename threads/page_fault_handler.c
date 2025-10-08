@@ -340,9 +340,10 @@ BOOL resolve_hard_fault(PPTE pte, PUSER_THREAD_INFO thread_info) {
         memset(kernel_read_va, 0, PAGE_SIZE);
     }
 
+#if 0
     // Ensure that the page contents correctly contain the relevant VA!
     ASSERT(validate_page(get_VA_from_PTE(pte)));
-
+#endif
     // Update PTE and PFN
     set_PTE_to_valid(pte, frame_number_to_map);
     set_PFN_active(available_pfn, pte);

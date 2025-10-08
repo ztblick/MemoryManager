@@ -40,6 +40,7 @@ VOID add_page_to_cache_or_free_list(PPFN page, ULONG first_index, PUSER_THREAD_I
     if (cache_count < FREE_PAGE_CACHE_SIZE) {
         thread_info->free_page_cache[cache_count] = page;
         thread_info->free_page_count = cache_count + 1;
+        return;
     }
 
     // If you cannot -- then add it to a free list
@@ -136,6 +137,7 @@ BOOL try_refill_cache_from_free_list(ULONG list_index, PUSER_THREAD_INFO thread_
     PPFN pfn = first_page;
     PPFN next;
     for (ULONG64 i = 0; i < batch_size; i++) {
+
 #if DEBUG
         validate_pfn(pfn);
 #endif
@@ -548,6 +550,10 @@ ULONG64 remove_batch_from_list_head_exclusive(PPAGE_LIST list,
         // If the next page is the head, we have reached the end and locked ALL the pages on the list.
         if (pfn == list_head) break;
 
+#if DEBUG
+        validate_pfn(pfn);
+#endif
+
         // We have locked the next page. Hooray! Let's move on to the next page.
         batch_last = pfn;
         pfn = pfn->flink;
@@ -711,7 +717,7 @@ BOOL try_lock_free_list(ULONG64 index) {
 
 VOID unlock_free_list(ULONG64 index) {
     BOOL result = InterlockedBitTestAndReset64(&free_lists.free_list_locks, index);
-    ASSERT(result == TRUE);
+    ASSERT(result);
 }
 
 #if DEBUG
