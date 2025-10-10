@@ -325,6 +325,9 @@ void initialize_threads(void) {
         for (ULONG64 j = 0; j < num_pages; j++) {
             user_thread_info[i].free_page_cache[j] = pfn;
             next = pfn->flink;
+
+            // Unlock the pfn (was locked by the list removal) and move on to the next pfn
+            unlock_pfn(pfn);
             pfn = next;
         }
         user_thread_info[i].free_page_count = num_pages;

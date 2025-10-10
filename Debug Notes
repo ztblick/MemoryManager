@@ -1,3 +1,42 @@
+October 10
+
+When executing a large test, we arrived in a situation where soft-faulting
+    is happening on concurrent threads. And in this case, three threads simultaneously hit
+    an assert in the soft-faulter where the page associated with the transition PTE
+    was active (and associated with a different PTE).
+
+    How is this possible? In this case, the PTE previously associated with that page should be
+    in its disk format.
+
+    At the same time, the standby count and the available count are both wrong:
+
+   +0x008 n_available      : 0n387286
+   +0x010 n_free           : 0x00007ff6`7b7c6ac8  -> 0n0
+   +0x018 n_modified       : 0x00007ff6`7b7c6b88  -> 0n0
+   +0x020 n_standby        : 0x00007ff6`7b7c6bc8  -> 0n-288
+   +0x028 n_hard           : 0n911806
+   +0x030 n_soft           : 0n1834
+   +0x038 wait_time        : 0n30798703
+   +0x040 hard_faults_missed : 0n252
+
+0:011> dv
+            pte = 0x00000200`7421aa50
+  available_pfn = 0x00000200`a3e75200
+   pte_snapshot = struct PTE
+0:011> dx -r1 ((MemoryManager!__pfn *)0x200a3e75200)
+((MemoryManager!__pfn *)0x200a3e75200)                 : 0x200a3e75200 [Type: __pfn *]
+    [+0x000] flink            : 0x2009a27d600 [Type: __pfn *]
+    [+0x008] blink            : 0x2009ce83bc0 [Type: __pfn *]
+    [+0x010] PTE              : 0x20073efeaa0 [Type: PTE *]
+    [+0x018] fields           [Type: __pfn_fields]
+    [+0x018] raw_pfn_data     : 0x100000000000001 [Type: unsigned __int64]
+    [+0x018] lock             [Type: BYTE_LOCK]
+    [+0x020] padding          : "" [Type: char [32]]
+
+
+    We need to think more about the soft-fault / hard fault race condition. We also need to see
+    if we can replicate this issue.
+
 July 25
 
 I am trying to implement smaller locks using interlockedCompareExchange.

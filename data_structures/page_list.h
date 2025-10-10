@@ -204,7 +204,7 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
 
 /*
     Removes a batch of pages from the head of the given list. Adds them into the
-    given list pages. Pages are UNLOCKED.
+    given list pages. Pages are LOCKED.
     Returns the total number of pages batched.
     ASSUMES the list is ALREADY locked exclusive.
  */

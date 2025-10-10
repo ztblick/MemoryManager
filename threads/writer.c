@@ -46,18 +46,28 @@ ULONG64 write_pages(VOID) {
     ULONG64 current_batch_size = 0;
     USHORT misses = 0;
     PPFN batch_first;
-    while (num_pages_in_write_batch < target_page_count &&
-            misses < BATCH_ATTEMPTS) {
 
-        current_batch_size = remove_batch_from_list_head(
-            &modified_list,
-            &batch_first,
-            target_page_count - num_pages_in_write_batch);
+    while (num_pages_in_write_batch < target_page_count) {
+
+        // First, remove as many pages as we can from the modified list.
+        current_batch_size = remove_batch_from_list_head( &modified_list,
+                                                            &batch_first,
+                                                    target_page_count - num_pages_in_write_batch);
+
+        // If no pages were returned, we will note the miss.
+        // After enough failed attempts, we will just move on.
+        if (current_batch_size == 0) {
+            misses++;
+            if (misses == BATCH_ATTEMPTS) break;
+            continue;
+        }
 
         // Move all pages to their mid-write state and put them in the array
         pfn = batch_first;
-        for (ULONG64 i = 0; i < current_batch_size; i++) {
-            pages_to_write[i + num_pages_in_write_batch] = pfn;
+        ULONG64 first_index = num_pages_in_write_batch;
+        ULONG64 last_index = num_pages_in_write_batch + current_batch_size;
+        for (ULONG64 i = first_index; i < last_index; i++) {
+            pages_to_write[i] = pfn;
             set_pfn_mid_write(pfn);
 
             // Move on to the next page, then unlock the current page
@@ -67,10 +77,7 @@ ULONG64 write_pages(VOID) {
             pfn = next;
         }
 
-        // If no pages were returned, we will note the miss.
-        // After enough failed attempts, we will just move on.
-        if (current_batch_size == 0) misses++;
-
+        // Update our running total number of pages batched
         num_pages_in_write_batch += current_batch_size;
     }
 

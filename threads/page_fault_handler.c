@@ -85,7 +85,7 @@ BOOL resolve_soft_fault(PPTE pte) {
     // Or it could be hanging out on the modified list.
     // We will need to address all of these situations.
 
-    // Ensure that the page is either modified or standby or mid-write or mid-write.
+    // Ensure that the page is either modified or standby or mid-write or mid-trim.
     ASSERT(!IS_PFN_ACTIVE(available_pfn) && !IS_PFN_FREE(available_pfn));
 
     // If the PFN is mid-trim or mid-write, then we will not need to remove it from any list.
@@ -203,6 +203,7 @@ BOOL move_batch_from_standby_to_cache(PUSER_THREAD_INFO thread_info) {
         // Now we can copy the page into the cache and release its lock
         thread_info->free_page_cache[i] = pfn;
         next = pfn->flink;
+        set_PFN_free(pfn);
         unlock_pfn(pfn);
         pfn = next;
     }

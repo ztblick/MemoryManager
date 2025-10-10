@@ -10,7 +10,7 @@
 // These switches turn on particular configurations for the program.
 #define LOGGING_MODE                0       // Outputs statistics to the console
 #define RUN_FOREVER                 0       // Does not stop user threads
-#define STATS_MODE                  1       // Collects data on page consumption
+#define STATS_MODE                  0       // Collects data on page consumption
 #define AGING                       1       // Initiates aging of PTEs when accessed / trimmed
 #define SCHEDULING                  1       // Adds a scheduling thread
 #define PRUNING                     0       // Turns on the pruning thread

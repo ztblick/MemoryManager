@@ -9,9 +9,9 @@ Current goal:
 
 
 Current observations:
-- We over-prune. Tremendously. We only want to prune when there are still free pages (so we don't get in the way
-    of operations on the standby list). And we don't want to prune too soon. When we over-prune, we end up with wayyyyy
-    too many free pages, which leads to too few active pages (and unnecessary faults).
+
+- NEW BUG! See Debug notes...
+
 
 - There never seem to be enough standby or modified pages to allow for soft-faulting. This indicates that we are
     over-trimming and over-writing. That said, we have zero latency, so this doesn't seem to be a big problem
@@ -19,13 +19,6 @@ Current observations:
     the importance of soft faults. So, later on, when we add an actual disk, we will want to fine-tune the
     trimmer/writer threads to run with less aggression.
 
-- New bug: One of the free list arrays has negative size -- -39487, in this case! This implies that we were
-            able to continuously remove pages from a list we were not supposed to remove from.
-
-- New bug: for some reason, we have an active, accessed PTE that has a locked page associated with it.
-           This stops the trimmer in its tracks. Why would a page associated with an active PTE be locked?
-           It must have still been locked when added to a free list, which means it was not properly unlocked
-           when moved off the standby list. Culprit: user thread (possible) or pruner (more likely).
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 NEXT SUB-GOALS:
@@ -33,8 +26,6 @@ NEXT SUB-GOALS:
 - Scrap pruner: instead, have user threads signal each other ("I am about to grab some standby pages, guys!").
                 How many? Not too many. A reasonable batch (16-64 pages, I imagine). Add them to an empty free list.
                 The next guy should do the same, but he should wait until the previous guy is done.
-
-- Fix batch removals to tolerate single-page removals (TODAY!)
 
 - Add a global field used to indicate if certain threads are ALREADY running
     - this could prevent user threads from setting the write event multiple times...

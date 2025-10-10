@@ -123,6 +123,9 @@ VOID set_accessed_bit(PULONG_PTR va) {
     // If the PTE is no longer valid, do not set its access bit
     if (!IS_PTE_VALID(&snapshot)) return;
 
+    // If the PTE is already accessed, return. It could be trimmed immediately, but that's okay.
+    if (IS_PTE_ACCESSED(&snapshot)) return;
+
     // Set the access bit atomically. If the PTE is made invalid along the way,
     // abort the process and return.
     PTE accessed = snapshot;

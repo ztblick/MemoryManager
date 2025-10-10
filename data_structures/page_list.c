@@ -135,15 +135,16 @@ BOOL try_refill_cache_from_free_list(ULONG list_index, PUSER_THREAD_INFO thread_
     // Now that we have a batch of pages, let's add it to our cache
     // Add all removed pages to the free cache and unlock them
     PPFN pfn = first_page;
-    PPFN next;
     for (ULONG64 i = 0; i < batch_size; i++) {
 
 #if DEBUG
         validate_pfn(pfn);
 #endif
         thread_info->free_page_cache[i] = pfn;
-        next = pfn->flink;
-        pfn = next;
+
+        // Unlock the pfn (was locked on list removal) and move on to the next page.
+        unlock_pfn(pfn);
+        pfn = pfn->flink;
     }
     thread_info->free_page_count = batch_size;
 
@@ -404,12 +405,9 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
     ULONG attempts = 0;
     ULONG wait_time = 1;
     BOOL locked_shared = FALSE;
-
-    // My current page
-    PPFN pfn, list_head = list->head, batch_first, batch_last;
-
-    // The number of pages we have added to our batch
-    LONG64 num_pages_batched = 0;
+    PPFN list_head = list->head,
+        first_page = list_head->flink,
+        next_page = first_page->flink;
 
     // Wait until the list can be locked shared and the head can be locked, too
     while (attempts < MAX_HARD_ACCESS_ATTEMPTS) {
@@ -421,11 +419,49 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
             continue;
         }
 
-        list_head = list->head;
-
         // If we can't lock the head, unlock, wait, and retry.
         if (!try_lock_pfn(list_head)) {
             unlock_list_shared(list);
+            wait(wait_time);
+            continue;
+        }
+
+        // If there are no pages on the list, return.
+        first_page = list_head->flink;
+        if (first_page == list_head) {
+            unlock_list_shared(list);
+            unlock_pfn(list_head);
+            return 0;
+        }
+
+        // If we cannot lock the first unique pfn on the list, we will unlock, wait, and try again.
+        if (!try_lock_pfn(first_page)) {
+            unlock_list_shared(list);
+            unlock_pfn(list_head);
+            wait(wait_time);
+            continue;
+        }
+
+        // Now, let's consider the second page on the list
+        next_page = first_page->flink;
+
+        // Special case: if there is just one page on the list, let's remove it and return it.
+        if (next_page == list_head) {
+            *address_of_first_page = first_page;
+            list_head->flink = list_head;
+            list_head->blink = list_head;
+            unlock_list_shared(list);
+            unlock_pfn(list_head);
+            change_list_size(list, -1);
+            return 1;
+        }
+
+        // If we cannot lock the second unique pfn on the list (we need both for at least one safe removal),
+        // unlock, wait, and try again.
+        if (!try_lock_pfn(next_page)) {
+            unlock_list_shared(list);
+            unlock_pfn(list_head);
+            unlock_pfn(first_page);
             wait(wait_time);
             continue;
         }
@@ -436,93 +472,56 @@ ULONG64 remove_batch_from_list_head(PPAGE_LIST list,
 
     // If we were NOT able to lock shared, we will need to lock exclusive
     if (!locked_shared) {
-        lock_list_exclusive(list);
-        lock_pfn(list->head);
-        list_head = list->head;
+        return remove_batch_from_list_head_exclusive(list, address_of_first_page, capacity);
     }
 
-    // Our current page to lock is, by default, the first page at the head of the list
-    batch_first = list_head->flink;
-    batch_last = batch_first;
+    // ---------------------------------------------------------------------------------------------//
+    // At this point, we know the list is locked shared, there are at least two unique pages on it, //
+    // and we have locked both of those pages. We will have a batch of at LEAST one page.           //
+    // ---------------------------------------------------------------------------------------------//
 
-    // Special case: if there are no pages, unlock and return 0
-    if (batch_first == list_head) {
-        if (locked_shared) unlock_list_shared(list);
-        else unlock_list_exclusive(list);
-        unlock_pfn(list_head);
-        return 0;
-    }
+    LONG64 num_pages_batched = 1;
 
-    pfn = batch_first;
-
+    PPFN look_ahead = next_page->flink;
     BOOL wrapped_around = FALSE;
-    BOOL cannot_acquire_lock = FALSE;
 
     // While we want pages and there are pages available, we will continue to expand our batch
-    for ( ; num_pages_batched <= capacity; num_pages_batched++) {
-
-        wrapped_around = FALSE;
-        cannot_acquire_lock = FALSE;
+    while (num_pages_batched < capacity) {
 
         // If the next page is the head, we have reached the end and locked ALL the pages on the list.
-        if (pfn == list_head){
+        if (look_ahead == list_head){
+            next_page = list_head;
             wrapped_around = TRUE;
+            num_pages_batched++;
             break;
         }
+
         // OR, if we can't lock the next page, then we will take the batch we have,
         // release locks on the current and previous page as well as the head and list,
         // and return (letting a soft-faulter make progress).
-        if (!try_lock_pfn(pfn)) {
-            cannot_acquire_lock = TRUE;
-            break;
-        }
-
-#if DEBUG
-        validate_pfn(pfn);
-#endif
+        if (!try_lock_pfn(look_ahead)) break;
 
         // We have locked the next page. Hooray! Let's move on to the next page.
-        batch_last = pfn;
-        pfn = pfn->flink;
-    }
-
-    // If no pages could be batched, we must have not been able to lock the first page
-    if (num_pages_batched == 0) {
-        ASSERT(cannot_acquire_lock && !wrapped_around)
-        if (locked_shared) unlock_list_shared(list);
-        else unlock_list_exclusive(list);
-        unlock_pfn(list_head);
-        return 0;
-    }
-
-    // If ONE page was locked, we still won't return any
-    if (num_pages_batched == 1) {
-        if (locked_shared) unlock_list_shared(list);
-        else unlock_list_exclusive(list);
-        unlock_pfn(list_head);
-        unlock_pfn(batch_last);
-        return 0;
+        next_page = look_ahead;
+        look_ahead = look_ahead->flink;
+        num_pages_batched++;
     }
 
     // Now the fun case! We have pages to flush! We will remove them from the list, then add them to our array
     // Update flinks/blinks to remove the batch from the list and add them to the temp list
-    list_head->flink = batch_last;
-    batch_last->blink = list_head;
-    if (locked_shared) unlock_list_shared(list);
-    else unlock_list_exclusive(list);
-    unlock_pfn(list_head);
-    ASSERT (batch_last != list_head)
-    unlock_pfn(batch_last);
+    list_head->flink = next_page;
+    next_page->blink = list_head;
 
-    // Since we did not include batch_last, which was counted,
-    // we will need to decrement our count
-    num_pages_batched--;
+    // Unlock our list, head, and last pfn
+    unlock_list_shared(list);
+    unlock_pfn(list_head);
+    if (!wrapped_around) unlock_pfn(next_page);
 
     // Decrease the list size by the number of batched pages
     change_list_size(list, -num_pages_batched);
 
     // We will now save the address of the first page in our batch
-    *address_of_first_page = batch_first;
+    *address_of_first_page = first_page;
 
     return num_pages_batched;
 }
@@ -535,7 +534,6 @@ ULONG64 remove_batch_from_list_head_exclusive(PPAGE_LIST list,
     // PFN variables for list removal
     PPFN list_head = list->head,
         batch_first = list_head->flink,
-        batch_last = batch_first,
         pfn = batch_first;
 
     // The number of pages we have added to our batch
@@ -545,34 +543,29 @@ ULONG64 remove_batch_from_list_head_exclusive(PPAGE_LIST list,
     if (batch_first == list_head) return 0;
 
     // While we want pages and there are pages available, we will continue to expand our batch
-    for ( ; num_pages_batched <= capacity; num_pages_batched++) {
+    while (num_pages_batched < capacity) {
 
-        // If the next page is the head, we have reached the end and locked ALL the pages on the list.
+        // If the next page is the head, we have reached the end and have ALL the pages on the list.
         if (pfn == list_head) break;
 
 #if DEBUG
         validate_pfn(pfn);
 #endif
 
-        // We have locked the next page. Hooray! Let's move on to the next page.
-        batch_last = pfn;
+        // We have the next page. Hooray! Let's move on to the next page.
+        lock_pfn(pfn);
         pfn = pfn->flink;
+        num_pages_batched++;
     }
 
     // If no pages could be batched, we must have not been able to lock the first page
     if (num_pages_batched == 0) return 0;
 
-    // If ONE page was locked, we still won't return any
-    if (num_pages_batched == 1) return 0;
-
     // Now the fun case! We have pages to flush! We will remove them from the list, then add them to our array
-    // Update flinks/blinks to remove the batch from the list and add them to the temp list
-    list_head->flink = batch_last;
-    batch_last->blink = list_head;
-
-    // Since we did not include batch_last, which was counted,
-    // we will need to decrement our count
-    num_pages_batched--;
+    // Update flinks/blinks to remove the batch from the list and add them to the temp list.
+    // It is possible that pfn is the list head, and that's okay.
+    list_head->flink = pfn;
+    pfn->blink = list_head;
 
     // Decrease the list size by the number of batched pages
     change_list_size(list, -num_pages_batched);
